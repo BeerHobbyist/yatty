@@ -1,7 +1,7 @@
 CONFIG ?= debug
 APP := build/Yatty.app
 
-.PHONY: deps ghostty zmx build app run clean
+.PHONY: deps ghostty zmx build test app run clean
 
 deps: ghostty zmx
 
@@ -15,6 +15,9 @@ zmx:
 # sandbox (fence), and a plain build doesn't need it.
 build: deps
 	swift build -c $(CONFIG) --scratch-path .build/swift --disable-sandbox
+
+test: deps
+	swift test --scratch-path .build/swift --disable-sandbox
 
 app: build
 	scripts/bundle-app.sh $(CONFIG)

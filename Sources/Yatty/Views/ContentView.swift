@@ -2,14 +2,80 @@ import SwiftUI
 
 struct ContentView: View {
   @Environment(AppStore.self) private var store
+  @Environment(\.openSettings) private var openSettings
+  @State private var labelDraft = ""
 
   var body: some View {
     @Bindable var store = store
-    NavigationSplitView {
-      Sidebar()
-        .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 400)
-    } detail: {
-      DetailView()
+    Group {
+      if Snapshot.isActive {
+        // macOS composites a split view's sidebar outside the app, where a
+        // snapshot can't see it; a plain row of the same views can be drawn.
+        HStack(spacing: 0) {
+          Sidebar().frame(width: 240)
+          Divider()
+          DetailView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+      } else {
+        NavigationSplitView {
+          Sidebar()
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 400)
+        } detail: {
+          DetailView()
+        }
+      }
+    }
+    .sheet(isPresented: $store.addingRepository) {
+      AddRepositorySheet()
+    }
+    .sheet(item: $store.addingHost) { request in
+      AddHostSheet(request: request)
+    }
+    .task(id: store.openingSettings) {
+      guard store.openingSettings else { return }
+      store.openingSettings = false
+      openSettings()
+    }
+    .sheet(isPresented: $store.showingPalette, onDismiss: { store.paletteClosed() }) {
+      CommandPalette(commands: store.commands) { store.pickedCommand = $0 }
+    }
+    .sheet(isPresented: $store.showingHelp, onDismiss: { store.focusSelectedTerminal() }) {
+      VStack(spacing: 0) {
+        HelpView(commands: store.commands)
+        Divider()
+        HStack {
+          Spacer()
+          Button("Done") { store.showingHelp = false }.keyboardShortcut(.defaultAction)
+        }
+        .padding(12)
+      }
+      .frame(width: 560, height: 620)
+    }
+    .confirmationDialog(
+      "Remove \(store.pendingHostRemoval?.host ?? "")?",
+      isPresented: Binding(
+        get: { store.pendingHostRemoval != nil }, set: { if !$0 { store.pendingHostRemoval = nil } }),
+      presenting: store.pendingHostRemoval
+    ) { host in
+      Button("Remove Host", role: .destructive) { Task { await store.removeHost(host) } }
+    } message: { _ in
+      Text("Ends the terminals of its directories there (once it can be reached). Nothing on the host is touched.")
+    }
+    .confirmationDialog(
+      "Remove \(store.pendingDirectoryRemoval.map { store.label(for: $0) } ?? "")?",
+      isPresented: Binding(
+        get: { store.pendingDirectoryRemoval != nil }, set: { if !$0 { store.pendingDirectoryRemoval = nil } }),
+      presenting: store.pendingDirectoryRemoval
+    ) { worktree in
+      Button("Remove Directory", role: .destructive) { Task { await store.removeRemoteDirectory(worktree) } }
+    } message: { _ in
+      Text("Ends its terminals on the host (once it can be reached). Its files stay.")
+    }
+    .sheet(item: $store.diffingWorktree) { worktree in
+      DiffSheet(worktree: worktree)
+    }
+    .sheet(item: $store.mergingWorktree) { worktree in
+      MergeSheet(worktree: worktree)
     }
     .sheet(item: $store.newWorktreeRepo) { repo in
       NewWorktreeSheet(repo: repo)
@@ -35,6 +101,30 @@ struct ContentView: View {
       Text(
         "Deletes \(pending.worktree.path) and any uncommitted changes in it, and ends its terminal. "
           + "The branch \(pending.worktree.branch ?? "") stays.")
+    }
+    .alert(
+      "Rename Worktree",
+      isPresented: Binding(get: { store.renamingWorktree != nil }, set: { if !$0 { store.renamingWorktree = nil } }),
+      presenting: store.renamingWorktree
+    ) { worktree in
+      TextField("Name", text: $labelDraft)
+      Button("Rename") { store.renameWorktree(worktree, to: labelDraft) }
+      Button("Cancel", role: .cancel) {}
+    } message: { worktree in
+      Text("Only the sidebar's name changes: the branch \(worktree.branch ?? "") and its folder keep theirs. Leave it empty to use the branch's name.")
+    }
+    .onChange(of: store.renamingWorktree) { _, worktree in
+      labelDraft = worktree.map { store.labels[$0.id] ?? "" } ?? ""
+    }
+    .confirmationDialog(
+      "Track every claude?", isPresented: $store.confirmingTracking
+    ) {
+      Button("Track Every Claude") { store.setTracking(true) }
+    } message: {
+      Text(
+        "Adds Yatty's status hooks to \(ClaudeSettings.url.path), so a claude you start by hand in a Yatty "
+          + "terminal reports too. They do nothing outside Yatty, leave your other settings alone, and come "
+          + "out again when you turn this off.")
     }
     .confirmationDialog(
       "Remove \(store.pendingRemoval?.name ?? "")?",
@@ -66,6 +156,7 @@ struct Sidebar: View {
               .tag(worktree.id)
               .contextMenu {
                 Button("New Worktree…") { store.newWorktreeRepo = repo }
+                Button("Rename…") { store.renamingWorktree = worktree }
                 if !worktree.isMain {
                   Button("Close Worktree…", role: .destructive) {
                     store.pendingClose = PendingClose(repo: repo, worktree: worktree)
@@ -91,42 +182,163 @@ struct Sidebar: View {
           }
         }
       }
+      ForEach(store.hosts) { host in
+        Section {
+          ForEach(host.worktrees) { worktree in
+            WorktreeRow(worktree: worktree)
+              .tag(worktree.id)
+              .contextMenu {
+                Button("Rename…") { store.renamingWorktree = worktree }
+                Button("Remove Directory…", role: .destructive) { store.pendingDirectoryRemoval = worktree }
+              }
+          }
+        } header: {
+          HStack {
+            Image(systemName: "server.rack")
+            Text(host.host)
+            Spacer()
+            Button {
+              store.addingHost = AddHostRequest(host: host.host)
+            } label: {
+              Image(systemName: "plus")
+            }
+            .buttonStyle(.borderless)
+            .help("Add a directory on \(host.host)")
+          }
+          .contextMenu {
+            Button("Add Directory…") { store.addingHost = AddHostRequest(host: host.host) }
+            Button("Remove Host…", role: .destructive) { store.pendingHostRemoval = host }
+          }
+        }
+      }
     }
-    .listStyle(.sidebar)
+    .modifier(SidebarListStyle())
+    .safeAreaInset(edge: .bottom) { AgentCounts() }
     .onKeyPress(.return) {
       store.focusSelectedTerminal()
       return .handled
     }
     .overlay {
-      if store.repos.isEmpty {
+      if store.repos.isEmpty && store.hosts.isEmpty {
         ContentUnavailableView(
-          "No Repositories", systemImage: "folder.badge.plus", description: Text("Add one with ⌘O."))
+          "No Repositories", systemImage: "folder.badge.plus",
+          description: Text("Add one with ⌘O, or a directory on another machine with ⌘⇧O."))
       }
     }
     .toolbar {
       ToolbarItem {
         Button {
-          store.chooseRepository()
+          store.addingRepository = true
         } label: {
           Label("Add Repository", systemImage: "folder.badge.plus")
         }
         .help("Add a repository (⌘O)")
       }
+      ToolbarItem {
+        Button {
+          store.addingHost = AddHostRequest()
+        } label: {
+          Label("Add SSH Host", systemImage: "server.rack")
+        }
+        .help("Add a directory on another machine (⌘⇧O)")
+      }
     }
+  }
+}
+
+/// How many agents need you, work, or are done; a click goes to the next one.
+struct AgentCounts: View {
+  @Environment(AppStore.self) private var store
+
+  var body: some View {
+    let needs = store.agents.count(.needsAction)
+    let working = store.agents.count(.working)
+    let done = store.agents.count(.done)
+    if needs + working + done > 0 {
+      HStack(spacing: 12) {
+        if needs > 0 { count(needs, .needsAction) }
+        if working > 0 { count(working, .working) }
+        if done > 0 { count(done, .done) }
+        Spacer()
+      }
+      .font(.callout)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 8)
+      .background(.bar)
+    }
+  }
+
+  private func count(_ n: Int, _ state: AgentState) -> some View {
+    Button {
+      store.jumpToNextAgent()
+    } label: {
+      HStack(spacing: 4) {
+        AgentGlyph(state: state)
+        Text("\(n)").monospacedDigit()
+      }
+    }
+    .buttonStyle(.borderless)
+    .help("Go to the next agent that needs you (⌘⇧J)")
   }
 }
 
 struct WorktreeRow: View {
   let worktree: Worktree
+  @Environment(AppStore.self) private var store
 
   var body: some View {
+    let status = store.gitStatus.status(of: worktree)
+    let selected = store.selection == worktree.id
     Label {
-      Text(worktree.name)
-        .foregroundStyle(worktree.exists ? .primary : .secondary)
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 4) {
+          Text(store.label(for: worktree))
+            .foregroundStyle(worktree.exists ? .primary : .secondary)
+            .lineLimit(1)
+          if !worktree.exists {
+            Text("missing").font(.caption).foregroundStyle(.secondary)
+          }
+          if let changed = status?.changed, changed > 0 {
+            Text("●\(changed)").font(.caption.monospacedDigit()).foregroundStyle(.orange)
+              .help("\(changed) changed file\(changed == 1 ? "" : "s")")
+          }
+          Spacer(minLength: 4)
+          if let pullRequest = store.pullRequests.badge(for: worktree) {
+            PullRequestBadge(pullRequest: pullRequest) {
+              store.selection = worktree.id
+              store.showingPullRequest = true
+            }
+          }
+          AgentGlyph(state: store.agents.state(of: worktree))
+        }
+        if selected, let details = secondLine(status) {
+          Text(details).font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+        }
+      }
     } icon: {
-      Image(systemName: worktree.isMain ? "house" : "arrow.triangle.branch")
+      Image(systemName: worktree.isRemote ? "folder" : worktree.isMain ? "house" : "arrow.triangle.branch")
     }
-    .help(worktree.branch ?? worktree.path)
+    .help(worktree.branch ?? remotePath ?? worktree.path)
+  }
+
+  /// Where a remote directory is on its host, `~/…` when under its home.
+  private var remotePath: String? {
+    guard let host = store.host(of: worktree) else { return nil }
+    return "\(host.host):" + SSH.displayPath(worktree.path, home: host.home)
+  }
+
+  /// The selected row's details: the branch when it isn't the name shown,
+  /// then +/− and ahead/behind, each only when there's something to say.
+  private func secondLine(_ status: GitStatus?) -> String? {
+    var parts: [String] = []
+    if let remotePath { parts.append(remotePath) }
+    if let branch = worktree.branch, branch != store.label(for: worktree) { parts.append(branch) }
+    if let status {
+      if status.added + status.removed > 0 { parts.append("+\(status.added) −\(status.removed)") }
+      if status.ahead > 0 { parts.append("↑\(status.ahead)") }
+      if status.behind > 0 { parts.append("↓\(status.behind)") }
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: "  ")
   }
 }
 
@@ -140,31 +352,24 @@ struct DetailView: View {
           ContentUnavailableView(
             "Directory Missing", systemImage: "questionmark.folder",
             description: Text("\(worktree.path) no longer exists."))
-        } else if store.endedSessions.contains(worktree.id) {
-          ContentUnavailableView {
-            Label("Session Ended", systemImage: "terminal")
-          } description: {
-            Text("The shell in this worktree exited.")
-          } actions: {
-            Button("Start New Session") { store.restartSession(worktree.id) }
-          }
-        } else if let terminal = store.terminal(for: worktree) {
-          TerminalHost(terminal: terminal)
-        } else if store.failedTerminals.contains(worktree.id) {
-          ContentUnavailableView {
-            Label("Couldn't Start the Terminal", systemImage: "exclamationmark.triangle")
-          } description: {
-            Text("zmx couldn't be reached, or libghostty didn't create a terminal.")
-          } actions: {
-            Button("Try Again") { store.retryTerminal(worktree.id) }
-          }
         } else {
-          // Starting: a moment while zmx is asked whether the session exists.
-          Color.clear
+          TerminalsView(worktree: worktree)
         }
       }
-      .navigationTitle(worktree.name)
-      .navigationSubtitle(store.repo(of: worktree)?.name ?? "")
+      .navigationTitle(store.label(for: worktree))
+      .navigationSubtitle(store.repo(of: worktree)?.name ?? worktree.host ?? "")
+      .modifier(PullRequestColumn(worktree: worktree))
+      .toolbar {
+        ToolbarItem {
+          Button {
+            store.showingPullRequest.toggle()
+          } label: {
+            Label("Pull Request", systemImage: "sidebar.right")
+          }
+          .help("Show the pull request (⌥⌘P)")
+          .disabled(worktree.isRemote)
+        }
+      }
     } else {
       ContentUnavailableView(
         "No Worktree Selected", systemImage: "sidebar.left",
@@ -174,73 +379,41 @@ struct DetailView: View {
   }
 }
 
-/// Shows a terminal that outlives the view: switching worktrees moves the
-/// terminal views in and out, never recreating them.
-struct TerminalHost: NSViewRepresentable {
-  let terminal: TerminalView
-
-  func makeNSView(context: Context) -> NSView { NSView() }
-
-  func updateNSView(_ container: NSView, context: Context) {
-    guard terminal.superview !== container else { return }
-    container.subviews.forEach { $0.removeFromSuperview() }
-    terminal.frame = container.bounds
-    terminal.autoresizingMask = [.width, .height]
-    container.addSubview(terminal)
-    terminal.setVisible(true)
+/// The sidebar list style, except in snapshots: vibrant sidebar text uses a
+/// blend that a snapshot's layer render can't draw, so it comes out blank.
+private struct SidebarListStyle: ViewModifier {
+  func body(content: Content) -> some View {
+    if Snapshot.isActive {
+      content.listStyle(.inset)
+    } else {
+      content.listStyle(.sidebar)
+    }
   }
 }
 
-struct NewWorktreeSheet: View {
-  let repo: Repo
+/// The pull request inspector beside the terminals. In snapshots it's a
+/// plain column: macOS draws an inspector outside the app, like a sidebar.
+private struct PullRequestColumn: ViewModifier {
+  let worktree: Worktree
   @Environment(AppStore.self) private var store
-  @Environment(\.dismiss) private var dismiss
-  @State private var branch = ""
-  @State private var base = ""
-  @State private var error: String?
-  @State private var busy = false
 
-  var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Text("New Worktree in \(repo.name)").font(.headline)
-      Form {
-        TextField("Branch", text: $branch, prompt: Text("feature/login"))
-        TextField("Based on", text: $base, prompt: Text("HEAD"))
+  func body(content: Content) -> some View {
+    if worktree.isRemote {
+      // No git there: no pull request to show.
+      content
+    } else if Snapshot.isActive {
+      HStack(spacing: 0) {
+        content
+        if store.showingPullRequest {
+          Divider()
+          PullRequestInspector(worktree: worktree).frame(width: 340)
+        }
       }
-      if let error {
-        Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
-      }
-      HStack {
-        Spacer()
-        Button("Cancel", role: .cancel) { dismiss() }
-          .keyboardShortcut(.cancelAction)
-        Button("Create") { create() }
-          .keyboardShortcut(.defaultAction)
-          .disabled(trimmed(branch).isEmpty || busy)
+    } else {
+      content.inspector(isPresented: Bindable(store).showingPullRequest) {
+        PullRequestInspector(worktree: worktree)
+          .inspectorColumnWidth(min: 260, ideal: 320, max: 520)
       }
     }
-    .padding(20)
-    .frame(width: 420)
-    .task { base = await Git.defaultBase(root: repo.path) }
-  }
-
-  private func create() {
-    busy = true
-    error = nil
-    let branch = trimmed(branch)
-    let base = trimmed(base).isEmpty ? "HEAD" : trimmed(base)
-    Task {
-      do {
-        try await store.createWorktree(in: repo, branch: branch, base: base)
-        dismiss()
-      } catch {
-        self.error = error.localizedDescription
-        busy = false
-      }
-    }
-  }
-
-  private func trimmed(_ s: String) -> String {
-    s.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 }

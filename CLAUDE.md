@@ -14,7 +14,12 @@ tabs and splits, and every one of them is a real Ghostty terminal.
 - **git** and **gh** are run as processes, as agentree does.
 - State lives in `~/.config/yatty/`: `state.json` (repos, selection; written
   by the app) and `config.json` (`agentCommand`, typed into a new session;
-  written by the user). Worktrees are read from git, never stored.
+  `sandboxCommand`; written by the user). Worktrees are read from git, never
+  stored. Runtime state is in `~/.local/state/yatty/`: zmx sockets (`zmx/`),
+  agent reports (`agents/`) and the CLI's sockets (`app.sock`, `sandbox.sock`).
+- The `yatty` CLI (`Sources/YattyCLI`, bundled as `Contents/Resources/bin/yatty`)
+  sends one JSON line per request to the app (`Sources/Yatty/CLI`); the
+  protocol is `Sources/YattyProtocol`.
 
 ## Commands
 

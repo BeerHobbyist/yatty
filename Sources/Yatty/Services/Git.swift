@@ -81,6 +81,11 @@ enum Git {
   static func removeWorktree(root: String, path: String) async throws {
     let tracked = try await listWorktrees(root: root).contains { $0.path == canonicalPath(path) }
     guard tracked else { return }
+    if !FileManager.default.fileExists(atPath: path) {
+      // Its directory is gone already: git only has to forget it.
+      try await run(["worktree", "prune"], in: root)
+      return
+    }
     try await run(["worktree", "remove", "--force", path], in: root)
   }
 
@@ -104,6 +109,76 @@ enum Git {
     try? (current + prefix + ".worktrees/\n").write(to: exclude, atomically: true, encoding: .utf8)
   }
 
+  // MARK: Branches
+
+  static func listBranches(root: String) async throws -> Branches {
+    let current = try? await run(["symbolic-ref", "--quiet", "--short", "HEAD"], in: root)
+    let refs = try await run(
+      ["for-each-ref", "--sort=-committerdate", "--format=%(refname)", "refs/heads", "refs/remotes"], in: root)
+    let trimmed = current?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return parseBranches(refs, current: trimmed.isEmpty ? nil : trimmed)
+  }
+
+  /// `for-each-ref` output as local and remote branch names. `origin/HEAD`
+  /// only points at another remote branch, so it's left out.
+  static func parseBranches(_ refs: String, current: String?) -> Branches {
+    var branches = Branches(current: current, local: [], remote: [])
+    for ref in refs.split(separator: "\n") {
+      if ref.hasPrefix("refs/heads/") {
+        branches.local.append(String(ref.dropFirst("refs/heads/".count)))
+      } else if ref.hasPrefix("refs/remotes/"), !ref.hasSuffix("/HEAD") {
+        branches.remote.append(String(ref.dropFirst("refs/remotes/".count)))
+      }
+    }
+    return branches
+  }
+
+  /// Checks out a local branch in a new worktree.
+  static func addWorktree(root: String, path: String, existingBranch branch: String) async throws {
+    try await run(["worktree", "add", path, branch], in: root)
+  }
+
+  /// Checks out `remote/branch` as a new local `branch` tracking it.
+  static func addWorktree(root: String, path: String, remote: String, branch: String) async throws {
+    try await run(["worktree", "add", "--track", "-b", branch, path, "\(remote)/\(branch)"], in: root)
+  }
+
+  /// The remote names (`origin`, `upstream`…).
+  static func remotes(root: String) async -> [String] {
+    ((try? await run(["remote"], in: root)) ?? "").split(separator: "\n").map(String.init)
+  }
+
+  /// Fetches a pull request's head into local `branch` (created or moved).
+  /// `refs/pull/<n>/head` works for pull requests from forks too.
+  static func fetchPullRequest(root: String, number: Int, into branch: String) async throws {
+    try await run(["fetch", "origin", "+refs/pull/\(number)/head:refs/heads/\(branch)"], in: root)
+  }
+
+  // MARK: Remotes
+
+  /// `owner/name` of a GitHub remote URL, in any form git or gh writes it.
+  static func slug(fromRemote url: String) -> String? {
+    var rest = url.trimmingCharacters(in: .whitespacesAndNewlines)
+    let prefixes = ["git@github.com:", "https://github.com/", "http://github.com/", "ssh://git@github.com/"]
+    guard let prefix = prefixes.first(where: { rest.lowercased().hasPrefix($0) }) else { return nil }
+    rest = String(rest.dropFirst(prefix.count))
+    while rest.hasSuffix("/") { rest.removeLast() }
+    if rest.hasSuffix(".git") { rest.removeLast(4) }
+    let parts = rest.split(separator: "/")
+    guard parts.count == 2 else { return nil }
+    return parts.joined(separator: "/")
+  }
+
+  static func remoteMatches(_ url: String, nameWithOwner: String) -> Bool {
+    slug(fromRemote: url)?.lowercased() == nameWithOwner.lowercased()
+  }
+
+  /// The GitHub `owner/name` of the repository's `origin`, if it has one.
+  static func remoteSlug(root: String) async -> String? {
+    guard let url = try? await run(["remote", "get-url", "origin"], in: root) else { return nil }
+    return slug(fromRemote: url)
+  }
+
   /// A branch name as a directory name; the branch itself keeps its slashes.
   static func directoryName(for branch: String) -> String {
     var name = branch.replacingOccurrences(of: "[^A-Za-z0-9._-]+", with: "-", options: .regularExpression)
@@ -111,4 +186,13 @@ enum Git {
     name = name.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     return name.isEmpty ? "worktree" : name
   }
+}
+
+struct Branches: Equatable, Sendable {
+  /// What the main copy has checked out; nil when detached.
+  var current: String?
+  /// Most recently committed first.
+  var local: [String]
+  /// `origin/main` and the like, most recently committed first.
+  var remote: [String]
 }

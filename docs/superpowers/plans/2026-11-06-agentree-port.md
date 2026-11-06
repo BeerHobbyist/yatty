@@ -40,7 +40,7 @@
 
 - `swift test --scratch-path .build/swift --disable-sandbox` passes.
 - `make app` succeeds.
-- `scripts/snapshot.sh <scene>` renders the app window with sample data to `build/snapshots/<scene>.png` (SwiftUI chrome only: terminals draw through Metal and come out blank). A fresh `verifier` agent checks the phase's acceptance list against the code and those images.
+- `scripts/snapshot.sh <scene>` renders the app window with sample data to `build/snapshots/<scene>.png`. Needs fence's `macos.mach.lookup` to allow `com.apple.windowserver.active` and `com.apple.CARenderServer`. In snapshot mode the window is laid out as a plain sidebar | detail row and panes are placeholders (the real split view's sidebar and libghostty can't be drawn or started there). A fresh `verifier` agent checks the phase's acceptance list against the code and those images.
 - The owner runs the app and confirms what snapshots can't show.
 
 ---
@@ -53,61 +53,75 @@
 - [x] One Ghostty terminal per worktree, kept alive while hidden, persistent through zmx; a new session types `agentCommand` from `~/.config/yatty/config.json`.
 - [x] Reviewed twice; startup crash (main-actor executor check in C callbacks) fixed.
 
-## Phase 2 — Tabs and splits
+## Phase 2 — Tabs and splits ✅
 
 Plan: `2026-11-06-phase-2-tabs-splits.md`.
 
-- [ ] Each worktree has tabs; each tab is a tree of splits; every pane a Ghostty terminal with its own zmx session.
-- [ ] The layout (tabs, splits, ratios, names, focused pane) persists in `state.json` and is restored on launch.
-- [ ] Ghostty keybinds: new tab, split right/down, close pane, go to split (prev/next/direction), go to tab (n/prev/next/last), equalize splits.
-- [ ] Tab bar: tabs titled by the focused pane's terminal title (or a name the user gave), close button, `+` menu (New Shell / New Agent), split buttons, double-click to rename.
-- [ ] Dividers drag to resize; unfocused panes are dimmed.
-- [ ] Closing a pane kills its session; closing the last pane leaves "No Terminals" with a button to open one.
-- [ ] `scripts/snapshot.sh` and the in-app snapshot mode exist (used by every later phase).
+- [x] Each worktree has tabs; each tab is a tree of splits; every pane a Ghostty terminal with its own zmx session.
+- [x] The layout (tabs, splits, ratios, names, focused pane) persists in `state.json` and is restored on launch.
+- [x] Ghostty keybinds: new tab, split right/down, close pane, go to split (prev/next/direction), go to tab (n/prev/next/last), equalize splits.
+- [x] Tab bar: tabs titled by the focused pane's terminal title (or a name the user gave), close button, `+` menu (New Shell / New Agent), split buttons, double-click to rename.
+- [x] Dividers drag to resize; unfocused panes are dimmed.
+- [x] Closing a pane kills its session; closing the last pane leaves "No Terminals" with a button to open one.
+- [x] `scripts/snapshot.sh` and the in-app snapshot mode exist (used by every later phase).
 
-## Phase 3 — Repositories and worktrees from GitHub
+## Phase 3 — Repositories and worktrees from GitHub ✅
 
-- [ ] Add Repository (⌘O) lists every repo `gh` can see (owned, collaborator, organization; most recently pushed first; paged in the background), ranked filter (exact name > prefix > contains > owner/name contains), clones with `gh repo clone` into `cloneDirectory` (config; default `~/yatty`), or reuses an existing clone; "Choose Local Folder…" stays.
-- [ ] New Worktree offers: a new branch from a base picked from local and remote branches; an existing branch; an open pull request (fetched as `refs/pull/<n>/head`, forks included, named after its head branch), hiding PRs that already have a worktree.
-- [ ] Worktree labels: rename a worktree's display name (stored by worktree path); branch and directory unchanged.
-- [ ] A worktree whose directory vanished shows as missing and can be closed.
+Plan: `2026-11-06-phase-3-github-worktrees.md`.
 
-## Phase 4 — Agent status and notifications
+- [x] Add Repository (⌘O) lists every repo `gh` can see (owned, collaborator, organization; most recently pushed first; paged in the background), ranked filter (exact name > prefix > contains > owner/name contains), clones with `gh repo clone` into `cloneDirectory` (config; default `~/yatty`), or reuses an existing clone; "Choose Local Folder…" stays.
+- [x] New Worktree offers: a new branch from a base picked from local and remote branches; an existing branch; an open pull request (fetched as `refs/pull/<n>/head`, forks included; our own PR's branch is its head branch, a fork's is always `pr/<n>-<head>` so it can't clash or change), hiding PRs that already have a worktree.
+- [x] Worktree labels: rename a worktree's display name (stored by worktree path); branch and directory unchanged.
+- [x] A worktree whose directory vanished shows as missing and can be closed.
 
-- [ ] Agents Yatty starts run with Claude Code hooks (a `--settings` file under `~/.config/yatty/`) writing `<state> <epoch>` per pane under `~/.config/yatty/agents/`: needs you, working, done, idle.
-- [ ] Optional "Track every claude": the same hooks merged into `~/.claude/settings.json` (asks first, reversible, idempotent), inert outside Yatty.
-- [ ] Sidebar shows each worktree's most urgent agent status, animated (working spins, needs-you pulses); "done" clears once viewed; stale reports corrected against pane activity.
-- [ ] A system notification when an agent needs you or finishes while you aren't looking at it; clicking it opens that worktree and pane.
-- [ ] "Next agent that needs you" command with a shortcut, and agent counts in the sidebar footer.
+## Phase 4 — Agent status and notifications ✅
 
-## Phase 5 — Git status and pull requests
+Plan: `2026-11-06-phase-4-agent-status.md`.
 
-- [ ] Sidebar: uncommitted-file count, and for the selected worktree: branch, +/−, ahead/behind; refreshed every 5s and on agent state changes.
-- [ ] PR badge per worktree (open PR for the branch, else a merged one that was this branch's), coloured by CI, draft and merged variants; refreshed every 60s, paused while the app is inactive.
-- [ ] PR inspector (right side): merge status, reviews, checks (failing first, click opens the log), labels, description (markdown), comments (newest first, inline ones with file:line); open on GitHub; refresh; foldable sections remembered.
-- [ ] Merge: methods the repo allows, the last one used first; auto-merge when blocked; confirm step; `gh pr merge --match-head-commit <sha>`; afterwards offers to close the worktree.
+- [x] Agents Yatty starts run with Claude Code hooks (a `--settings` file under `~/.config/yatty/`) writing `<state> <epoch>` per pane under `~/.config/yatty/agents/`: needs you, working, done, idle.
+- [x] Optional "Track every claude": the same hooks merged into `~/.claude/settings.json` (asks first, reversible, idempotent), inert outside Yatty.
+- [x] Sidebar shows each worktree's most urgent agent status, animated (working spins, needs-you pulses); "done" clears once viewed; stale reports corrected against pane activity.
+- [x] A system notification when an agent needs you or finishes while you aren't looking at it; clicking it opens that worktree and pane.
+- [x] "Next agent that needs you" command with a shortcut, and agent counts in the sidebar footer.
 
-## Phase 6 — Diffs
+## Phase 5 — Git status and pull requests ✅
 
-- [ ] Diff picker: working changes, staged, against the base branch, a ref, or a range of commits picked from a list.
-- [ ] Viewers: hunk, diffnav, delta, difftastic, lumen, nvim diffview, plain git — the first installed by default, choice remembered; opens in a tab of its own that closes when the viewer quits; an empty diff says so; pagers can't quit on a short diff.
+Plan: `2026-11-06-phase-5-git-status-prs.md`.
 
-## Phase 7 — Agent CLI and fence
+- [x] Sidebar: uncommitted-file count, and for the selected worktree: branch, +/−, ahead/behind; refreshed every 5s and on agent state changes.
+- [x] PR badge per worktree (open PR for the branch, else a merged one that was this branch's), coloured by CI, draft and merged variants; refreshed every 60s, paused while the app is inactive.
+- [x] PR inspector (right side): merge status, reviews, checks (failing first, click opens the log), labels, description (markdown), comments (newest first, inline ones with file:line); open on GitHub; refresh; foldable sections remembered.
+- [x] Merge: methods the repo allows, the last one used first; auto-merge when blocked; confirm step; `gh pr merge --match-head-commit <sha>`; afterwards offers to close the worktree.
 
-- [ ] A `yatty` CLI bundled in the app, on the PATH of every Yatty terminal, talking to the app over its socket: `tab list|new|read|send|select|rename|close`, `diff`, `notify`, `status` (`--json` where agentree has it), `skill install|uninstall|show`.
-- [ ] Agents Yatty starts are told about the CLI by a silent-except-SessionStart hook; a Claude Code skill ships with it.
-- [ ] Inside fence the CLI's requests run on the sandbox's terms: started commands wrapped in `sandboxCommand` (config), typing only into panes started that way, no argument tmux/zmx could turn into a command.
+## Phase 6 — Diffs ✅
 
-## Phase 8 — SSH projects
+Plan: `2026-11-06-phase-6-diffs.md`.
 
-- [ ] Add an SSH host (typed or from `~/.ssh/config`) and directories on it; their terminals run there, kept alive by zmx on the host (install hint when missing); one shared connection per host (ControlMaster, short ControlPath).
-- [ ] Password or key-passphrase logins through `SSH_ASKPASS`, never stored; background calls never log in on their own.
+- [x] Diff picker: working changes, staged, against the base branch, a ref, or a range of commits picked from a list.
+- [x] Viewers: hunk, diffnav, delta, difftastic, lumen, nvim diffview, plain git — the first installed by default, choice remembered; opens in a tab of its own that closes when the viewer quits; an empty diff says so; pagers can't quit on a short diff.
 
-## Phase 9 — Command palette, help and polish
+## Phase 7 — Agent CLI and fence ✅
 
-- [ ] Command palette (⌘K) listing every action that applies, fuzzy-filtered.
-- [ ] Settings window for `agentCommand`, `cloneDirectory`, `sandboxCommand`, notifications.
-- [ ] Help / keyboard reference; README with screenshots; release build (`make app CONFIG=release`).
+Plan: `2026-11-06-phase-7-agent-cli.md`.
+
+- [x] A `yatty` CLI bundled in the app, on the PATH of every Yatty terminal, talking to the app over its socket: `tab list|new|read|send|select|rename|close`, `diff`, `notify`, `status` (`--json` where agentree has it), `skill install|uninstall|show`.
+- [x] Agents Yatty starts are told about the CLI by a silent-except-SessionStart hook; a Claude Code skill ships with it.
+- [x] Inside fence the CLI's requests run on the sandbox's terms: started commands wrapped in `sandboxCommand` (config), typing only into panes started that way, no argument tmux/zmx could turn into a command.
+
+## Phase 8 — SSH projects ✅
+
+Plan: `2026-11-06-phase-8-ssh.md`.
+
+- [x] Add an SSH host (typed or from `~/.ssh/config`) and directories on it; their terminals run there, kept alive by zmx on the host (install hint when missing); one shared connection per host (ControlMaster, short ControlPath).
+- [x] Password or key-passphrase logins through `SSH_ASKPASS`, never stored; background calls never log in on their own.
+
+## Phase 9 — Command palette, help and polish ✅
+
+Plan: `2026-11-06-phase-9-polish.md`.
+
+- [x] Command palette (⇧⌘P) listing every action that applies, fuzzy-filtered.
+- [x] Settings window for `agentCommand`, `cloneDirectory`, `sandboxCommand`, notifications.
+- [x] Help / keyboard reference; README (screenshots still to take: snapshots can't draw terminals, and window capture needs Screen Recording permission); release build (`make app CONFIG=release`).
 
 ---
 
@@ -115,4 +129,12 @@ Plan: `2026-11-06-phase-2-tabs-splits.md`.
 
 | Date | Phase | Commit |
 |---|---|---|
-| 2026-11-06 | 1 — app shell and worktrees | (initial commit) |
+| 2026-11-06 | 1 — app shell and worktrees | `e19b370` |
+| 2026-11-06 | 2 — tabs and splits (two verifier rounds; snapshots checked) | `8504a15`…`ecfbb85` |
+| 2026-11-06 | 3 — repositories and worktrees from GitHub (verifier + re-verify) | `16ad5ae`…`503ca7f` |
+| 2026-11-06 | 4 — agent status and notifications (verifier + re-verify) | `c8d8216`…`040e347` |
+| 2026-11-06 | 5 — git status and pull requests (verifier + re-verify) | `aa039ab`…`dd8fb77` |
+| 2026-11-06 | 6 — diffs (verifier: no findings) | `dd8fb77` |
+| 2026-11-06 | 7 — agent CLI and fence (verifier: 6 findings fixed, re-verified; real-app e2e) | `a59a99e`…`ad964b4`+ |
+| 2026-11-06 | 8 — SSH projects (real-sshd e2e; verifier: 9 findings fixed, re-verified, 2 more fixed) | `728c90d`…`2bb4b0e` |
+| 2026-11-06 | 9 — command palette, help, settings, README, release build (verifier: 1 defect + 5 fixes, re-verified) | `d4bd4ba`…`8136ed7` |

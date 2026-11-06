@@ -8,9 +8,12 @@ enum Zmx {
     Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("zmx").path
   }
 
+  /// `YATTY_ZMX_DIR` moves it, so snapshots and tests never meet real sessions.
   static let socketDir: String = {
-    let dir = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".local/state/yatty/zmx").path
+    let override = ProcessInfo.processInfo.environment["YATTY_ZMX_DIR"] ?? ""
+    let dir = override.hasPrefix("/")
+      ? override
+      : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/state/yatty/zmx").path
     try? FileManager.default.createDirectory(
       atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     return dir
@@ -30,9 +33,28 @@ enum Zmx {
     return "yatty-" + digest.prefix(5).map { String(format: "%02x", $0) }.joined()
   }
 
+  /// Pane `0` is the worktree's first terminal and keeps the plain name.
+  static func sessionName(for worktreePath: String, pane: String) -> String {
+    let base = sessionName(for: worktreePath)
+    return pane == "0" ? base : base + "-" + pane
+  }
+
+  /// Every session a known worktree may own: its first pane's, whether or not
+  /// it was opened, and every pane of its stored layout.
+  static func knownSessions(worktrees: [Worktree], layouts: [String: WorktreeLayout]) -> Set<String> {
+    var known = Set<String>()
+    for worktree in worktrees {
+      known.insert(sessionName(for: worktree.path))
+      for pane in layouts[worktree.path]?.allPanes ?? [] {
+        known.insert(sessionName(for: worktree.path, pane: pane))
+      }
+    }
+    return known
+  }
+
   /// Yatty's live sessions, or nil when zmx couldn't be asked.
   static func sessions() async -> Set<String>? {
-    let result = await Run.run(executable, ["list", "--short"], env: environment)
+    let result = await Run.run(executable, ["list", "--short"], env: environment, timeout: 10)
     guard result.ok else { return nil }
     return Set(result.stdout.split(separator: "\n").compactMap { $0.split(separator: " ").first.map(String.init) })
   }
@@ -41,11 +63,27 @@ enum Zmx {
     _ = await Run.run(executable, ["kill", name], env: environment)
   }
 
-  /// The terminal's command: attach to the session, starting the login shell
-  /// in it if it doesn't exist yet. libghostty runs it as
+  /// The session's scrollback as plain text, or nil when it isn't running.
+  static func history(_ name: String) async -> String? {
+    let result = await Run.run(executable, ["history", name], env: environment, timeout: 10)
+    return result.ok ? result.stdout : nil
+  }
+
+  /// Types `input` into the session as if at its keyboard; false when it isn't running.
+  static func send(_ name: String, _ input: String) async -> Bool {
+    await Run.run(executable, sendArguments(session: name, input: input), env: environment, timeout: 10).ok
+  }
+
+  /// One argument for all of it, so zmx joins nothing and splits nothing.
+  static func sendArguments(session: String, input: String) -> [String] {
+    ["send", session, input]
+  }
+
+  /// The terminal's command: attach to the session, starting `command` (by
+  /// default the login shell) in it if it doesn't exist yet. libghostty runs it as
   /// `bash -c "exec -l <command>"`, so it's plain shell words.
-  static func attachCommand(session: String) -> String {
-    [executable, "attach", session, loginShell, "-l"].map(shellQuote).joined(separator: " ")
+  static func attachCommand(session: String, command: [String]? = nil) -> String {
+    ([executable, "attach", session] + (command ?? [loginShell, "-l"])).map(shellQuote).joined(separator: " ")
   }
 
   static var loginShell: String {
