@@ -73,7 +73,7 @@ struct StoredState: Codable {
 }
 
 /// Settings the user edits: `~/.config/yatty/config.json`.
-struct YattyConfig: Codable {
+struct YattyConfig: Codable, Equatable {
   /// Typed into a worktree's terminal when its session is first created.
   var agentCommand: String = "caffeinate -is claude"
   /// Where repositories picked from GitHub are cloned; `~` is the home folder.

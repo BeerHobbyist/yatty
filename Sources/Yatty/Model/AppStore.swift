@@ -49,7 +49,9 @@ final class AppStore {
   var pendingRemoval: Repo?
   var renamingWorktree: Worktree?
 
-  let config = ConfigFiles.loadConfig()
+  /// `config.json`, as the Settings window last changed it.
+  private(set) var config = ConfigFiles.loadConfig()
+  var settingsError: String?
   let catalog = RepoCatalog()
   let agents = AgentMonitor()
   let gitStatus = GitStatusMonitor()
@@ -416,6 +418,18 @@ final class AppStore {
     } catch {
       alert = AppAlert(title: "Couldn't change Claude's settings", message: error.localizedDescription)
       trackingEveryClaude = ClaudeSettings.isInstalled()
+    }
+  }
+
+  /// Settings apply at once: to terminals started from now on, the next
+  /// clone, the next notification.
+  func applySettings(_ settings: YattyConfig) {
+    config = settings
+    do {
+      try ConfigFiles.saveConfig(settings)
+      settingsError = nil
+    } catch {
+      settingsError = "Couldn't save the settings: \(error.localizedDescription)"
     }
   }
 

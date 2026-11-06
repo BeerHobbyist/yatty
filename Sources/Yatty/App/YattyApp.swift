@@ -59,5 +59,8 @@ struct YattyApp: App {
             set: { on in if on { store.confirmingTracking = true } else { store.setTracking(false) } }))
       }
     }
+    Settings {
+      SettingsView().environment(store)
+    }
   }
 }

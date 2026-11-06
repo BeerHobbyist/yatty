@@ -34,3 +34,26 @@ import Testing
   #expect(KeyboardShortcut("=", modifiers: [.command, .control]).label == "⌃⌘=")
   #expect(KeyboardShortcut("t", modifiers: [.command, .option]).label == "⌥⌘T")
 }
+
+@Test func savingSettingsKeepsWhatItDoesntKnow() throws {
+  let url = FileManager.default.temporaryDirectory.appendingPathComponent("yatty-config-\(UUID().uuidString).json")
+  defer { try? FileManager.default.removeItem(at: url) }
+  try Data(#"{"agentCommand":"claude","futureKey":{"a":[1,2]},"sandboxCommand":"fence --"}"#.utf8).write(to: url)
+
+  var settings = try JSONDecoder().decode(YattyConfig.self, from: Data(contentsOf: url))
+  settings.agentCommand = ""
+  settings.cloneDirectory = "  "
+  settings.sandboxCommand = " "
+  settings.notifications = false
+  try ConfigFiles.saveConfig(settings, to: url)
+
+  let saved = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+  #expect((saved["futureKey"] as? [String: Any])?["a"] as? [Int] == [1, 2])
+  #expect(saved["agentCommand"] as? String == "")
+  #expect(saved["cloneDirectory"] == nil)
+  #expect(saved["sandboxCommand"] == nil)
+  #expect(saved["notifications"] as? Bool == false)
+  let reloaded = try JSONDecoder().decode(YattyConfig.self, from: Data(contentsOf: url))
+  #expect(reloaded.cloneDirectory == YattyConfig().cloneDirectory)
+  #expect(reloaded.sandboxCommand == nil)
+}
