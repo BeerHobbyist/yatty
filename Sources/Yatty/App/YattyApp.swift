@@ -6,6 +6,8 @@ struct YattyApp: App {
   @State private var store: AppStore
 
   init() {
+    // A CLI client that hangs up mid-answer must not take the app down.
+    signal(SIGPIPE, SIG_IGN)
     if ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) != GHOSTTY_SUCCESS {
       fatalError("libghostty failed to initialize")
     }

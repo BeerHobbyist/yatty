@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Assembles build/Yatty.app from the SwiftPM binary, Info.plist, Ghostty's
-# resources and zmx, then signs it ad hoc. Usage: bundle-app.sh [debug|release]
+# Assembles build/Yatty.app (or $YATTY_APP) from the SwiftPM binary,
+# Info.plist, Ghostty's resources and zmx, then signs it ad hoc.
+# Usage: bundle-app.sh [debug|release]
 set -euo pipefail
 
 config="${1:-debug}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
-app="$root/build/Yatty.app"
+app="${YATTY_APP:-$root/build/Yatty.app}"
 bindir="$(cd "$root" && swift build -c "$config" --scratch-path .build/swift --disable-sandbox --show-bin-path)"
 bin="$bindir/Yatty"
 

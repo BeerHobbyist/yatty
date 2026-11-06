@@ -20,13 +20,18 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 "$zmx" kill "$session" >/dev/null 2>&1 || true
 "$zmx" run "$session" -d true >/dev/null
-for _ in 1 2 3 4 5 6 7 8 9 10; do "$zmx" list --short | grep -qx "$session" && break; sleep 0.3; done
+# Once its first command has run, the shell reads input: typed earlier, bash
+# would throw it away as it starts.
+"$zmx" wait "$session" >/dev/null
 "$zmx" list --short | grep -qx "$session" || fail "session didn't start"
 
 # What `yatty tab send e2e 'echo "a  b" -- --force'` sends: text, then Enter.
 "$zmx" send "$session" $'echo "a  b" -- --force \'q\'\r'
 sleep 1
-"$zmx" history "$session" | grep -q -- "a  b -- --force 'q'" || fail "send didn't type its argument as given"
+history="$("$zmx" history "$session")"
+# The line arrived byte for byte, and the Enter after it ran it.
+grep -qF -- "echo \"a  b\" -- --force 'q'" <<<"$history" || fail "send didn't type its argument as given"
+grep -qxF -- "a  b -- --force q" <<<"$history" || fail "the Enter after the text didn't run it"
 
 start=$(date +%s)
 if "$zmx" history nosuch-session >/dev/null 2>&1; then fail "history of a missing session succeeded"; fi

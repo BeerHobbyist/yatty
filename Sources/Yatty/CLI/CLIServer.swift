@@ -30,6 +30,10 @@ final class CLIServer: @unchecked Sendable {
     }
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { return nil }
+    // Inherited by every connection: set on one whose client already hung
+    // up, macOS refuses it, and the reply's write would kill the app.
+    var on: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
     let bound = withUnsafePointer(to: &address) {
       $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
     }
@@ -66,8 +70,6 @@ final class CLIServer: @unchecked Sendable {
 
   private static func serve(_ connection: Int32, sandboxed: Bool, handler: @escaping Handler) {
     _ = fcntl(connection, F_SETFL, fcntl(connection, F_GETFL) & ~O_NONBLOCK)
-    var on: Int32 = 1
-    setsockopt(connection, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
     // A client that connects and says nothing doesn't hold a thread for long.
     var timeout = timeval(tv_sec: 5, tv_usec: 0)
     setsockopt(connection, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))

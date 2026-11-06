@@ -3,6 +3,9 @@ import YattyProtocol
 
 // `yatty`: drives the tabs of the Yatty terminal it runs in, through the app.
 
+// A hung-up socket or a closed pipe is an error to report, not a reason to die.
+signal(SIGPIPE, SIG_IGN)
+
 let arguments = Array(CommandLine.arguments.dropFirst())
 let environment = ProcessInfo.processInfo.environment
 
