@@ -86,11 +86,11 @@ EOF
 { "repos": [{ "name": "sample-app", "path": "$repo" }], "selectedWorktree": "$login" }
 EOF
     session() { printf 'yatty-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -c1-10)"; }
-    mkdir -p "$sandbox/config/yatty/agents"
+    mkdir -p "$sandbox/state/agents"
     now="$(date +%s)"
-    echo "needs-action $now" > "$sandbox/config/yatty/agents/$(session "$login")"
-    echo "working $now" > "$sandbox/config/yatty/agents/$(session "$repo/.worktrees/crash-on-start")"
-    echo "done $now" > "$sandbox/config/yatty/agents/$(session "$repo")"
+    echo "needs-action $now" > "$sandbox/state/agents/$(session "$login")"
+    echo "working $now" > "$sandbox/state/agents/$(session "$repo/.worktrees/crash-on-start")"
+    echo "done $now" > "$sandbox/state/agents/$(session "$repo")"
     ;;
   status|pr-panel|merge)
     cat > "$state" <<EOF
@@ -139,7 +139,7 @@ rm -f "$out"
 # Window restoration off: snapshots share the real app's bundle id, so they'd
 # reopen at whatever size the real window last had.
 log="$sandbox/app.log"
-XDG_CONFIG_HOME="$sandbox/config" YATTY_ZMX_DIR="$sandbox/zmx" \
+XDG_CONFIG_HOME="$sandbox/config" YATTY_STATE_DIR="$sandbox/state" YATTY_ZMX_DIR="$sandbox/zmx" \
   YATTY_SNAPSHOT="$out" YATTY_SNAPSHOT_DELAY="${YATTY_SNAPSHOT_DELAY:-3}" \
   "$app" -ApplePersistenceIgnoreState YES >"$log" 2>&1 || true
 grep '^snapshot:' "$log" | sort -u >&2 || true

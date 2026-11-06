@@ -1,10 +1,13 @@
 import Foundation
+import YattyProtocol
 
 /// Claude Code hooks that report an agent's state to Yatty: each event
 /// writes `<state> <epoch>` to `$YATTY_AGENT_DIR/$YATTY_PANE` (the pane's zmx
 /// session name). Yatty's terminals set both; anywhere else they do nothing.
 enum AgentHooks {
-  static var directory: URL { ConfigFiles.directory.appendingPathComponent("agents") }
+  /// In the state directory, not the config one: a sandboxed agent's hooks
+  /// write here, and fence should keep it away from Yatty's config.
+  static var directory: URL { CLIPaths.directory().appendingPathComponent("agents") }
   static var settingsURL: URL { ConfigFiles.directory.appendingPathComponent("claude-hooks.json") }
 
   /// nil state: the session ended, so its report goes.
@@ -38,11 +41,28 @@ enum AgentHooks {
     return #"[ -n "$YATTY_AGENT_DIR" ] && [ -n "$YATTY_PANE" ]"# + " && { \(action); } >/dev/null 2>&1; exit 0"
   }
 
-  /// The `--settings` file's content: one command hook per event.
+  /// What an agent in a Yatty terminal is told when it starts.
+  static let note = "You are running inside Yatty, a terminal workspace where each git worktree has tabs the user sees. "
+    + "The `yatty` command (also at $YATTY_CLI) controls this worktree's tabs: run long-lived processes in their own tab "
+    + "with `yatty tab new --name dev -- npm run dev` (opens in the background), read a tab's output with "
+    + "`yatty tab read dev`, stop it with `yatty tab send dev --key C-c`, show the user a diff with `yatty diff`, "
+    + "and ask for their attention with `yatty notify MESSAGE`. See `yatty --help`."
+
+  /// The SessionStart hook that prints `note`: Claude adds what it prints to
+  /// the conversation. Only where the CLI is; it names `YATTY_AGENT_DIR` so
+  /// it's recognised as Yatty's (see ClaudeSettings).
+  static var noteCommand: String {
+    #"[ -n "$YATTY_AGENT_DIR" ] && [ -n "$YATTY_CLI" ] && printf '%s\n' "# + shellQuote(note) + "; exit 0"
+  }
+
+  /// The `--settings` file's content: one command hook per event, and the
+  /// note at SessionStart.
   static func settings() -> [String: Any] {
     var hooks: [String: [[String: Any]]] = [:]
     for (event, matcher, state) in events {
-      var entry: [String: Any] = ["hooks": [["type": "command", "command": command(for: state), "timeout": 5]]]
+      var commands: [[String: Any]] = [["type": "command", "command": command(for: state), "timeout": 5]]
+      if event == "SessionStart" { commands.append(["type": "command", "command": noteCommand, "timeout": 5]) }
+      var entry: [String: Any] = ["hooks": commands]
       if let matcher { entry["matcher"] = matcher }
       hooks[event, default: []].append(entry)
     }

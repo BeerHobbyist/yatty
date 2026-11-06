@@ -68,9 +68,10 @@ final class AppStore {
   @ObservationIgnored var starting: Set<PaneKey> = []
   /// Panes opened with "New Agent": their new session gets the agent command.
   @ObservationIgnored var agentPanes: Set<PaneKey> = []
-  /// Panes that run a command (a diff viewer) instead of a shell; the pane
-  /// closes when it exits.
-  @ObservationIgnored var commandPanes: [PaneKey: String] = [:]
+  /// Panes opened on request (a diff, `yatty tab new`), until they start.
+  @ObservationIgnored var paneLaunches: [PaneKey: PaneLaunch] = [:]
+  /// The `yatty` CLI's sockets.
+  @ObservationIgnored var cliServers: [CLIServer] = []
   /// Worktrees being closed or removed: no terminal may start for them.
   @ObservationIgnored var retiring: Set<String> = []
   @ObservationIgnored var focusWhenStarted: PaneKey?
@@ -106,6 +107,7 @@ final class AppStore {
     gitStatus.start(store: self)
     pullRequests.start(store: self)
     notificationDelegate.store = self
+    startCLIServers()
     if !Snapshot.isActive { UNUserNotificationCenter.current().delegate = notificationDelegate }
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }

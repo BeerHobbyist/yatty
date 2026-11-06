@@ -6,7 +6,8 @@ set -euo pipefail
 config="${1:-debug}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 app="$root/build/Yatty.app"
-bin="$(cd "$root" && swift build -c "$config" --scratch-path .build/swift --disable-sandbox --show-bin-path)/Yatty"
+bindir="$(cd "$root" && swift build -c "$config" --scratch-path .build/swift --disable-sandbox --show-bin-path)"
+bin="$bindir/Yatty"
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
@@ -18,6 +19,12 @@ cp "$root/Resources/Info.plist" "$app/Contents/Info.plist"
 cp -R "$root/Vendor/ghostty/share/ghostty" "$app/Contents/Resources/ghostty"
 cp -R "$root/Vendor/ghostty/share/terminfo" "$app/Contents/Resources/terminfo"
 install -m 755 "$root/Vendor/zmx" "$app/Contents/MacOS/zmx"
+# The `yatty` CLI and its Claude Code skill: Contents/Resources/bin/yatty finds
+# the skill at ../skills/yatty/SKILL.md.
+mkdir -p "$app/Contents/Resources/bin" "$app/Contents/Resources/skills"
+install -m 755 "$bindir/yatty-cli" "$app/Contents/Resources/bin/yatty"
+cp -R "$root/skills/yatty" "$app/Contents/Resources/skills/yatty"
 
 codesign --force --sign - "$app/Contents/MacOS/zmx"
+codesign --force --sign - "$app/Contents/Resources/bin/yatty"
 codesign --force --sign - "$app"

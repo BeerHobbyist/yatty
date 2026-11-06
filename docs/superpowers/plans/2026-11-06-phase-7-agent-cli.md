@@ -8,6 +8,13 @@
 
 **Spec:** roadmap Phase 7; agentree README "The agent CLI" and "Running agents in fence", DEVLOG "Agent CLI" and "Sandbox broker (fence)", `src/cli.ts`, `src/services/broker.ts`, `skills/agentree/SKILL.md`.
 
+## Status (resume here)
+
+- Tasks 1–3 written: `Sources/YattyProtocol` (request, response, paths, argument parsing, `CLIClient`), `Sources/YattyCLI` (main, skill), `Sources/Yatty/CLI` (`CLIServer` POSIX sockets, `CLIHandler` ops, `CLIRules` pure rules), `WorktreeLayout.sandboxed`, `PaneLaunch`, `config.sandboxCommand`, SessionStart note hook, `skills/yatty/SKILL.md`, README fence section, `make app` bundles the CLI and skill.
+- Changes from the plan: no `YATTY_SOCKET` (panes get `YATTY_STATE_DIR`; the CLI derives both sockets from it); agent reports moved to `~/.local/state/yatty/agents` so fence can deny writes to `~/.config/yatty/**` (a sandbox that edits `sandboxCommand` would escape it).
+- Blocked by fence in the dev session: `serverAnswersEachSocket` and `scripts/zmx-e2e.sh` need `network.allowUnixSockets` for `/private/tmp/yatty-test-501/app.sock`, `/private/tmp/yatty-test-501/sandbox.sock` and `/private/tmp/yatty-test-501/zmx/e2e`. Every other test passes.
+- Next: Task 4 (run those two, fresh verifier, one re-verify, tick the roadmap, commit).
+
 ## Global Constraints
 
 See the roadmap. Commands: `tab list [--json]`, `tab new [--name N] [--select] [-- COMMAND...]`, `tab read TAB [--lines N]`, `tab send TAB TEXT... [--key KEY]`, `tab select|rename|close TAB`, `diff [working|staged|base|REF]`, `notify MESSAGE...`, `status [--json]`, `skill install|uninstall|show`. `TAB` is a tab's name or 1-based index. `tab new` opens in the background (never steals the user's view) unless `--select`, refuses a name already in use, and types the command into a fresh shell so the tab outlives it; `tab close` refuses the last tab. Exit status 0 on success, 1 with a one-line message on stderr otherwise.
@@ -22,7 +29,7 @@ Sandbox rules (requests on `sandbox.sock`): what it starts runs in `sandboxComma
 4. Arguments with spaces, quotes or newlines survive CLI → JSON → app → zmx unchanged — round-trip test on `CLIRequest` encoding and `Zmx.sendArguments`.
 5. The CLI with no app running prints "Yatty isn't running" and exits 1 within a second — test on the CLI's connect error mapping.
 
-- [ ] Task 1: protocol + CLI — `Sources/YattyCLI/main.swift` (new target `yatty-cli`), `Sources/Yatty/CLI/CLIProtocol.swift` shared by both via a small `YattyProtocol` target (`CLIRequest`, `CLIResponse`, socket paths), argument parsing tested in `Tests/YattyTests/CLITests.swift`; `make app` bundles it.
-- [ ] Task 2: app server — `Sources/Yatty/CLI/CLIServer.swift` (two `NWListener`s on Unix sockets), `Sources/Yatty/CLI/CLIHandler.swift` (ops → `AppStore` / zmx; sandbox rules); pane env `YATTY_CLI`, `YATTY_SOCKET`, PATH with the CLI's directory; tab names and indices; `tab new` in the background; snapshot-free (tested by running the CLI against a test server in `CLITests`).
-- [ ] Task 3: agents learn about it — a SessionStart hook prints a short note (only where `$YATTY_CLI` is set); `skills/yatty/SKILL.md` (when to use the CLI, the dev-server workflow, etiquette); `yatty skill install|uninstall|show` (`$CLAUDE_CONFIG_DIR` or `~/.claude/skills/yatty/`); README section "Running agents in fence" with the exact `allowUnixSockets` entry for `sandbox.sock`.
+- [x] Task 1: protocol + CLI — `Sources/YattyCLI/main.swift` (new target `yatty-cli`), `Sources/Yatty/CLI/CLIProtocol.swift` shared by both via a small `YattyProtocol` target (`CLIRequest`, `CLIResponse`, socket paths), argument parsing tested in `Tests/YattyTests/CLITests.swift`; `make app` bundles it.
+- [x] Task 2: app server — `Sources/Yatty/CLI/CLIServer.swift` (two `NWListener`s on Unix sockets), `Sources/Yatty/CLI/CLIHandler.swift` (ops → `AppStore` / zmx; sandbox rules); pane env `YATTY_CLI`, `YATTY_SOCKET`, PATH with the CLI's directory; tab names and indices; `tab new` in the background; snapshot-free (tested by running the CLI against a test server in `CLITests`).
+- [x] Task 3: agents learn about it — a SessionStart hook prints a short note (only where `$YATTY_CLI` is set); `skills/yatty/SKILL.md` (when to use the CLI, the dev-server workflow, etiquette); `yatty skill install|uninstall|show` (`$CLAUDE_CONFIG_DIR` or `~/.claude/skills/yatty/`); README section "Running agents in fence" with the exact `allowUnixSockets` entry for `sandbox.sock`.
 - [ ] Task 4: verify (tests; a scripted end-to-end run of the CLI against the app's handler; fresh verifier; one re-verify), tick the roadmap, commit.

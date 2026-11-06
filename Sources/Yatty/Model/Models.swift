@@ -80,8 +80,11 @@ struct YattyConfig: Codable {
   var cloneDirectory: String = "~/yatty"
   /// System notifications when an agent needs you or finishes elsewhere.
   var notifications: Bool = true
+  /// What a sandboxed agent's `yatty tab new` runs in: a command prefix read
+  /// by /bin/sh, like `fence --`. Unset, Yatty starts nothing for one.
+  var sandboxCommand: String?
 
-  enum CodingKeys: String, CodingKey { case agentCommand, cloneDirectory, notifications }
+  enum CodingKeys: String, CodingKey { case agentCommand, cloneDirectory, notifications, sandboxCommand }
 
   init() {}
 
@@ -90,6 +93,7 @@ struct YattyConfig: Codable {
     agentCommand = try container.decodeIfPresent(String.self, forKey: .agentCommand) ?? agentCommand
     cloneDirectory = try container.decodeIfPresent(String.self, forKey: .cloneDirectory) ?? cloneDirectory
     notifications = try container.decodeIfPresent(Bool.self, forKey: .notifications) ?? notifications
+    sandboxCommand = try container.decodeIfPresent(String.self, forKey: .sandboxCommand)
   }
 
   var cloneRoot: URL {

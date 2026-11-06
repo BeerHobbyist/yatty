@@ -147,6 +147,21 @@ struct TerminalTab: Codable, Identifiable, Equatable, Sendable {
 struct WorktreeLayout: Codable, Equatable, Sendable {
   var tabs: [TerminalTab]
   var selectedTab: String?
+  /// Panes a sandboxed agent opened (`yatty tab new` inside fence): their
+  /// shell runs in the sandbox, so only they may be typed into from it.
+  var sandboxed: Set<String> = []
+
+  init(tabs: [TerminalTab], selectedTab: String?) {
+    self.tabs = tabs
+    self.selectedTab = selectedTab
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    tabs = try container.decode([TerminalTab].self, forKey: .tabs)
+    selectedTab = try container.decodeIfPresent(String.self, forKey: .selectedTab)
+    sandboxed = try container.decodeIfPresent(Set<String>.self, forKey: .sandboxed) ?? []
+  }
 
   /// One tab with the worktree's first pane, `0`.
   static let initial = WorktreeLayout(
@@ -160,15 +175,15 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
     tabs.first { $0.root.panes.contains(pane) }
   }
 
-  /// A new tab after the selected one, selected.
-  mutating func addTab(pane: String, id: String) {
+  /// A new tab after the selected one, selected unless told not to.
+  mutating func addTab(pane: String, id: String, select: Bool = true) {
     let tab = TerminalTab(id: id, root: .pane(pane), focusedPane: pane)
     if let index = tabs.firstIndex(where: { $0.id == selectedTab }) {
       tabs.insert(tab, at: index + 1)
     } else {
       tabs.append(tab)
     }
-    selectedTab = id
+    if select || selectedTab == nil { selectedTab = id }
   }
 
   /// Splits `pane`, focusing the new one.
@@ -181,6 +196,7 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
   /// Removes `pane`. Its sibling takes over the focus; an emptied tab goes,
   /// and the next tab (else the previous) is selected.
   mutating func close(_ pane: String) {
+    sandboxed.remove(pane)
     guard let index = tabs.firstIndex(where: { $0.root.panes.contains(pane) }) else { return }
     let sibling = tabs[index].root.sibling(of: pane)
     if let root = tabs[index].root.removing(pane) {

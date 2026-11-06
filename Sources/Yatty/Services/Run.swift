@@ -14,17 +14,20 @@ enum Run {
   static let searchPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
   static func run(
-    _ executable: String, _ args: [String], cwd: String? = nil, env: [String: String] = [:]
+    _ executable: String, _ args: [String], cwd: String? = nil, env: [String: String] = [:],
+    timeout: TimeInterval? = nil
   ) async -> ProcessResult {
     await withCheckedContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
-        continuation.resume(returning: runSync(executable, args, cwd: cwd, env: env))
+        continuation.resume(returning: runSync(executable, args, cwd: cwd, env: env, timeout: timeout))
       }
     }
   }
 
+  /// Past `timeout` the program is terminated (its result then fails).
   static func runSync(
-    _ executable: String, _ args: [String], cwd: String? = nil, env: [String: String] = [:]
+    _ executable: String, _ args: [String], cwd: String? = nil, env: [String: String] = [:],
+    timeout: TimeInterval? = nil
   ) -> ProcessResult {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
@@ -45,6 +48,11 @@ enum Run {
       try process.run()
     } catch {
       return ProcessResult(status: -1, stdout: "", stderr: error.localizedDescription)
+    }
+    if let timeout {
+      DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [process] in
+        if process.isRunning { process.terminate() }
+      }
     }
 
     // Read stderr alongside stdout so neither pipe fills up and stalls the child.

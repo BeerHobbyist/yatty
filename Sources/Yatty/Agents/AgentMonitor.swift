@@ -151,19 +151,29 @@ final class AgentMonitor {
     else { return }
     let title = state == .needsAction ? "\(store.label(for: worktree)) needs you" : "\(store.label(for: worktree)) is done"
     let subtitle = store.repo(of: worktree)?.name ?? ""
-    Task {
-      let center = UNUserNotificationCenter.current()
-      if notificationsAllowed == nil {
-        notificationsAllowed = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
-      }
-      guard notificationsAllowed == true else { return }
-      let content = UNMutableNotificationContent()
-      content.title = title
-      content.subtitle = subtitle
-      content.sound = .default
-      content.userInfo = ["worktree": key.worktree, "pane": key.pane]
-      try? await center.add(
-        UNNotificationRequest(identifier: "\(key.worktree)#\(key.pane)", content: content, trigger: nil))
+    Task { await post(title: title, subtitle: subtitle, body: nil, about: key, id: "\(key.worktree)#\(key.pane)") }
+  }
+
+  /// A system notification; clicking it opens `key`'s pane. False when
+  /// Yatty may not show notifications.
+  @discardableResult
+  func post(title: String, subtitle: String, body: String?, about key: PaneKey, id: String = UUID().uuidString) async -> Bool {
+    let center = UNUserNotificationCenter.current()
+    if notificationsAllowed == nil {
+      notificationsAllowed = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+    }
+    guard notificationsAllowed == true else { return false }
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.subtitle = subtitle
+    if let body { content.body = body }
+    content.sound = .default
+    content.userInfo = ["worktree": key.worktree, "pane": key.pane]
+    do {
+      try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+      return true
+    } catch {
+      return false
     }
   }
 }

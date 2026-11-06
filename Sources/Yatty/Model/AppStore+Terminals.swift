@@ -23,13 +23,23 @@ enum GotoSplit: Sendable {
   case toward(FocusDirection)
 }
 
+/// How a pane opened on request starts; used once, when its session is new.
+struct PaneLaunch: Sendable {
+  /// Runs instead of a shell (a diff viewer): the pane closes when it exits.
+  var command: String?
+  /// Typed into its new shell (`yatty tab new -- COMMAND`).
+  var input: String?
+  /// Where its shell starts.
+  var cwd: String?
+}
+
 extension AppStore {
   func layout(for worktree: Worktree) -> WorktreeLayout {
     layouts[worktree.id] ?? .initial
   }
 
   /// Applies `change` to the worktree's layout and, unless told not to, saves it.
-  private func updateLayout(_ worktreeID: String, save: Bool = true, _ change: (inout WorktreeLayout) -> Void) {
+  func updateLayout(_ worktreeID: String, save: Bool = true, _ change: (inout WorktreeLayout) -> Void) {
     var layout = layouts[worktreeID] ?? .initial
     change(&layout)
     guard layouts[worktreeID] != layout else { return }
@@ -79,13 +89,32 @@ extension AppStore {
       failedPanes.insert(key)
       return
     }
+    let sandboxed = layouts[key.worktree, default: .initial].sandboxed.contains(key.pane)
+    let paneLaunch = paneLaunches[key]
+    // The login shell's PATH: Finder's is too thin to find a viewer or the sandbox.
+    let loginPath = paneLaunch?.command != nil || sandboxed ? await Task.detached { Run.loginPath }.value : nil
     guard terminals[key] == nil, !retiring.contains(key.worktree),
       layouts[key.worktree, default: .initial].allPanes.contains(key.pane)
     else { return }
+    paneLaunches[key] = nil
     guard let app = GhosttyApp.shared.app else {
       Snapshot.note("libghostty app unavailable")
       failedPanes.insert(key)
       return
+    }
+
+    // A sandboxed pane only ever starts in the sandbox, after a restart too.
+    var program = paneLaunch?.command.map { ["/bin/sh", "-c", $0] } ?? [Zmx.loginShell, "-l"]
+    var directory = worktree.path
+    if sandboxed {
+      guard let prefix = CLIRules.sandboxPrefix(config.sandboxCommand) else {
+        Snapshot.note("a sandboxed pane, but no sandboxCommand")
+        failedPanes.insert(key)
+        return
+      }
+      program = CLIRules.sandboxArgv(prefix: prefix, program: program, cwd: paneLaunch?.cwd)
+    } else if let cwd = paneLaunch?.cwd {
+      directory = cwd
     }
 
     var environment = Zmx.environment
@@ -93,18 +122,17 @@ extension AppStore {
     // Where this pane's agent reports its state (see AgentHooks).
     environment["YATTY_AGENT_DIR"] = AgentHooks.directory.path
     environment["YATTY_PANE"] = session
-    let input = AppStore.agentInput(
+    environment.merge(CLIServer.paneEnvironment(path: loginPath)) { _, new in new }
+    let sessionIsNew = !live.contains(session)
+    let agent = AppStore.agentInput(
       AgentHooks.withStatusHooks(config.agentCommand, settingsPath: AgentHooks.settingsURL.path),
-      pane: key.pane, sessionIsNew: !live.contains(session), agentTab: agentPanes.remove(key) != nil)
-    let paneCommand = commandPanes.removeValue(forKey: key)
-    if paneCommand != nil { environment["PATH"] = Run.loginPath }
+      pane: key.pane, sessionIsNew: sessionIsNew, agentTab: agentPanes.remove(key) != nil)
+    let typed = paneLaunch?.input.flatMap { sessionIsNew ? $0 + "\n" : nil }
     let launch = TerminalLaunch(
-      command: Snapshot.isActive
-        ? "/bin/cat"
-        : Zmx.attachCommand(session: session, command: paneCommand.map { ["/bin/sh", "-c", $0] }),
-      workingDirectory: worktree.path,
+      command: Snapshot.isActive ? "/bin/cat" : Zmx.attachCommand(session: session, command: program),
+      workingDirectory: directory,
       environment: environment,
-      initialInput: Snapshot.isActive || paneCommand != nil ? nil : input)
+      initialInput: Snapshot.isActive || paneLaunch?.command != nil ? nil : typed ?? agent)
     guard let terminal = TerminalView(app: app, launch: launch) else {
       Snapshot.note("libghostty didn't create a surface")
       failedPanes.insert(key)
@@ -211,13 +239,14 @@ extension AppStore {
 
   /// A tab running `command` (a diff viewer) instead of a shell, named
   /// `name`; it closes when the command exits.
-  func newTab(in worktree: Worktree, command: String, name: String) {
+  func newTab(in worktree: Worktree, command: String, name: String, sandboxed: Bool = false) {
     let key = PaneKey(worktree: worktree.id, pane: newPaneID())
-    commandPanes[key] = command
+    paneLaunches[key] = PaneLaunch(command: command)
     let tabID = "t" + newPaneID()
     updateLayout(worktree.id) {
       $0.addTab(pane: key.pane, id: tabID)
       $0.rename(tabID, to: name)
+      if sandboxed { $0.sandboxed.insert(key.pane) }
     }
     focusPane(key)
   }
@@ -281,7 +310,7 @@ extension AppStore {
     failedPanes.remove(key)
     paneTitles[key] = nil
     agentPanes.remove(key)
-    commandPanes[key] = nil
+    paneLaunches[key] = nil
   }
 
   /// Destroys every terminal of the worktree, forgets its layout and ends

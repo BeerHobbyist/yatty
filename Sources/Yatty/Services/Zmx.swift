@@ -63,6 +63,22 @@ enum Zmx {
     _ = await Run.run(executable, ["kill", name], env: environment)
   }
 
+  /// The session's scrollback as plain text, or nil when it isn't running.
+  static func history(_ name: String) async -> String? {
+    let result = await Run.run(executable, ["history", name], env: environment, timeout: 10)
+    return result.ok ? result.stdout : nil
+  }
+
+  /// Types `input` into the session as if at its keyboard; false when it isn't running.
+  static func send(_ name: String, _ input: String) async -> Bool {
+    await Run.run(executable, sendArguments(session: name, input: input), env: environment, timeout: 10).ok
+  }
+
+  /// One argument for all of it, so zmx joins nothing and splits nothing.
+  static func sendArguments(session: String, input: String) -> [String] {
+    ["send", session, input]
+  }
+
   /// The terminal's command: attach to the session, starting `command` (by
   /// default the login shell) in it if it doesn't exist yet. libghostty runs it as
   /// `bash -c "exec -l <command>"`, so it's plain shell words.
