@@ -83,6 +83,7 @@ extension AppStore {
       layouts[key.worktree, default: .initial].allPanes.contains(key.pane)
     else { return }
     guard let app = GhosttyApp.shared.app else {
+      Snapshot.note("libghostty app unavailable")
       failedPanes.insert(key)
       return
     }
@@ -98,6 +99,7 @@ extension AppStore {
       environment: environment,
       initialInput: Snapshot.isActive ? nil : input)
     guard let terminal = TerminalView(app: app, launch: launch) else {
+      Snapshot.note("libghostty didn't create a surface")
       failedPanes.insert(key)
       return
     }
@@ -114,6 +116,7 @@ extension AppStore {
 
   /// Starts every pane of every tab of the worktree that isn't running yet.
   func startTerminals(of worktree: Worktree) {
+    guard !Snapshot.isActive else { return }
     for pane in layout(for: worktree).allPanes {
       _ = terminal(for: PaneKey(worktree: worktree.id, pane: pane), in: worktree)
     }

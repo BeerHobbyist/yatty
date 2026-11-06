@@ -10,6 +10,12 @@ enum Snapshot {
 
   @MainActor private static var scheduled = false
 
+  /// A line for the snapshot script's log; nothing outside snapshot mode.
+  static func note(_ message: String) {
+    guard isActive else { return }
+    FileHandle.standardError.write(Data("snapshot: \(message)\n".utf8))
+  }
+
   @MainActor static func scheduleIfRequested() {
     let environment = ProcessInfo.processInfo.environment
     guard let path = environment["YATTY_SNAPSHOT"], !path.isEmpty, !scheduled else { return }
@@ -23,16 +29,33 @@ enum Snapshot {
     }
   }
 
+  /// Renders the view's layer tree, which (unlike `cacheDisplay`) includes
+  /// the sidebar's contents. Blur and Metal content still come out empty.
+  @MainActor private static func capture(_ view: NSView) -> NSBitmapImageRep? {
+    guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+    guard let layer = view.layer, let context = NSGraphicsContext(bitmapImageRep: rep) else {
+      view.cacheDisplay(in: view.bounds, to: rep)
+      return rep
+    }
+    let cg = context.cgContext
+    cg.setFillColor(NSColor.windowBackgroundColor.cgColor)
+    cg.fill(CGRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh))
+    cg.scaleBy(x: CGFloat(rep.pixelsWide) / view.bounds.width, y: CGFloat(rep.pixelsHigh) / view.bounds.height)
+    if layer.isGeometryFlipped || view.isFlipped {
+      cg.translateBy(x: 0, y: view.bounds.height)
+      cg.scaleBy(x: 1, y: -1)
+    }
+    layer.render(in: cg)
+    return rep
+  }
+
   @MainActor private static func write(to path: String) {
     // Under a sandbox that blocks the window server there are none: say so.
     FileHandle.standardError.write(Data("snapshot: \(NSApp.windows.filter(\.isVisible).count) visible windows\n".utf8))
     // The frame view includes the title bar and toolbar; sheets are windows of their own.
     let images: [NSBitmapImageRep] = NSApp.windows.filter(\.isVisible).compactMap { window in
-      guard let view = window.contentView?.superview ?? window.contentView,
-        let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
-      else { return nil }
-      view.cacheDisplay(in: view.bounds, to: rep)
-      return rep
+      guard let view = window.contentView?.superview ?? window.contentView else { return nil }
+      return capture(view)
     }
     guard !images.isEmpty else { return }
 

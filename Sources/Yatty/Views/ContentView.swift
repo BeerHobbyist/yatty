@@ -5,11 +5,23 @@ struct ContentView: View {
 
   var body: some View {
     @Bindable var store = store
-    NavigationSplitView {
-      Sidebar()
-        .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 400)
-    } detail: {
-      DetailView()
+    Group {
+      if Snapshot.isActive {
+        // macOS composites a split view's sidebar outside the app, where a
+        // snapshot can't see it; a plain row of the same views can be drawn.
+        HStack(spacing: 0) {
+          Sidebar().frame(width: 240)
+          Divider()
+          DetailView()
+        }
+      } else {
+        NavigationSplitView {
+          Sidebar()
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 400)
+        } detail: {
+          DetailView()
+        }
+      }
     }
     .sheet(item: $store.newWorktreeRepo) { repo in
       NewWorktreeSheet(repo: repo)
@@ -92,7 +104,7 @@ struct Sidebar: View {
         }
       }
     }
-    .listStyle(.sidebar)
+    .modifier(SidebarListStyle())
     .onKeyPress(.return) {
       store.focusSelectedTerminal()
       return .handled
@@ -206,5 +218,17 @@ struct NewWorktreeSheet: View {
 
   private func trimmed(_ s: String) -> String {
     s.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+}
+
+/// The sidebar list style, except in snapshots: vibrant sidebar text uses a
+/// blend that a snapshot's layer render can't draw, so it comes out blank.
+private struct SidebarListStyle: ViewModifier {
+  func body(content: Content) -> some View {
+    if Snapshot.isActive {
+      content.listStyle(.inset)
+    } else {
+      content.listStyle(.sidebar)
+    }
   }
 }

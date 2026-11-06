@@ -75,7 +75,13 @@ func shellQuote(_ s: String) -> String {
   "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
 }
 
-/// A path with symlinks resolved, as git reports worktree paths.
+/// A path with symlinks resolved, as git reports worktree paths. `realpath`,
+/// not Foundation's resolver: that one strips a leading /private, which git
+/// keeps (/private/tmp, /private/var/folders).
 func canonicalPath(_ path: String) -> String {
-  URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+  guard let resolved = realpath(path, nil) else {
+    return URL(fileURLWithPath: path).standardizedFileURL.path
+  }
+  defer { free(resolved) }
+  return String(cString: resolved)
 }

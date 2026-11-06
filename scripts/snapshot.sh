@@ -61,5 +61,6 @@ log="$sandbox/app.log"
 XDG_CONFIG_HOME="$sandbox/config" YATTY_ZMX_DIR="$sandbox/zmx" \
   YATTY_SNAPSHOT="$out" YATTY_SNAPSHOT_DELAY="${YATTY_SNAPSHOT_DELAY:-3}" \
   "$app" >"$log" 2>&1 || true
-[ -f "$out" ] || { grep '^snapshot:' "$log" >&2; echo "no snapshot written" >&2; exit 1; }
+grep '^snapshot:' "$log" | sort -u >&2 || true
+[ -f "$out" ] || { echo "no snapshot written" >&2; exit 1; }
 echo "$out"

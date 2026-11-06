@@ -40,19 +40,20 @@ struct TabBar: View {
           ForEach(layout.tabs) { tab in
             TabButton(worktree: worktree, tab: tab, isSelected: tab.id == layout.selectedTab)
           }
+          Menu {
+            Button("New Shell") { store.newTab(in: worktree, agent: false) }
+            Button("New Agent") { store.newTab(in: worktree, agent: true) }
+          } label: {
+            Image(systemName: "plus")
+          }
+          .menuStyle(.borderlessButton)
+          .menuIndicator(.hidden)
+          .fixedSize()
+          .padding(.leading, 4)
+          .help("New tab")
         }
         .padding(.horizontal, 6)
       }
-      Menu {
-        Button("New Shell") { store.newTab(in: worktree, agent: false) }
-        Button("New Agent") { store.newTab(in: worktree, agent: true) }
-      } label: {
-        Image(systemName: "plus")
-      }
-      .menuStyle(.borderlessButton)
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .help("New tab")
       Spacer(minLength: 8)
       if let tab = layout.selected {
         let focused = PaneKey(worktree: worktree.id, pane: tab.focusedPane)
@@ -242,7 +243,14 @@ struct PaneView: View {
 
   var body: some View {
     Group {
-      if let terminal = store.terminal(for: key, in: worktree) {
+      if Snapshot.isActive {
+        // libghostty can't start under the sandbox snapshots run in.
+        Color(nsColor: .textBackgroundColor)
+          .overlay(alignment: .topLeading) {
+            Text("terminal \(key.pane)").font(.system(.caption, design: .monospaced))
+              .foregroundStyle(.secondary).padding(8)
+          }
+      } else if let terminal = store.terminal(for: key, in: worktree) {
         TerminalHost(terminal: terminal)
       } else if store.failedPanes.contains(key) {
         ContentUnavailableView {
@@ -257,6 +265,7 @@ struct PaneView: View {
         Color.clear
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .overlay {
       if dimmed {
         Color.black.opacity(0.18).allowsHitTesting(false)
