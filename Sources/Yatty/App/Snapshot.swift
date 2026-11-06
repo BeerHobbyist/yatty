@@ -8,6 +8,13 @@ enum Snapshot {
     !(ProcessInfo.processInfo.environment["YATTY_SNAPSHOT"] ?? "").isEmpty
   }
 
+  /// `YATTY_SNAPSHOT_SHEET`: a sheet to open before the snapshot is taken.
+  static var sheet: String? {
+    guard isActive else { return nil }
+    let value = ProcessInfo.processInfo.environment["YATTY_SNAPSHOT_SHEET"] ?? ""
+    return value.isEmpty ? nil : value
+  }
+
   @MainActor private static var scheduled = false
 
   /// A line for the snapshot script's log; nothing outside snapshot mode.
@@ -24,7 +31,8 @@ enum Snapshot {
     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
       MainActor.assumeIsolated {
         write(to: path)
-        NSApp.terminate(nil)
+        // Not NSApp.terminate: it waits while a sheet is open.
+        exit(0)
       }
     }
   }

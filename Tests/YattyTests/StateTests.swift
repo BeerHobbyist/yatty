@@ -39,3 +39,12 @@ import Testing
   #expect(AppStore.agentInput("claude", pane: "ab12cd", sessionIsNew: true, agentTab: true) == "claude\n")
   #expect(AppStore.agentInput("  ", pane: "0", sessionIsNew: true, agentTab: false) == nil)
 }
+
+@Test func configDefaultsAndCloneRoot() throws {
+  let config = try JSONDecoder().decode(YattyConfig.self, from: Data(#"{"agentCommand":"claude"}"#.utf8))
+  #expect(config.agentCommand == "claude")
+  #expect(config.cloneDirectory == "~/yatty")
+  #expect(config.cloneRoot.path == NSHomeDirectory() + "/yatty")
+  let custom = try JSONDecoder().decode(YattyConfig.self, from: Data(#"{"cloneDirectory":"/src"}"#.utf8))
+  #expect(custom.cloneRoot.path == "/src")
+}

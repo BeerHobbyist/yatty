@@ -4,6 +4,8 @@ struct Repo: Codable, Identifiable, Hashable {
   /// The main working copy, symlinks resolved.
   var path: String
   var name: String
+  /// `owner/name` on GitHub, when known: pull requests need it.
+  var nameWithOwner: String?
 
   var id: String { path }
 }
@@ -54,14 +56,21 @@ struct StoredState: Codable {
 struct YattyConfig: Codable {
   /// Typed into a worktree's terminal when its session is first created.
   var agentCommand: String = "caffeinate -is claude"
+  /// Where repositories picked from GitHub are cloned; `~` is the home folder.
+  var cloneDirectory: String = "~/yatty"
 
-  enum CodingKeys: String, CodingKey { case agentCommand }
+  enum CodingKeys: String, CodingKey { case agentCommand, cloneDirectory }
 
   init() {}
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     agentCommand = try container.decodeIfPresent(String.self, forKey: .agentCommand) ?? agentCommand
+    cloneDirectory = try container.decodeIfPresent(String.self, forKey: .cloneDirectory) ?? cloneDirectory
+  }
+
+  var cloneRoot: URL {
+    URL(fileURLWithPath: (cloneDirectory as NSString).expandingTildeInPath)
   }
 }
 

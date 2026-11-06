@@ -23,6 +23,9 @@ struct ContentView: View {
         }
       }
     }
+    .sheet(isPresented: $store.addingRepository) {
+      AddRepositorySheet()
+    }
     .sheet(item: $store.newWorktreeRepo) { repo in
       NewWorktreeSheet(repo: repo)
     }
@@ -118,7 +121,7 @@ struct Sidebar: View {
     .toolbar {
       ToolbarItem {
         Button {
-          store.chooseRepository()
+          store.addingRepository = true
         } label: {
           Label("Add Repository", systemImage: "folder.badge.plus")
         }

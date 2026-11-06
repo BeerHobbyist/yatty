@@ -67,6 +67,10 @@ struct AddRepositorySheet: View {
     .onChange(of: query) { _, newQuery in
       highlighted = RemoteRepo.ranked(catalog.repos, query: newQuery).first?.id
     }
+    // The first result is highlighted as soon as there is one: Return adds it.
+    .onChange(of: catalog.repos) { _, repos in
+      if highlighted == nil { highlighted = RemoteRepo.ranked(repos, query: query).first?.id }
+    }
   }
 
   @ViewBuilder
@@ -123,11 +127,13 @@ private struct RemoteRepoRow: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
       HStack(spacing: 6) {
-        Text(repo.name).fontWeight(.medium)
+        Text(repo.name).fontWeight(.medium).lineLimit(1).truncationMode(.middle)
+          .layoutPriority(1)
         if repo.isPrivate {
           Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.secondary)
         }
         Text(repo.nameWithOwner).font(.caption).foregroundStyle(.secondary)
+          .lineLimit(1).truncationMode(.middle)
       }
       if let description = repo.description, !description.isEmpty {
         Text(description).font(.caption).foregroundStyle(.secondary).lineLimit(1)

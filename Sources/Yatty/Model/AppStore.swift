@@ -40,11 +40,13 @@ final class AppStore {
   var terminalsStarted = 0
 
   var alert: AppAlert?
+  var addingRepository = false
   var newWorktreeRepo: Repo?
   var pendingClose: PendingClose?
   var pendingRemoval: Repo?
 
   let config = ConfigFiles.loadConfig()
+  let catalog = RepoCatalog()
   @ObservationIgnored var terminals: [PaneKey: TerminalView] = [:]
   @ObservationIgnored var starting: Set<PaneKey> = []
   /// Panes opened with "New Agent": their new session gets the agent command.
@@ -75,6 +77,7 @@ final class AppStore {
         message: "It was moved to \(aside.path). Add your repositories again; their terminals are still running.")
     }
     Task { await refreshAll() }
+    if Snapshot.sheet == "add-repository" { addingRepository = true }
     // Worktrees made outside Yatty (by hand, by an agent) show up on return.
     NotificationCenter.default.addObserver(
       forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
@@ -127,6 +130,13 @@ final class AppStore {
       let gone = (worktrees[repo.id] ?? []).filter { !alive.contains($0.id) }
       worktrees[repo.id] = list
       loadErrors[repo.id] = nil
+      // Repositories added before Yatty knew their GitHub name learn it here.
+      if repo.nameWithOwner == nil, let slug = await Git.remoteSlug(root: repo.path),
+        let index = repos.firstIndex(where: { $0.id == repo.id })
+      {
+        repos[index].nameWithOwner = slug
+        saveState()
+      }
       // A worktree removed outside Yatty takes its terminals and sessions with it.
       for worktree in gone { await endTerminals(of: worktree) }
     } catch {
@@ -147,20 +157,55 @@ final class AppStore {
     Task { await addRepository(at: url.path) }
   }
 
+  /// A local folder: errors show as an alert.
   func addRepository(at path: String) async {
     do {
-      let root = canonicalPath(try await Git.mainRoot(containing: path))
-      if !repos.contains(where: { $0.id == root }) {
-        repos.append(Repo(path: root, name: URL(fileURLWithPath: root).lastPathComponent))
-        saveState()
-      }
-      if let repo = repos.first(where: { $0.id == root }) {
-        await refresh(repo)
-        selection = worktrees[repo.id]?.first?.id
-      }
+      try await addRepository(path: path)
     } catch {
       alert = AppAlert(title: "Not a git repository", message: error.localizedDescription)
     }
+  }
+
+  /// Adds the repository `path` is in (or selects it if it's there already)
+  /// and selects its main copy.
+  func addRepository(path: String, nameWithOwner: String? = nil) async throws {
+    let root = canonicalPath(try await Git.mainRoot(containing: path))
+    var slug = nameWithOwner
+    if slug == nil { slug = await Git.remoteSlug(root: root) }
+    if let index = repos.firstIndex(where: { $0.id == root }) {
+      if repos[index].nameWithOwner == nil, let slug {
+        repos[index].nameWithOwner = slug
+        saveState()
+      }
+    } else {
+      repos.append(Repo(path: root, name: URL(fileURLWithPath: root).lastPathComponent, nameWithOwner: slug))
+      saveState()
+    }
+    guard let repo = repos.first(where: { $0.id == root }) else { return }
+    await refresh(repo)
+    selection = worktrees[repo.id]?.first?.id
+  }
+
+  /// A repository picked from GitHub: selected if it's added already, else
+  /// cloned into `<cloneDirectory>/<name>` — or that folder reused when it
+  /// already holds the same repository — and added.
+  func addRemote(_ remote: RemoteRepo) async throws {
+    if let existing = repos.first(where: { $0.nameWithOwner?.lowercased() == remote.nameWithOwner.lowercased() }) {
+      await refresh(existing)
+      selection = worktrees[existing.id]?.first?.id
+      return
+    }
+    let destination = config.cloneRoot.appendingPathComponent(remote.name).path
+    if FileManager.default.fileExists(atPath: destination) {
+      let origin = (try? await Git.run(["remote", "get-url", "origin"], in: destination)) ?? ""
+      guard Git.remoteMatches(origin, nameWithOwner: remote.nameWithOwner) else {
+        throw GitError(message: "\(destination) already holds another repository.")
+      }
+    } else {
+      try FileManager.default.createDirectory(at: config.cloneRoot, withIntermediateDirectories: true)
+      try await GitHub.clone(remote.nameWithOwner, to: destination)
+    }
+    try await addRepository(path: destination, nameWithOwner: remote.nameWithOwner)
   }
 
   /// Forgets the repository and ends its terminals' sessions; files stay.

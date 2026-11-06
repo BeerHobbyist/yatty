@@ -25,7 +25,7 @@ struct YattyApp: App {
         Button("New Worktree…") { store.newWorktreeForSelection() }
           .keyboardShortcut("n")
           .disabled(store.repos.isEmpty)
-        Button("Add Repository…") { store.chooseRepository() }
+        Button("Add Repository…") { store.addingRepository = true }
           .keyboardShortcut("o")
       }
       // File > Close (⌘W) would close the whole window; ⌘W closes a pane instead.
