@@ -140,27 +140,8 @@ struct DetailView: View {
           ContentUnavailableView(
             "Directory Missing", systemImage: "questionmark.folder",
             description: Text("\(worktree.path) no longer exists."))
-        } else if store.endedSessions.contains(worktree.id) {
-          ContentUnavailableView {
-            Label("Session Ended", systemImage: "terminal")
-          } description: {
-            Text("The shell in this worktree exited.")
-          } actions: {
-            Button("Start New Session") { store.restartSession(worktree.id) }
-          }
-        } else if let terminal = store.terminal(for: worktree) {
-          TerminalHost(terminal: terminal)
-        } else if store.failedTerminals.contains(worktree.id) {
-          ContentUnavailableView {
-            Label("Couldn't Start the Terminal", systemImage: "exclamationmark.triangle")
-          } description: {
-            Text("zmx couldn't be reached, or libghostty didn't create a terminal.")
-          } actions: {
-            Button("Try Again") { store.retryTerminal(worktree.id) }
-          }
         } else {
-          // Starting: a moment while zmx is asked whether the session exists.
-          Color.clear
+          TerminalsView(worktree: worktree)
         }
       }
       .navigationTitle(worktree.name)
@@ -171,23 +152,6 @@ struct DetailView: View {
         description: Text(
           store.repos.isEmpty ? "Add a repository with ⌘O." : "Pick one in the sidebar, or press ⌘N for a new one."))
     }
-  }
-}
-
-/// Shows a terminal that outlives the view: switching worktrees moves the
-/// terminal views in and out, never recreating them.
-struct TerminalHost: NSViewRepresentable {
-  let terminal: TerminalView
-
-  func makeNSView(context: Context) -> NSView { NSView() }
-
-  func updateNSView(_ container: NSView, context: Context) {
-    guard terminal.superview !== container else { return }
-    container.subviews.forEach { $0.removeFromSuperview() }
-    terminal.frame = container.bounds
-    terminal.autoresizingMask = [.width, .height]
-    container.addSubview(terminal)
-    terminal.setVisible(true)
   }
 }
 

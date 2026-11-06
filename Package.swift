@@ -16,5 +16,6 @@ let package = Package(
         .linkedLibrary("c++"),
       ]
     ),
+    .testTarget(name: "YattyTests", dependencies: ["Yatty"], path: "Tests/YattyTests"),
   ]
 )

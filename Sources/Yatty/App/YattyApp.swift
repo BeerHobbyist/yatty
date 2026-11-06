@@ -10,6 +10,7 @@ struct YattyApp: App {
       fatalError("libghostty failed to initialize")
     }
     _store = State(initialValue: AppStore())
+    DispatchQueue.main.async { MainActor.assumeIsolated { Snapshot.scheduleIfRequested() } }
   }
 
   var body: some Scene {
@@ -18,6 +19,7 @@ struct YattyApp: App {
         .environment(store)
         .frame(minWidth: 720, minHeight: 420)
     }
+    .defaultSize(width: 1280, height: 800)
     .commands {
       CommandGroup(replacing: .newItem) {
         Button("New Worktree…") { store.newWorktreeForSelection() }
@@ -26,10 +28,13 @@ struct YattyApp: App {
         Button("Add Repository…") { store.chooseRepository() }
           .keyboardShortcut("o")
       }
+      // File > Close (⌘W) would close the whole window; ⌘W closes a pane instead.
+      CommandGroup(replacing: .saveItem) {}
       CommandMenu("Worktree") {
         Button("Close Worktree…") { store.requestCloseSelected() }
           .disabled(store.selectedWorktree.map { $0.isMain } ?? true)
       }
+      TerminalCommands(store: store)
     }
   }
 }

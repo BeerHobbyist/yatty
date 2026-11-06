@@ -53,19 +53,21 @@
 - [x] One Ghostty terminal per worktree, kept alive while hidden, persistent through zmx; a new session types `agentCommand` from `~/.config/yatty/config.json`.
 - [x] Reviewed twice; startup crash (main-actor executor check in C callbacks) fixed.
 
-## Phase 2 — Tabs and splits
+## Phase 2 — Tabs and splits (built; visual check pending)
 
 Plan: `2026-11-06-phase-2-tabs-splits.md`.
 
-- [ ] Each worktree has tabs; each tab is a tree of splits; every pane a Ghostty terminal with its own zmx session.
-- [ ] The layout (tabs, splits, ratios, names, focused pane) persists in `state.json` and is restored on launch.
-- [ ] Ghostty keybinds: new tab, split right/down, close pane, go to split (prev/next/direction), go to tab (n/prev/next/last), equalize splits.
-- [ ] Tab bar: tabs titled by the focused pane's terminal title (or a name the user gave), close button, `+` menu (New Shell / New Agent), split buttons, double-click to rename.
-- [ ] Dividers drag to resize; unfocused panes are dimmed.
-- [ ] Closing a pane kills its session; closing the last pane leaves "No Terminals" with a button to open one.
-- [ ] `scripts/snapshot.sh` and the in-app snapshot mode exist (used by every later phase).
+- [x] Each worktree has tabs; each tab is a tree of splits; every pane a Ghostty terminal with its own zmx session.
+- [x] The layout (tabs, splits, ratios, names, focused pane) persists in `state.json` and is restored on launch.
+- [x] Ghostty keybinds: new tab, split right/down, close pane, go to split (prev/next/direction), go to tab (n/prev/next/last), equalize splits.
+- [x] Tab bar: tabs titled by the focused pane's terminal title (or a name the user gave), close button, `+` menu (New Shell / New Agent), split buttons, double-click to rename.
+- [x] Dividers drag to resize; unfocused panes are dimmed.
+- [x] Closing a pane kills its session; closing the last pane leaves "No Terminals" with a button to open one.
+- [x] `scripts/snapshot.sh` and the in-app snapshot mode exist (used by every later phase).
 
-## Phase 3 — Repositories and worktrees from GitHub
+## Phase 3 — Repositories and worktrees from GitHub (in progress)
+
+Plan: `2026-11-06-phase-3-github-worktrees.md`.
 
 - [ ] Add Repository (⌘O) lists every repo `gh` can see (owned, collaborator, organization; most recently pushed first; paged in the background), ranked filter (exact name > prefix > contains > owner/name contains), clones with `gh repo clone` into `cloneDirectory` (config; default `~/yatty`), or reuses an existing clone; "Choose Local Folder…" stays.
 - [ ] New Worktree offers: a new branch from a base picked from local and remote branches; an existing branch; an open pull request (fetched as `refs/pull/<n>/head`, forks included, named after its head branch), hiding PRs that already have a worktree.
@@ -115,4 +117,5 @@ Plan: `2026-11-06-phase-2-tabs-splits.md`.
 
 | Date | Phase | Commit |
 |---|---|---|
-| 2026-11-06 | 1 — app shell and worktrees | (initial commit) |
+| 2026-11-06 | 1 — app shell and worktrees | `e19b370` |
+| 2026-11-06 | 2 — tabs and splits (verifier PASS on code; visuals pending) | see `git log` |

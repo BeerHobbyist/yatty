@@ -20,8 +20,10 @@ struct TerminalLaunch {
 @MainActor
 final class TerminalView: NSView, @preconcurrency NSTextInputClient {
   private(set) var surface: ghostty_surface_t?
-  /// Called once the terminal's process has exited.
-  var onClose: (() -> Void)?
+  /// What the terminal asks for: Ghostty keybinds, its title, closing.
+  var onCommand: ((TerminalCommand) -> Void)?
+  /// Called when the terminal gets the keyboard.
+  var onFocus: (() -> Void)?
 
   private var markedText = NSMutableAttributedString()
   /// Non-nil while a keyDown is being interpreted: text AppKit inserts then.
@@ -81,8 +83,8 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
     removeFromSuperview()
   }
 
-  func surfaceDidClose() {
-    onClose?()
+  func perform(_ command: TerminalCommand) {
+    onCommand?(command)
   }
 
   /// A hidden terminal stops drawing; its process keeps running.
@@ -149,7 +151,10 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
 
   override func becomeFirstResponder() -> Bool {
     let became = super.becomeFirstResponder()
-    if became, let surface { ghostty_surface_set_focus(surface, true) }
+    if became, let surface {
+      ghostty_surface_set_focus(surface, true)
+      onFocus?()
+    }
     return became
   }
 

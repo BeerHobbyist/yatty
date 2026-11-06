@@ -72,14 +72,47 @@ final class GhosttyApp {
     switch action.tag {
     case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
       // libghostty keeps a terminal whose command exited open, waiting for a
-      // key. Yatty shows its own "Session Ended" instead.
-      guard target.tag == GHOSTTY_TARGET_SURFACE, let surface = target.target.surface,
-        let view = TerminalRef(ghostty_surface_userdata(surface))
-      else { return false }
-      DispatchQueue.main.async {
-        MainActor.assumeIsolated { view.resolve()?.surfaceDidClose() }
-      }
-      return true
+      // key. In Yatty the pane closes, as a tmux pane did in agentree.
+      return deliver(.close, to: target)
+    case GHOSTTY_ACTION_NEW_TAB:
+      return deliver(.newTab, to: target)
+    case GHOSTTY_ACTION_NEW_SPLIT:
+      let command: TerminalCommand =
+        switch action.action.new_split {
+        case GHOSTTY_SPLIT_DIRECTION_LEFT: .split(.horizontal, newFirst: true)
+        case GHOSTTY_SPLIT_DIRECTION_UP: .split(.vertical, newFirst: true)
+        case GHOSTTY_SPLIT_DIRECTION_DOWN: .split(.vertical, newFirst: false)
+        default: .split(.horizontal, newFirst: false)
+        }
+      return deliver(command, to: target)
+    case GHOSTTY_ACTION_GOTO_SPLIT:
+      let goto: GotoSplit =
+        switch action.action.goto_split {
+        case GHOSTTY_GOTO_SPLIT_PREVIOUS: .previous
+        case GHOSTTY_GOTO_SPLIT_UP: .toward(.up)
+        case GHOSTTY_GOTO_SPLIT_LEFT: .toward(.left)
+        case GHOSTTY_GOTO_SPLIT_DOWN: .toward(.down)
+        case GHOSTTY_GOTO_SPLIT_RIGHT: .toward(.right)
+        default: .next
+        }
+      return deliver(.gotoSplit(goto), to: target)
+    case GHOSTTY_ACTION_GOTO_TAB:
+      let raw = action.action.goto_tab.rawValue
+      let goto: GotoTab =
+        switch raw {
+        case GHOSTTY_GOTO_TAB_PREVIOUS.rawValue: .previous
+        case GHOSTTY_GOTO_TAB_NEXT.rawValue: .next
+        case GHOSTTY_GOTO_TAB_LAST.rawValue: .last
+        default: .index(Int(raw))
+        }
+      return deliver(.gotoTab(goto), to: target)
+    case GHOSTTY_ACTION_CLOSE_TAB:
+      guard action.action.close_tab_mode == GHOSTTY_ACTION_CLOSE_TAB_MODE_THIS else { return false }
+      return deliver(.closeTab, to: target)
+    case GHOSTTY_ACTION_EQUALIZE_SPLITS:
+      return deliver(.equalize, to: target)
+    case GHOSTTY_ACTION_SET_TITLE:
+      return deliver(.title(String(cString: action.action.set_title.title)), to: target)
     case GHOSTTY_ACTION_OPEN_URL:
       let payload = action.action.open_url
       let string = String(decoding: Data(bytes: payload.url, count: Int(payload.len)), as: UTF8.self)
@@ -151,11 +184,23 @@ final class GhosttyApp {
     }
   }
 
+  /// A `close_surface` keybind (⌘W) closes the pane.
   nonisolated private static func closeSurface(userdata: UnsafeMutableRawPointer?) {
     guard let view = TerminalRef(userdata) else { return }
     DispatchQueue.main.async {
-      MainActor.assumeIsolated { view.resolve()?.surfaceDidClose() }
+      MainActor.assumeIsolated { view.resolve()?.perform(.close) }
     }
+  }
+
+  /// Hands `command` to the terminal an action targets, on the main thread.
+  nonisolated private static func deliver(_ command: TerminalCommand, to target: ghostty_target_s) -> Bool {
+    guard target.tag == GHOSTTY_TARGET_SURFACE, let surface = target.target.surface,
+      let view = TerminalRef(ghostty_surface_userdata(surface))
+    else { return false }
+    DispatchQueue.main.async {
+      MainActor.assumeIsolated { view.resolve()?.perform(command) }
+    }
+    return true
   }
 
   nonisolated private static func plainText(

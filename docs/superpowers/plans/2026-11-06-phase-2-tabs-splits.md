@@ -12,8 +12,8 @@
 
 ## Status (resume here)
 
-- Branch `port`. Task 1 done except the snapshot run: under fence the app gets no windows until `com.apple.windowserver.active` (+ `com.apple.CARenderServer`) are in fence's `macos.mach.lookup`; the owner is adding them. First thing after a restart: `make app && scripts/snapshot.sh worktrees`; if it prints `snapshot: 0 visible windows`, find the missing mach service and ask the owner for it.
-- Task 2: `Sources/Yatty/Model/Layout.swift` and the tests in `Tests/YattyTests/{LayoutTests,StateTests}.swift` are written. Still to do: `StoredState.layouts` (custom `init(from:)`), `Zmx.sessionName(for:pane:)`, `Zmx.knownSessions(worktrees:layouts:)`, `AppStore.agentInput(_:pane:sessionIsNew:agentTab:)` (static), then `make test`.
+- Tasks 1–4 done and committed on `port`. Verifier: PASS on criteria 1–3, 6–9; its three minor findings (keyboard after rename, state.json writes during divider drags, untitled hidden tabs) are fixed but not re-verified.
+- Still open: Task 4 Step 2 and Task 5's visual check. After a session restart with the window server allowed in fence (`macos.mach.lookup`: `com.apple.windowserver.active`, `com.apple.CARenderServer`): `make app && scripts/snapshot.sh tabs-splits` (and `worktrees`, `empty`); read the PNGs; if it prints `snapshot: 0 visible windows`, name the missing mach service to the owner. Then one re-verify round of the three fixes and the snapshots, and tick this plan.
 - `knownSessions` lives on `Zmx` (not a free function as written below).
 
 ## Global Constraints

@@ -8,9 +8,12 @@ enum Zmx {
     Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("zmx").path
   }
 
+  /// `YATTY_ZMX_DIR` moves it, so snapshots and tests never meet real sessions.
   static let socketDir: String = {
-    let dir = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".local/state/yatty/zmx").path
+    let override = ProcessInfo.processInfo.environment["YATTY_ZMX_DIR"] ?? ""
+    let dir = override.hasPrefix("/")
+      ? override
+      : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/state/yatty/zmx").path
     try? FileManager.default.createDirectory(
       atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     return dir
@@ -28,6 +31,25 @@ enum Zmx {
   static func sessionName(for worktreePath: String) -> String {
     let digest = SHA256.hash(data: Data(worktreePath.utf8))
     return "yatty-" + digest.prefix(5).map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// Pane `0` is the worktree's first terminal and keeps the plain name.
+  static func sessionName(for worktreePath: String, pane: String) -> String {
+    let base = sessionName(for: worktreePath)
+    return pane == "0" ? base : base + "-" + pane
+  }
+
+  /// Every session a known worktree may own: its first pane's, whether or not
+  /// it was opened, and every pane of its stored layout.
+  static func knownSessions(worktrees: [Worktree], layouts: [String: WorktreeLayout]) -> Set<String> {
+    var known = Set<String>()
+    for worktree in worktrees {
+      known.insert(sessionName(for: worktree.path))
+      for pane in layouts[worktree.path]?.allPanes ?? [] {
+        known.insert(sessionName(for: worktree.path, pane: pane))
+      }
+    }
+    return known
   }
 
   /// Yatty's live sessions, or nil when zmx couldn't be asked.

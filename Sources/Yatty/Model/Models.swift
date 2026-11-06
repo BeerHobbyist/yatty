@@ -32,6 +32,22 @@ struct Worktree: Identifiable, Hashable {
 struct StoredState: Codable {
   var repos: [Repo] = []
   var selectedWorktree: String?
+  /// Per worktree path; a worktree without one has `WorktreeLayout.initial`.
+  var layouts: [String: WorktreeLayout] = [:]
+
+  init(repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:]) {
+    self.repos = repos
+    self.selectedWorktree = selectedWorktree
+    self.layouts = layouts
+  }
+
+  // Every field may be missing: a file from an older Yatty must still load.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    repos = try container.decodeIfPresent([Repo].self, forKey: .repos) ?? []
+    selectedWorktree = try container.decodeIfPresent(String.self, forKey: .selectedWorktree)
+    layouts = try container.decodeIfPresent([String: WorktreeLayout].self, forKey: .layouts) ?? [:]
+  }
 }
 
 /// Settings the user edits: `~/.config/yatty/config.json`.
