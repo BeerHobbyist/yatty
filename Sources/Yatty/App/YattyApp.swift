@@ -29,12 +29,15 @@ struct YattyApp: App {
           .disabled(store.repos.isEmpty)
         Button("Add Repository…") { store.addingRepository = true }
           .keyboardShortcut("o")
+        Button("Add SSH Host…") { store.addingHost = AddHostRequest() }
+          .keyboardShortcut("o", modifiers: [.command, .shift])
       }
       // File > Close (⌘W) would close the whole window; ⌘W closes a pane instead.
       CommandGroup(replacing: .saveItem) {}
       CommandGroup(after: .sidebar) {
         Button("Show Pull Request") { store.showingPullRequest.toggle() }
           .keyboardShortcut("p", modifiers: [.command, .option])
+          .disabled(store.selectedWorktree?.isRemote ?? false)
         Button("Refresh Pull Requests") { store.refreshPullRequests() }
           .keyboardShortcut("r")
         Button("Merge Pull Request…") {

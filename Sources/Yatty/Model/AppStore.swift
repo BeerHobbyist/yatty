@@ -8,6 +8,12 @@ struct PendingClose: Identifiable {
   var id: String { worktree.id }
 }
 
+/// The Add SSH Host sheet, maybe for a host already added.
+struct AddHostRequest: Identifiable {
+  let id = UUID()
+  var host = ""
+}
+
 struct AppAlert: Identifiable {
   let id = UUID()
   let title: String
@@ -21,6 +27,8 @@ struct AppAlert: Identifiable {
 @Observable
 final class AppStore {
   var repos: [Repo]
+  /// SSH hosts and the directories on them, after the repositories.
+  var hosts: [SSHHost] = []
   /// Per repository path, main working copy first.
   var worktrees: [String: [Worktree]] = [:]
   var loadErrors: [String: String] = [:]
@@ -37,6 +45,8 @@ final class AppStore {
   var labels: [String: String] = [:]
   /// Panes whose terminal couldn't start; they wait for "Try Again".
   var failedPanes: Set<PaneKey> = []
+  /// Remote panes whose connection went; their session is still there.
+  var disconnectedPanes: Set<PaneKey> = []
   /// What each pane's terminal calls itself (OSC 0/2).
   var paneTitles: [PaneKey: String] = [:]
   /// Bumped when a terminal finishes starting, so views asking for it look again.
@@ -47,6 +57,9 @@ final class AppStore {
   var newWorktreeRepo: Repo?
   var pendingClose: PendingClose?
   var pendingRemoval: Repo?
+  var addingHost: AddHostRequest?
+  var pendingHostRemoval: SSHHost?
+  var pendingDirectoryRemoval: Worktree?
   var renamingWorktree: Worktree?
 
   let config = ConfigFiles.loadConfig()
@@ -94,6 +107,7 @@ final class AppStore {
       foldedSections = Set(stored.foldedSections)
       mergeMethod = stored.mergeMethod
       diffViewer = stored.diffViewer
+      hosts = stored.hosts
       reposKnown = true
     case .unreadable(let aside):
       repos = []
@@ -111,6 +125,10 @@ final class AppStore {
     if !Snapshot.isActive { UNUserNotificationCenter.current().delegate = notificationDelegate }
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }
+    if Snapshot.sheet == "add-host" { addingHost = AddHostRequest() }
+    if Snapshot.sheet == "disconnected", let selection {
+      disconnectedPanes.insert(PaneKey(worktree: selection, pane: "0"))
+    }
     if Snapshot.sheet == "diff" {
       Task {
         await refreshAll()
@@ -152,6 +170,11 @@ final class AppStore {
 
   func worktree(withID id: String) -> Worktree? {
     worktrees.values.lazy.flatMap { $0 }.first { $0.id == id }
+      ?? hosts.lazy.flatMap(\.worktrees).first { $0.id == id }
+  }
+
+  func host(of worktree: Worktree) -> SSHHost? {
+    worktree.host.flatMap { name in hosts.first { $0.host == name } }
   }
 
   func repo(of worktree: Worktree) -> Repo? {
@@ -291,6 +314,51 @@ final class AppStore {
     saveState()
   }
 
+  // MARK: SSH hosts
+
+  /// Checks the directory on the host and adds it (and the host, the first
+  /// time), selected. What went wrong otherwise: a password to ask for, or
+  /// why it can't be added.
+  func addRemoteDirectory(host name: String, path: String, password: String?) async -> ProbeFailure? {
+    let name = name.trimmingCharacters(in: .whitespaces)
+    let path = path.trimmingCharacters(in: .whitespaces).isEmpty ? "~" : path.trimmingCharacters(in: .whitespaces)
+    let found: RemoteDirectory
+    switch await SSH.probe(host: name, path: path, password: password) {
+    case .success(let directory): found = directory
+    case .failure(let failure): return failure
+    }
+    if let index = hosts.firstIndex(where: { $0.host == name }) {
+      hosts[index].home = found.home
+      hosts[index].zmx = found.zmx
+      if password != nil { hosts[index].needsPassword = true }
+      if !hosts[index].directories.contains(found.path) { hosts[index].directories.append(found.path) }
+    } else {
+      hosts.append(
+        SSHHost(host: name, home: found.home, zmx: found.zmx, needsPassword: password != nil, directories: [found.path]))
+    }
+    selection = SSHHost.directoryID(host: name, path: found.path)
+    saveState()
+    focusSelectedTerminal()
+    return nil
+  }
+
+  /// Forgets the directory and ends its sessions on the host (when it can be
+  /// reached); its files stay. A host left with none goes too.
+  func removeRemoteDirectory(_ worktree: Worktree) async {
+    guard let index = hosts.firstIndex(where: { $0.host == worktree.host }) else { return }
+    if selection == worktree.id { selection = nil }
+    await endTerminals(of: worktree)
+    hosts[index].directories.removeAll { $0 == worktree.path }
+    if hosts[index].directories.isEmpty { hosts.remove(at: index) }
+    saveState()
+  }
+
+  func removeHost(_ host: SSHHost) async {
+    for worktree in host.worktrees { await removeRemoteDirectory(worktree) }
+    hosts.removeAll { $0.host == host.host }
+    saveState()
+  }
+
   // MARK: Worktrees
 
   func newWorktreeForSelection() {
@@ -298,6 +366,10 @@ final class AppStore {
   }
 
   func requestCloseSelected() {
+    if let worktree = selectedWorktree, worktree.isRemote {
+      pendingDirectoryRemoval = worktree
+      return
+    }
     guard let worktree = selectedWorktree, !worktree.isMain, let repo = repo(of: worktree) else { return }
     pendingClose = PendingClose(repo: repo, worktree: worktree)
   }
@@ -423,6 +495,6 @@ final class AppStore {
     ConfigFiles.saveState(
       StoredState(
         repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
-        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod, diffViewer: diffViewer))
+        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod, diffViewer: diffViewer, hosts: hosts))
   }
 }

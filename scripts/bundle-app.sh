@@ -7,6 +7,9 @@ set -euo pipefail
 config="${1:-debug}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 app="${YATTY_APP:-$root/build/Yatty.app}"
+# Built here too: --show-bin-path only says where, and a stale binary would
+# be bundled without a word.
+(cd "$root" && swift build -c "$config" --scratch-path .build/swift --disable-sandbox >/dev/null)
 bindir="$(cd "$root" && swift build -c "$config" --scratch-path .build/swift --disable-sandbox --show-bin-path)"
 bin="$bindir/Yatty"
 

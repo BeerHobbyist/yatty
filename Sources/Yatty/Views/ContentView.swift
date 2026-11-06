@@ -27,6 +27,29 @@ struct ContentView: View {
     .sheet(isPresented: $store.addingRepository) {
       AddRepositorySheet()
     }
+    .sheet(item: $store.addingHost) { request in
+      AddHostSheet(request: request)
+    }
+    .confirmationDialog(
+      "Remove \(store.pendingHostRemoval?.host ?? "")?",
+      isPresented: Binding(
+        get: { store.pendingHostRemoval != nil }, set: { if !$0 { store.pendingHostRemoval = nil } }),
+      presenting: store.pendingHostRemoval
+    ) { host in
+      Button("Remove Host", role: .destructive) { Task { await store.removeHost(host) } }
+    } message: { _ in
+      Text("Ends the terminals of its directories there. Nothing on the host is touched.")
+    }
+    .confirmationDialog(
+      "Remove \(store.pendingDirectoryRemoval.map { store.label(for: $0) } ?? "")?",
+      isPresented: Binding(
+        get: { store.pendingDirectoryRemoval != nil }, set: { if !$0 { store.pendingDirectoryRemoval = nil } }),
+      presenting: store.pendingDirectoryRemoval
+    ) { worktree in
+      Button("Remove Directory", role: .destructive) { Task { await store.removeRemoteDirectory(worktree) } }
+    } message: { _ in
+      Text("Ends its terminals on the host. Its files stay.")
+    }
     .sheet(item: $store.diffingWorktree) { worktree in
       DiffSheet(worktree: worktree)
     }
@@ -138,6 +161,35 @@ struct Sidebar: View {
           }
         }
       }
+      ForEach(store.hosts) { host in
+        Section {
+          ForEach(host.worktrees) { worktree in
+            WorktreeRow(worktree: worktree)
+              .tag(worktree.id)
+              .contextMenu {
+                Button("Rename…") { store.renamingWorktree = worktree }
+                Button("Remove Directory…", role: .destructive) { store.pendingDirectoryRemoval = worktree }
+              }
+          }
+        } header: {
+          HStack {
+            Image(systemName: "server.rack")
+            Text(host.host)
+            Spacer()
+            Button {
+              store.addingHost = AddHostRequest(host: host.host)
+            } label: {
+              Image(systemName: "plus")
+            }
+            .buttonStyle(.borderless)
+            .help("Add a directory on \(host.host)")
+          }
+          .contextMenu {
+            Button("Add Directory…") { store.addingHost = AddHostRequest(host: host.host) }
+            Button("Remove Host…", role: .destructive) { store.pendingHostRemoval = host }
+          }
+        }
+      }
     }
     .modifier(SidebarListStyle())
     .safeAreaInset(edge: .bottom) { AgentCounts() }
@@ -146,9 +198,10 @@ struct Sidebar: View {
       return .handled
     }
     .overlay {
-      if store.repos.isEmpty {
+      if store.repos.isEmpty && store.hosts.isEmpty {
         ContentUnavailableView(
-          "No Repositories", systemImage: "folder.badge.plus", description: Text("Add one with ⌘O."))
+          "No Repositories", systemImage: "folder.badge.plus",
+          description: Text("Add one with ⌘O, or a directory on another machine with ⌘⇧O."))
       }
     }
     .toolbar {
@@ -159,6 +212,14 @@ struct Sidebar: View {
           Label("Add Repository", systemImage: "folder.badge.plus")
         }
         .help("Add a repository (⌘O)")
+      }
+      ToolbarItem {
+        Button {
+          store.addingHost = AddHostRequest()
+        } label: {
+          Label("Add SSH Host", systemImage: "server.rack")
+        }
+        .help("Add a directory on another machine (⌘⇧O)")
       }
     }
   }
@@ -234,15 +295,22 @@ struct WorktreeRow: View {
         }
       }
     } icon: {
-      Image(systemName: worktree.isMain ? "house" : "arrow.triangle.branch")
+      Image(systemName: worktree.isRemote ? "folder" : worktree.isMain ? "house" : "arrow.triangle.branch")
     }
-    .help(worktree.branch ?? worktree.path)
+    .help(worktree.branch ?? remotePath ?? worktree.path)
+  }
+
+  /// Where a remote directory is on its host, `~/…` when under its home.
+  private var remotePath: String? {
+    guard let host = store.host(of: worktree) else { return nil }
+    return "\(host.host):" + SSH.displayPath(worktree.path, home: host.home)
   }
 
   /// The selected row's details: the branch when it isn't the name shown,
   /// then +/− and ahead/behind, each only when there's something to say.
   private func secondLine(_ status: GitStatus?) -> String? {
     var parts: [String] = []
+    if let remotePath { parts.append(remotePath) }
     if let branch = worktree.branch, branch != store.label(for: worktree) { parts.append(branch) }
     if let status {
       if status.added + status.removed > 0 { parts.append("+\(status.added) −\(status.removed)") }
@@ -268,7 +336,7 @@ struct DetailView: View {
         }
       }
       .navigationTitle(store.label(for: worktree))
-      .navigationSubtitle(store.repo(of: worktree)?.name ?? "")
+      .navigationSubtitle(store.repo(of: worktree)?.name ?? worktree.host ?? "")
       .modifier(PullRequestColumn(worktree: worktree))
       .toolbar {
         ToolbarItem {
@@ -278,6 +346,7 @@ struct DetailView: View {
             Label("Pull Request", systemImage: "sidebar.right")
           }
           .help("Show the pull request (⌥⌘P)")
+          .disabled(worktree.isRemote)
         }
       }
     } else {
@@ -308,7 +377,10 @@ private struct PullRequestColumn: ViewModifier {
   @Environment(AppStore.self) private var store
 
   func body(content: Content) -> some View {
-    if Snapshot.isActive {
+    if worktree.isRemote {
+      // No git there: no pull request to show.
+      content
+    } else if Snapshot.isActive {
       HStack(spacing: 0) {
         content
         if store.showingPullRequest {

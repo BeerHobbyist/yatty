@@ -18,6 +18,8 @@ struct TerminalCommands: Commands {
         .keyboardShortcut("t", modifiers: [.command, .option])
         Button("Open Diff…") { store.diffingWorktree = store.selectedWorktree }
           .keyboardShortcut("d", modifiers: [.command, .option])
+          // Diffs run git here; a remote directory's files are there.
+          .disabled(store.selectedWorktree?.isRemote ?? false)
         Divider()
         Button("Split Right") { store.performOnFocusedPane(.split(.horizontal, newFirst: false)) }
           .keyboardShortcut("d")

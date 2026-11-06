@@ -2,7 +2,8 @@
 # Renders Yatty with sample data to build/snapshots/<scene>.png, in a
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
-#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff
+#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff,
+#   ssh, add-host, disconnected
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -131,6 +132,19 @@ EOF
       git -C "$login" -c user.name=y -c user.email=y@y commit -qam "Change number $n to the readme"
     done
     export YATTY_SNAPSHOT_SHEET=diff
+    ;;
+  ssh|add-host|disconnected)
+    cat > "$state" <<EOF
+{
+  "repos": [{ "name": "sample-app", "path": "$repo" }],
+  "selectedWorktree": "ssh:devbox:/home/me/src/api",
+  "hosts": [{ "host": "devbox", "home": "/home/me", "zmx": "/usr/local/bin/zmx", "needsPassword": false,
+              "directories": ["/home/me/src/api", "/srv/data pipeline"] }]
+}
+EOF
+    printf 'Host devbox staging\n  HostName 10.0.0.2\nHost *\n' > "$sandbox/ssh-config"
+    export YATTY_SSH_CONFIG="$sandbox/ssh-config"
+    [ "$scene" = ssh ] || export YATTY_SNAPSHOT_SHEET="$scene"
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

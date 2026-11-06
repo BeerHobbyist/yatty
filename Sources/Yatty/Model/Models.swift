@@ -77,8 +77,9 @@ struct StoredState: Codable {
   init(
     repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
     labels: [String: String] = [:], foldedSections: [String] = [], mergeMethod: MergeMethod? = nil,
-    diffViewer: DiffViewer? = nil
+    diffViewer: DiffViewer? = nil, hosts: [SSHHost] = []
   ) {
+    self.hosts = hosts
     self.diffViewer = diffViewer
     self.repos = repos
     self.selectedWorktree = selectedWorktree

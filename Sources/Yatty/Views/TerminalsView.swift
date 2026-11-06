@@ -84,6 +84,7 @@ struct TabBar: View {
       Button("New Shell") { store.newTab(in: worktree, agent: false) }
       Button("New Agent") { store.newTab(in: worktree, agent: true) }
       Button("New Diff…") { store.diffingWorktree = worktree }
+        .disabled(worktree.isRemote)
     } label: {
       Image(systemName: "plus")
     }
@@ -258,7 +259,15 @@ struct PaneView: View {
 
   var body: some View {
     Group {
-      if Snapshot.isActive {
+      if store.disconnectedPanes.contains(key) {
+        ContentUnavailableView {
+          Label("Disconnected", systemImage: "wifi.slash")
+        } description: {
+          Text("The connection to \(worktree.host ?? "the host") went. Its session is still running there.")
+        } actions: {
+          Button("Reconnect") { store.reconnect(key) }
+        }
+      } else if Snapshot.isActive {
         // libghostty can't start under the sandbox snapshots run in.
         Color(nsColor: .textBackgroundColor)
           .overlay(alignment: .topLeading) {
