@@ -1,0 +1,4 @@
+[submodule "ThirdParty/ghostty"]
+	path = ThirdParty/ghostty
+	url = https://github.com/ghostty-org/ghostty.git
+	shallow = true
