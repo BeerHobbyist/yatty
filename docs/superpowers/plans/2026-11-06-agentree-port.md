@@ -84,21 +84,25 @@ Plan: `2026-11-06-phase-4-agent-status.md`.
 - [x] A system notification when an agent needs you or finishes while you aren't looking at it; clicking it opens that worktree and pane.
 - [x] "Next agent that needs you" command with a shortcut, and agent counts in the sidebar footer.
 
-## Phase 5 — Git status and pull requests (in progress)
+## Phase 5 — Git status and pull requests ✅
 
 Plan: `2026-11-06-phase-5-git-status-prs.md`.
 
-- [ ] Sidebar: uncommitted-file count, and for the selected worktree: branch, +/−, ahead/behind; refreshed every 5s and on agent state changes.
-- [ ] PR badge per worktree (open PR for the branch, else a merged one that was this branch's), coloured by CI, draft and merged variants; refreshed every 60s, paused while the app is inactive.
-- [ ] PR inspector (right side): merge status, reviews, checks (failing first, click opens the log), labels, description (markdown), comments (newest first, inline ones with file:line); open on GitHub; refresh; foldable sections remembered.
-- [ ] Merge: methods the repo allows, the last one used first; auto-merge when blocked; confirm step; `gh pr merge --match-head-commit <sha>`; afterwards offers to close the worktree.
+- [x] Sidebar: uncommitted-file count, and for the selected worktree: branch, +/−, ahead/behind; refreshed every 5s and on agent state changes.
+- [x] PR badge per worktree (open PR for the branch, else a merged one that was this branch's), coloured by CI, draft and merged variants; refreshed every 60s, paused while the app is inactive.
+- [x] PR inspector (right side): merge status, reviews, checks (failing first, click opens the log), labels, description (markdown), comments (newest first, inline ones with file:line); open on GitHub; refresh; foldable sections remembered.
+- [x] Merge: methods the repo allows, the last one used first; auto-merge when blocked; confirm step; `gh pr merge --match-head-commit <sha>`; afterwards offers to close the worktree.
 
-## Phase 6 — Diffs
+## Phase 6 — Diffs ✅
 
-- [ ] Diff picker: working changes, staged, against the base branch, a ref, or a range of commits picked from a list.
-- [ ] Viewers: hunk, diffnav, delta, difftastic, lumen, nvim diffview, plain git — the first installed by default, choice remembered; opens in a tab of its own that closes when the viewer quits; an empty diff says so; pagers can't quit on a short diff.
+Plan: `2026-11-06-phase-6-diffs.md`.
 
-## Phase 7 — Agent CLI and fence
+- [x] Diff picker: working changes, staged, against the base branch, a ref, or a range of commits picked from a list.
+- [x] Viewers: hunk, diffnav, delta, difftastic, lumen, nvim diffview, plain git — the first installed by default, choice remembered; opens in a tab of its own that closes when the viewer quits; an empty diff says so; pagers can't quit on a short diff.
+
+## Phase 7 — Agent CLI and fence (in progress)
+
+Plan: `2026-11-06-phase-7-agent-cli.md`.
 
 - [ ] A `yatty` CLI bundled in the app, on the PATH of every Yatty terminal, talking to the app over its socket: `tab list|new|read|send|select|rename|close`, `diff`, `notify`, `status` (`--json` where agentree has it), `skill install|uninstall|show`.
 - [ ] Agents Yatty starts are told about the CLI by a silent-except-SessionStart hook; a Claude Code skill ships with it.
@@ -125,3 +129,5 @@ Plan: `2026-11-06-phase-5-git-status-prs.md`.
 | 2026-11-06 | 2 — tabs and splits (two verifier rounds; snapshots checked) | `8504a15`…`ecfbb85` |
 | 2026-11-06 | 3 — repositories and worktrees from GitHub (verifier + re-verify) | `16ad5ae`…`503ca7f` |
 | 2026-11-06 | 4 — agent status and notifications (verifier + re-verify) | `c8d8216`…`040e347` |
+| 2026-11-06 | 5 — git status and pull requests (verifier + re-verify) | `aa039ab`…`dd8fb77` |
+| 2026-11-06 | 6 — diffs (verifier: no findings) | `dd8fb77` |

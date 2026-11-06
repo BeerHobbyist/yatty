@@ -10,10 +10,9 @@
 
 **Spec:** roadmap Phase 5; agentree DEVLOG "PR panel", `src/services/pr.ts` (`PR_VIEW_FIELDS`, `checkState`, `summarizeChecks`, `mergeStatus`, `mergeOptions`, `mergePr`), `src/services/gh.ts` (`prForBranch`, `isThisBranchsPr`), `src/services/git.ts` (`status`).
 
-## Status (resume here)
+## Status
 
-- Tasks 1–2 done: git status rows (`●N`, selected row's branch/+−/↑↓), PR badges (`PullRequestStore`, `GitHub+PullRequests.swift`), all pure rules for Tasks 2–4 in `PullRequests/PullRequests.swift` with tests; snapshot scene `status` (`YATTY_BADGE_FIXTURE`). `AppStore.showingPullRequest` exists; `PullRequestStore.refreshDetails`/`invalidate` and `GitHub.pullRequestDetails`/`mergeSettings`/`merge` exist.
-- Next: Task 3 (inspector view, `.inspector`, ⌥⌘P, ⌘R, `ui.foldedSections`), Task 4 (merge sheet), Task 5.
+- Done (`aa039ab`…`dd8fb77`): verified, five findings fixed, re-verified with all five resolved.
 - Snapshots run with `-ApplePersistenceIgnoreState YES` (they share the app's bundle id and would reopen at the real window's size).
 
 ## Global Constraints
