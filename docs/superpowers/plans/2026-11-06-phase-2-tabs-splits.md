@@ -10,6 +10,12 @@
 
 **Spec:** roadmap `2026-11-06-agentree-port.md` (Phase 2) and agentree's tabs/splits behaviour (DEVLOG: "Tabs + pane splitting", "Keybindings", "Mouse").
 
+## Status (resume here)
+
+- Branch `port`. Task 1 done except the snapshot run: under fence the app gets no windows until `com.apple.windowserver.active` (+ `com.apple.CARenderServer`) are in fence's `macos.mach.lookup`; the owner is adding them. First thing after a restart: `make app && scripts/snapshot.sh worktrees`; if it prints `snapshot: 0 visible windows`, find the missing mach service and ask the owner for it.
+- Task 2: `Sources/Yatty/Model/Layout.swift` and the tests in `Tests/YattyTests/{LayoutTests,StateTests}.swift` are written. Still to do: `StoredState.layouts` (custom `init(from:)`), `Zmx.sessionName(for:pane:)`, `Zmx.knownSessions(worktrees:layouts:)`, `AppStore.agentInput(_:pane:sessionIsNew:agentTab:)` (static), then `make test`.
+- `knownSessions` lives on `Zmx` (not a free function as written below).
+
 ## Global Constraints
 
 See the roadmap. In particular: pane `0` keeps the Phase 1 session name `yatty-<hash>`; other panes are `yatty-<hash>-<pane id>`; new `state.json` fields decode when missing.
