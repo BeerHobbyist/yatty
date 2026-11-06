@@ -12,7 +12,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
           Sidebar().frame(width: 240)
           Divider()
-          DetailView()
+          DetailView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       } else {
         NavigationSplitView {
