@@ -45,20 +45,23 @@ public enum CLIClient {
       }
       return true
     }
-    guard sent else { throw CLIClientError("couldn't send the request to Yatty") }
+    // Yatty may answer before it has read everything ("busy") and hang up:
+    // its answer is still there to read.
+    guard let response = answer(fd) else {
+      throw CLIClientError(sent ? "Yatty's answer made no sense" : "couldn't send the request to Yatty")
+    }
+    return response
+  }
 
+  private static func answer(_ fd: Int32) -> CLIResponse? {
     var answer = Data()
     var buffer = [UInt8](repeating: 0, count: 65536)
     while answer.last != UInt8(ascii: "\n") {
       let count = read(fd, &buffer, buffer.count)
-      if count < 0 { throw CLIClientError("no answer from Yatty") }
-      if count == 0 { break }
+      if count <= 0 { break }
       answer.append(contentsOf: buffer[0..<count])
     }
-    guard let response = try? JSONDecoder().decode(CLIResponse.self, from: answer) else {
-      throw CLIClientError("Yatty's answer made no sense")
-    }
-    return response
+    return try? JSONDecoder().decode(CLIResponse.self, from: answer)
   }
 
   /// Why a connection failed, in words. A sandbox that refuses the socket is

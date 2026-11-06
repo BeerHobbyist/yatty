@@ -8,12 +8,12 @@
 
 **Spec:** roadmap Phase 7; agentree README "The agent CLI" and "Running agents in fence", DEVLOG "Agent CLI" and "Sandbox broker (fence)", `src/cli.ts`, `src/services/broker.ts`, `skills/agentree/SKILL.md`.
 
-## Status (resume here)
+## Status
 
-- Tasks 1–3 written: `Sources/YattyProtocol` (request, response, paths, argument parsing, `CLIClient`), `Sources/YattyCLI` (main, skill), `Sources/Yatty/CLI` (`CLIServer` POSIX sockets, `CLIHandler` ops, `CLIRules` pure rules), `WorktreeLayout.sandboxed`, `PaneLaunch`, `config.sandboxCommand`, SessionStart note hook, `skills/yatty/SKILL.md`, README fence section, `make app` bundles the CLI and skill.
-- Changes from the plan: no `YATTY_SOCKET` (panes get `YATTY_STATE_DIR`; the CLI derives both sockets from it); agent reports moved to `~/.local/state/yatty/agents` so fence can deny writes to `~/.config/yatty/**` (a sandbox that edits `sandboxCommand` would escape it).
-- Blocked by fence in the dev session: `serverAnswersEachSocket` and `scripts/zmx-e2e.sh` need `network.allowUnixSockets` for `/private/tmp/yatty-test-501/app.sock`, `/private/tmp/yatty-test-501/sandbox.sock` and `/private/tmp/yatty-test-501/zmx/e2e`. Every other test passes.
-- Next: Task 4 (run those two, fresh verifier, one re-verify, tick the roadmap, commit).
+- Done (`a59a99e`…`ad964b4` and the busy-answer fix after it). Verified: 90 tests; `scripts/zmx-e2e.sh`; `scripts/cli-e2e.sh` against a real, isolated Yatty (background tabs, send and keys, rename/select/close, sandbox rules with a stand-in sandbox, sandboxed diff, status, no-app); a fresh verifier found 6 defects (a negative `lines` crashed the app, non-reading clients wedged the server, fish quoting, connection floods, tab numbers, tab names), all fixed and re-verified.
+- Changes from the plan: no `YATTY_SOCKET` (panes get `YATTY_STATE_DIR`; the CLI derives both sockets from it); agent reports moved to `~/.local/state/yatty/agents` so fence can deny writes to `~/.config/yatty/**` (a sandbox that edits `sandboxCommand` would escape it); a per-socket cap of 8 connections.
+- Known, by design: a sandboxed agent may act on another worktree's tabs (`--worktree`, as agentree), and one that holds 8 connections open keeps `sandbox.sock` busy for other fenced agents (never `app.sock`).
+- Not exercised end to end: `yatty notify` (it posts a real notification).
 
 ## Global Constraints
 
@@ -32,4 +32,4 @@ Sandbox rules (requests on `sandbox.sock`): what it starts runs in `sandboxComma
 - [x] Task 1: protocol + CLI — `Sources/YattyCLI/main.swift` (new target `yatty-cli`), `Sources/Yatty/CLI/CLIProtocol.swift` shared by both via a small `YattyProtocol` target (`CLIRequest`, `CLIResponse`, socket paths), argument parsing tested in `Tests/YattyTests/CLITests.swift`; `make app` bundles it.
 - [x] Task 2: app server — `Sources/Yatty/CLI/CLIServer.swift` (two `NWListener`s on Unix sockets), `Sources/Yatty/CLI/CLIHandler.swift` (ops → `AppStore` / zmx; sandbox rules); pane env `YATTY_CLI`, `YATTY_SOCKET`, PATH with the CLI's directory; tab names and indices; `tab new` in the background; snapshot-free (tested by running the CLI against a test server in `CLITests`).
 - [x] Task 3: agents learn about it — a SessionStart hook prints a short note (only where `$YATTY_CLI` is set); `skills/yatty/SKILL.md` (when to use the CLI, the dev-server workflow, etiquette); `yatty skill install|uninstall|show` (`$CLAUDE_CONFIG_DIR` or `~/.claude/skills/yatty/`); README section "Running agents in fence" with the exact `allowUnixSockets` entry for `sandbox.sock`.
-- [ ] Task 4: verify (tests; a scripted end-to-end run of the CLI against the app's handler; fresh verifier; one re-verify), tick the roadmap, commit.
+- [x] Task 4: verify (tests; a scripted end-to-end run of the CLI against the app's handler; fresh verifier; one re-verify), tick the roadmap, commit.

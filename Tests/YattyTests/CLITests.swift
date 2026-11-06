@@ -321,6 +321,14 @@ private let inside = ["YATTY_WORKTREE": "/w", "YATTY_PANE": "yatty-abc-1f2e3d"]
   let started = Date()
   let busy = try await Task.detached { try CLIClient.send(CLIRequest(op: .status), to: dir + "/sandbox.sock") }.value
   #expect(busy.error == "Yatty is busy: try again")
+  // Hung up on mid-request, the CLI still shows why.
+  let big = {
+    var request = CLIRequest(op: .tabSend)
+    request.text = [String(repeating: "x", count: 600_000)]
+    return request
+  }()
+  let busyBig = try await Task.detached { try CLIClient.send(big, to: dir + "/sandbox.sock") }.value
+  #expect(busyBig.error == "Yatty is busy: try again")
   let other = try await Task.detached { try CLIClient.send(CLIRequest(op: .status), to: dir + "/app.sock") }.value
   #expect(other.output == "app")
   #expect(Date().timeIntervalSince(started) < 1)

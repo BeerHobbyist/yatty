@@ -100,15 +100,17 @@ Plan: `2026-11-06-phase-6-diffs.md`.
 - [x] Diff picker: working changes, staged, against the base branch, a ref, or a range of commits picked from a list.
 - [x] Viewers: hunk, diffnav, delta, difftastic, lumen, nvim diffview, plain git — the first installed by default, choice remembered; opens in a tab of its own that closes when the viewer quits; an empty diff says so; pagers can't quit on a short diff.
 
-## Phase 7 — Agent CLI and fence (in progress)
+## Phase 7 — Agent CLI and fence ✅
 
 Plan: `2026-11-06-phase-7-agent-cli.md`.
 
-- [ ] A `yatty` CLI bundled in the app, on the PATH of every Yatty terminal, talking to the app over its socket: `tab list|new|read|send|select|rename|close`, `diff`, `notify`, `status` (`--json` where agentree has it), `skill install|uninstall|show`.
-- [ ] Agents Yatty starts are told about the CLI by a silent-except-SessionStart hook; a Claude Code skill ships with it.
-- [ ] Inside fence the CLI's requests run on the sandbox's terms: started commands wrapped in `sandboxCommand` (config), typing only into panes started that way, no argument tmux/zmx could turn into a command.
+- [x] A `yatty` CLI bundled in the app, on the PATH of every Yatty terminal, talking to the app over its socket: `tab list|new|read|send|select|rename|close`, `diff`, `notify`, `status` (`--json` where agentree has it), `skill install|uninstall|show`.
+- [x] Agents Yatty starts are told about the CLI by a silent-except-SessionStart hook; a Claude Code skill ships with it.
+- [x] Inside fence the CLI's requests run on the sandbox's terms: started commands wrapped in `sandboxCommand` (config), typing only into panes started that way, no argument tmux/zmx could turn into a command.
 
-## Phase 8 — SSH projects
+## Phase 8 — SSH projects (in progress)
+
+Plan: `2026-11-06-phase-8-ssh.md`.
 
 - [ ] Add an SSH host (typed or from `~/.ssh/config`) and directories on it; their terminals run there, kept alive by zmx on the host (install hint when missing); one shared connection per host (ControlMaster, short ControlPath).
 - [ ] Password or key-passphrase logins through `SSH_ASKPASS`, never stored; background calls never log in on their own.
@@ -131,3 +133,4 @@ Plan: `2026-11-06-phase-7-agent-cli.md`.
 | 2026-11-06 | 4 — agent status and notifications (verifier + re-verify) | `c8d8216`…`040e347` |
 | 2026-11-06 | 5 — git status and pull requests (verifier + re-verify) | `aa039ab`…`dd8fb77` |
 | 2026-11-06 | 6 — diffs (verifier: no findings) | `dd8fb77` |
+| 2026-11-06 | 7 — agent CLI and fence (verifier: 6 findings fixed, re-verified; real-app e2e) | `a59a99e`…`ad964b4`+ |
