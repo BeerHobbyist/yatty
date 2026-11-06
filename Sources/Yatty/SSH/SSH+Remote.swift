@@ -66,7 +66,7 @@ extension SSH {
         return .failure(.failed("Yatty has nowhere to keep the connection, so a password login wouldn't last."))
       }
       let argv = [setup.executable] + setup.sharingOptions
-        + ["-T", "-o", "NumberOfPasswordPrompts=1", "-o", "ConnectTimeout=10", "--", host, "exec sh -c " + shellQuote(script)]
+        + ["-T", "-o", "NumberOfPasswordPrompts=1", "-o", "ConnectTimeout=10", "--", host, "exec sh -c " + CLIRules.portableQuote(script)]
       result = await setup.run(
         argv,
         env: [
@@ -95,6 +95,15 @@ extension SSH {
     let remote = "cd -- \(remotePathExpr(directory)) && ZMX_NO_DETACH_KEY=1 exec "
       + [host.zmx, "attach", session].map(shellQuote).joined(separator: " ")
     return argv(host: host.host, command: remote, tty: true, setup: setup).map(shellQuote).joined(separator: " ")
+  }
+
+  /// Whether `session` is running on `host`; nil when the host couldn't be
+  /// asked.
+  static func sessionExists(_ session: String, on host: SSHHost, setup: SSHSetup = .standard) async -> Bool? {
+    guard let result = await run(on: host, shellQuote(host.zmx) + " list --short", setup: setup), result.ok else {
+      return nil
+    }
+    return result.stdout.split(separator: "\n").contains { $0.split(whereSeparator: \.isWhitespace).first.map(String.init) == session }
   }
 
   /// Ends sessions on `host`; false when it couldn't be reached.

@@ -94,7 +94,7 @@ private struct FakeHosts {
   let batch = SSH.argv(host: "box", command: "echo 'hi'", tty: false, setup: setup)
   #expect(batch.contains("BatchMode=yes"))
   #expect(batch.contains("ControlPath=/c/%C"))
-  #expect(Array(batch.suffix(3)) == ["--", "box", #"exec sh -c 'echo '\''hi'\'''"#])
+  #expect(Array(batch.suffix(3)) == ["--", "box", #"exec sh -c 'echo '\''hi'\'"#])
   let tty = SSH.argv(host: "box", command: "x", tty: true, setup: SSHSetup())
   #expect(tty.contains("-t") && !tty.contains("BatchMode=yes") && !tty.contains("ControlMaster=auto"))
 }
@@ -191,6 +191,19 @@ private struct FakeHosts {
   #expect(hosts.logins("pw") == after)
 }
 
+/// After a pane's ssh ends, the host says whether its session lives on.
+@Test func sessionCheckTellsGoneFromUnreachable() async throws {
+  let hosts = try FakeHosts()
+  defer { hosts.remove() }
+  let box = try hosts.host("box", zmx: false)
+  try hosts.write("#!/bin/sh\n[ \"$1\" = list ] && printf 'yatty-1\\tpid=1\\nyatty-2\\n'\n", to: box.appendingPathComponent("bin/zmx"), executable: true)
+  let host = SSHHost(host: "box", home: "", zmx: box.appendingPathComponent("bin/zmx").path)
+  #expect(await SSH.sessionExists("yatty-1", on: host, setup: hosts.setup) == true)
+  #expect(await SSH.sessionExists("yatty-3", on: host, setup: hosts.setup) == false)
+  let unreachable = SSHHost(host: "nowhere", home: "", zmx: "zmx")
+  #expect(await SSH.sessionExists("yatty-1", on: unreachable, setup: hosts.setup) == nil)
+}
+
 @Test func killEndsExactlyThoseSessions() async throws {
   let hosts = try FakeHosts()
   defer { hosts.remove() }
@@ -225,4 +238,16 @@ private struct FakeHosts {
   #expect(worktree.isRemote && worktree.exists)
   // A state file from before hosts existed.
   #expect(try JSONDecoder().decode(StoredState.self, from: Data(#"{"repos":[]}"#.utf8)).hosts.isEmpty)
+}
+
+/// sshd runs the command through the remote login shell, whichever it is.
+@Test func remoteCommandMeansTheSameInEveryLoginShell() {
+  let command = #"printf '[%s]' 'a\b' "it's" '$HOME' 'x\\y'"#
+  let word = SSH.argv(host: "box", command: command, tty: false, setup: SSHSetup()).last!
+  let shells = ["/bin/sh", "/bin/bash", "/bin/zsh", "/opt/homebrew/bin/fish", "/usr/local/bin/fish"]
+    .filter { FileManager.default.isExecutableFile(atPath: $0) }
+  for shell in shells {
+    let result = Run.runSync(shell, ["-c", word])
+    #expect(result.stdout == #"[a\b][it's][$HOME][x\\y]"#, "\(shell): \(result.stdout) \(result.stderr)")
+  }
 }

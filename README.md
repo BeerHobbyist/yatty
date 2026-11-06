@@ -12,6 +12,23 @@ make app    # build/Yatty.app
 make run    # build and open the app
 ```
 
+## SSH projects
+
+Add SSH Host (⌘⇧O) adds a directory on another machine: any host `ssh` can
+reach, a `~/.ssh/config` alias included. Its terminals, tabs and splits run
+there, each in a [zmx](https://github.com/neurosnap/zmx) session on that host,
+so they outlive a dropped connection and Yatty quitting. zmx must be installed
+on the host.
+
+- Key logins just work. A host that asks for a password, or a key's passphrase,
+  gets a field for it: it logs in once, and everything after shares that
+  connection (for 10 minutes after the last terminal closes). The password is
+  never stored. Yatty never logs in to such a host in the background.
+- A dropped connection leaves the pane waiting with a Reconnect button; the
+  session is still running on the host.
+- Git status, pull requests, diffs and the `yatty` CLI are for this Mac's
+  repositories only. A "New Agent" tab there runs plain `claude`.
+
 ## The agent CLI
 
 Every Yatty terminal has the `yatty` command on its `PATH` (and at

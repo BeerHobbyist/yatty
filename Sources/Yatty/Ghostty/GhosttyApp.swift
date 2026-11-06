@@ -74,7 +74,7 @@ final class GhosttyApp {
       // libghostty keeps a terminal whose command exited open, waiting for a
       // key. In Yatty the pane closes, as a tmux pane did in agentree; a
       // remote one whose connection dropped waits to reconnect.
-      return deliver(.childExited(action.action.child_exited.exit_code), to: target)
+      return deliver(.childExited, to: target)
     case GHOSTTY_ACTION_NEW_TAB:
       return deliver(.newTab, to: target)
     case GHOSTTY_ACTION_NEW_SPLIT:

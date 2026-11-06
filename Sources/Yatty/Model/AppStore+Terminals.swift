@@ -17,8 +17,8 @@ enum TerminalCommand: Sendable {
   case gotoTab(GotoTab)
   case equalize
   case title(String)
-  /// The pane's command exited, with this status.
-  case childExited(UInt32)
+  /// The pane's command exited.
+  case childExited
 }
 
 enum GotoSplit: Sendable {
@@ -256,11 +256,9 @@ extension AppStore {
       if let tab = layout.tab(containing: key.pane) { equalize(tab.id, in: worktree) }
     case .title(let title):
       if paneTitles[key] != title { paneTitles[key] = title }
-    case .childExited(let status):
-      // ssh's 255 is a lost or refused connection, not the shell ending:
-      // the session is still there, waiting to be reattached.
-      if worktree.isRemote && status == 255 {
-        disconnect(key)
+    case .childExited:
+      if worktree.isRemote {
+        remotePaneExited(key, in: worktree)
       } else {
         closePane(key)
       }
@@ -371,6 +369,22 @@ extension AppStore {
       if let host = host(of: worktree) { _ = await SSH.kill(names, on: host) }
     } else {
       for name in names { await Zmx.kill(name) }
+    }
+  }
+
+  /// A remote pane's ssh ended: the shell there exited, or the connection
+  /// went. (libghostty starts commands through login(1), which always exits
+  /// 0, so ssh's own status never arrives.) The host says which: a session
+  /// that's gone closes the pane; one still there, or a host that can't be
+  /// asked, leaves it waiting to reconnect.
+  private func remotePaneExited(_ key: PaneKey, in worktree: Worktree) {
+    disconnect(key)
+    guard let host = host(of: worktree) else { return }
+    let session = Zmx.sessionName(for: worktree.path, pane: key.pane)
+    Task {
+      if await SSH.sessionExists(session, on: host) == false, disconnectedPanes.contains(key) {
+        closePane(key)
+      }
     }
   }
 

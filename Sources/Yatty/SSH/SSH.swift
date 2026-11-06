@@ -15,7 +15,11 @@ struct SSHSetup: Sendable {
   var controlDirectory: String?
   var environment: [String: String] = [:]
 
-  static var standard: SSHSetup { SSHSetup(controlDirectory: SSH.controlDirectory()) }
+  /// `$YATTY_SSH` stands in for ssh (the end-to-end run's, with its own config).
+  static var standard: SSHSetup {
+    let override = ProcessInfo.processInfo.environment["YATTY_SSH"] ?? ""
+    return SSHSetup(executable: override.hasPrefix("/") ? override : "/usr/bin/ssh", controlDirectory: SSH.controlDirectory())
+  }
 
   /// Options for every call: one shared master connection per host.
   var sharingOptions: [String] {
@@ -68,12 +72,12 @@ enum SSH {
 
   /// The argv that runs a POSIX shell command line on `host`. sshd hands it
   /// to the user's login shell, which may be fish, so it's wrapped in
-  /// `sh -c`. `tty`: an interactive terminal, where ssh can ask for a
+  /// `sh -c`, quoted so that fish reads it as sh does. `tty`: an interactive terminal, where ssh can ask for a
   /// password or a host key; otherwise batch mode, failing fast instead of
   /// waiting on a prompt nobody sees.
   static func argv(host: String, command: String, tty: Bool, setup: SSHSetup = .standard) -> [String] {
     let mode = tty ? ["-t"] : ["-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
-    return [setup.executable] + setup.sharingOptions + mode + ["--", host, "exec sh -c " + shellQuote(command)]
+    return [setup.executable] + setup.sharingOptions + mode + ["--", host, "exec sh -c " + CLIRules.portableQuote(command)]
   }
 
   /// A remote path as a shell word: a leading `~` becomes `"$HOME"`
