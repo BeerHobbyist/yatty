@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 
 /// One terminal pane of one worktree.
 struct PaneKey: Hashable, Sendable {
@@ -16,6 +17,10 @@ enum TerminalCommand: Sendable {
   case gotoTab(GotoTab)
   case equalize
   case title(String)
+  /// The pane's command exited.
+  case childExited
+  /// A key pressed on a terminal whose command had exited.
+  case closeAfterExit
 }
 
 enum GotoSplit: Sendable {
@@ -64,8 +69,8 @@ extension AppStore {
   func terminal(for key: PaneKey, in worktree: Worktree) -> TerminalView? {
     _ = terminalsStarted
     if let existing = terminals[key] { return existing }
-    guard worktree.exists, !failedPanes.contains(key), !retiring.contains(key.worktree),
-      !starting.contains(key)
+    guard worktree.exists, !failedPanes.contains(key), !disconnectedPanes.contains(key),
+      !retiring.contains(key.worktree), !starting.contains(key)
     else { return nil }
     starting.insert(key)
     Task { await startTerminal(key, in: worktree) }
@@ -83,6 +88,7 @@ extension AppStore {
 
   private func startTerminal(_ key: PaneKey, in worktree: Worktree) async {
     defer { starting.remove(key) }
+    if worktree.isRemote { return startRemoteTerminal(key, in: worktree) }
     let session = Zmx.sessionName(for: worktree.path, pane: key.pane)
     // A snapshot never starts sessions: its terminals just hold the space.
     guard let live = Snapshot.isActive ? [] : await Zmx.sessions() else {
@@ -133,6 +139,37 @@ extension AppStore {
       workingDirectory: directory,
       environment: environment,
       initialInput: Snapshot.isActive || paneLaunch?.command != nil ? nil : typed ?? agent)
+    install(launch, for: key, app: app)
+  }
+
+  /// A remote directory's pane: ssh to its host, zmx there. A plain shell;
+  /// a "New Agent" tab gets plain `claude` (the status hooks are files on
+  /// this Mac).
+  private func startRemoteTerminal(_ key: PaneKey, in worktree: Worktree) {
+    guard terminals[key] == nil, !retiring.contains(key.worktree),
+      layouts[key.worktree, default: .initial].allPanes.contains(key.pane)
+    else { return }
+    paneLaunches[key] = nil
+    let agent = agentPanes.remove(key) != nil
+    guard let host = host(of: worktree), let app = GhosttyApp.shared.app else {
+      failedPanes.insert(key)
+      return
+    }
+    let session = Zmx.sessionName(for: worktree.sessionKey, pane: key.pane)
+    // A session waiting to be ended is this pane's again (a directory added
+    // back): it lives on.
+    forgetCleanup(of: session, on: host)
+    let command = SSH.attachCommand(
+      host: host, directory: worktree.path, session: session, program: agent ? SSH.agentProgram : [])
+    let launch = TerminalLaunch(
+      command: Snapshot.isActive ? "/bin/cat" : command,
+      workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
+      environment: [:],
+      initialInput: nil)
+    install(launch, for: key, app: app)
+  }
+
+  private func install(_ launch: TerminalLaunch, for key: PaneKey, app: ghostty_app_t) {
     guard let terminal = TerminalView(app: app, launch: launch) else {
       Snapshot.note("libghostty didn't create a surface")
       failedPanes.insert(key)
@@ -151,7 +188,9 @@ extension AppStore {
 
   /// Starts every pane of every tab of the worktree that isn't running yet.
   func startTerminals(of worktree: Worktree) {
-    guard !Snapshot.isActive else { return }
+    // A remote one starts its panes as they're shown: a password host would
+    // otherwise ask once per hidden pane, each a login that could fail.
+    guard !Snapshot.isActive, !worktree.isRemote else { return }
     for pane in layout(for: worktree).allPanes {
       _ = terminal(for: PaneKey(worktree: worktree.id, pane: pane), in: worktree)
     }
@@ -226,6 +265,15 @@ extension AppStore {
       if let tab = layout.tab(containing: key.pane) { equalize(tab.id, in: worktree) }
     case .title(let title):
       if paneTitles[key] != title { paneTitles[key] = title }
+    case .closeAfterExit:
+      // On a dropped connection: go back, rather than end the session.
+      if disconnectedPanes.contains(key) { reconnect(key) } else { closePane(key) }
+    case .childExited:
+      if worktree.isRemote {
+        remotePaneExited(key, in: worktree)
+      } else {
+        closePane(key)
+      }
     }
   }
 
@@ -265,18 +313,17 @@ extension AppStore {
     let hadKeyboard = terminals[key].map { $0.window?.firstResponder === $0 } ?? false
     dropTerminal(key)
     updateLayout(key.worktree) { $0.close(key.pane) }
-    Task { await Zmx.kill(Zmx.sessionName(for: worktree.path, pane: key.pane)) }
+    Task { await endSessions([key.pane], of: worktree) }
     if hadKeyboard { focusSelectedTerminal() }
   }
 
   func closeTab(_ tabID: String, in worktree: Worktree) {
     guard let tab = layout(for: worktree).tabs.first(where: { $0.id == tabID }) else { return }
     for pane in tab.root.panes {
-      let key = PaneKey(worktree: worktree.id, pane: pane)
-      dropTerminal(key)
+      dropTerminal(PaneKey(worktree: worktree.id, pane: pane))
       updateLayout(worktree.id) { $0.close(pane) }
-      Task { await Zmx.kill(Zmx.sessionName(for: worktree.path, pane: pane)) }
     }
+    Task { await endSessions(tab.root.panes, of: worktree) }
     if selection == worktree.id { focusSelectedTerminal() }
   }
 
@@ -308,6 +355,7 @@ extension AppStore {
   private func dropTerminal(_ key: PaneKey) {
     terminals.removeValue(forKey: key)?.destroy()
     failedPanes.remove(key)
+    disconnectedPanes.remove(key)
     paneTitles[key] = nil
     agentPanes.remove(key)
     paneLaunches[key] = nil
@@ -323,6 +371,39 @@ extension AppStore {
     layouts[worktree.id] = nil
     labels[worktree.id] = nil
     saveState()
-    for pane in panes { await Zmx.kill(Zmx.sessionName(for: worktree.path, pane: pane)) }
+    await endSessions(Array(panes), of: worktree)
+  }
+
+  /// Ends the panes' zmx sessions: here, or on the worktree's host.
+  func endSessions(_ panes: [String], of worktree: Worktree) async {
+    let names = panes.map { Zmx.sessionName(for: worktree.sessionKey, pane: $0) }
+    if worktree.isRemote {
+      // Unreachable now: they're ended once it can be reached.
+      if let host = host(of: worktree), !(await SSH.kill(names, on: host)) { remember(names, toEndOn: host) }
+    } else {
+      for name in names { await Zmx.kill(name) }
+    }
+  }
+
+  /// A remote pane's ssh ended: the shell there exited, or the connection
+  /// went. (libghostty starts commands through login(1), which always exits
+  /// 0, so ssh's own status never arrives.) The host says which: a session
+  /// that's gone closes the pane; one still there, or a host that can't be
+  /// asked, leaves it waiting to reconnect.
+  private func remotePaneExited(_ key: PaneKey, in worktree: Worktree) {
+    // The terminal stays, showing what ssh said, under a Reconnect bar.
+    disconnectedPanes.insert(key)
+    guard let host = host(of: worktree) else { return }
+    let session = Zmx.sessionName(for: worktree.sessionKey, pane: key.pane)
+    Task {
+      if await SSH.sessionExists(session, on: host) == false, disconnectedPanes.contains(key) {
+        closePane(key)
+      }
+    }
+  }
+
+  func reconnect(_ key: PaneKey) {
+    dropTerminal(key)
+    focusPane(key)
   }
 }

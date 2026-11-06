@@ -58,7 +58,7 @@ final class GhosttyApp {
       write_clipboard_cb: { _, location, content, count, confirm in
         GhosttyApp.writeClipboard(location: location, content: content, count: count, confirm: confirm)
       },
-      close_surface_cb: { userdata, _ in GhosttyApp.closeSurface(userdata: userdata) }
+      close_surface_cb: { userdata, processAlive in GhosttyApp.closeSurface(userdata: userdata, processAlive: processAlive) }
     )
   }
 
@@ -72,8 +72,9 @@ final class GhosttyApp {
     switch action.tag {
     case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
       // libghostty keeps a terminal whose command exited open, waiting for a
-      // key. In Yatty the pane closes, as a tmux pane did in agentree.
-      return deliver(.close, to: target)
+      // key. In Yatty the pane closes, as a tmux pane did in agentree; a
+      // remote one whose connection dropped waits to reconnect.
+      return deliver(.childExited, to: target)
     case GHOSTTY_ACTION_NEW_TAB:
       return deliver(.newTab, to: target)
     case GHOSTTY_ACTION_NEW_SPLIT:
@@ -184,11 +185,12 @@ final class GhosttyApp {
     }
   }
 
-  /// A `close_surface` keybind (⌘W) closes the pane.
-  nonisolated private static func closeSurface(userdata: UnsafeMutableRawPointer?) {
+  /// A `close_surface` keybind (⌘W) closes the pane. With the process
+  /// gone, it's a key pressed on a terminal whose command ended.
+  nonisolated private static func closeSurface(userdata: UnsafeMutableRawPointer?, processAlive: Bool) {
     guard let view = TerminalRef(userdata) else { return }
     DispatchQueue.main.async {
-      MainActor.assumeIsolated { view.resolve()?.perform(.close) }
+      MainActor.assumeIsolated { view.resolve()?.perform(processAlive ? .close : .closeAfterExit) }
     }
   }
 

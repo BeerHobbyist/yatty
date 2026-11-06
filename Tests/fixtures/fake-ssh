@@ -1,0 +1,39 @@
+#!/bin/sh
+# A stand-in ssh whose every host is this Mac: skips ssh's options, then runs
+# the command with sh -c, as sshd would through a login shell that is sh.
+# Each host is a directory, $FAKE_SSH_ROOT/<host>/:
+#   home/      its $HOME, where commands start
+#   bin/       first on its PATH
+#   shell      its $SHELL, if present (else /bin/sh)
+#   password   present: a password host. Batch mode is refused until a login
+#              through SSH_ASKPASS gave this password; that login is the
+#              host's "connection", which `-O check` sees.
+#   log        a line per login attempt (a call without a connection)
+check=; batch=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -O) check=$2; shift 2 ;;
+    -o) [ "$2" = BatchMode=yes ] && batch=1; shift 2 ;;
+    --) shift; break ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+host=$1; shift
+dir="${FAKE_SSH_ROOT:?}/$host"
+[ -d "$dir" ] || { echo "ssh: Could not resolve hostname $host: nodename nor servname provided" >&2; exit 255; }
+if [ -n "$check" ]; then [ -f "$dir/connected" ]; exit; fi
+if [ ! -f "$dir/connected" ]; then
+  echo login >>"$dir/log"
+  if [ -f "$dir/password" ]; then
+    if [ -n "$batch" ] || [ -z "$SSH_ASKPASS" ]; then
+      echo "$host: Permission denied (publickey,password)." >&2; exit 255
+    fi
+    answer=$("$SSH_ASKPASS" "$host's password: ") || { echo "$host: Permission denied (password)." >&2; exit 255; }
+    [ "$answer" = "$(cat "$dir/password")" ] || { echo "$host: Permission denied (password)." >&2; exit 255; }
+    touch "$dir/connected"
+  fi
+fi
+shell=/bin/sh; [ -x "$dir/shell" ] && shell="$dir/shell"
+cd "$dir/home" || exit 255
+exec env HOME="$dir/home" PATH="$dir/bin:/usr/bin:/bin" SHELL="$shell" /bin/sh -c "$*"

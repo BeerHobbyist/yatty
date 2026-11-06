@@ -26,15 +26,19 @@ struct YattyApp: App {
       CommandGroup(replacing: .newItem) {
         Button("New Worktree…") { store.newWorktreeForSelection() }
           .keyboardShortcut("n")
-          .disabled(store.repos.isEmpty)
+          // A remote directory isn't a repository's: no repo to offer.
+          .disabled(store.repos.isEmpty || store.selectedWorktree?.isRemote == true)
         Button("Add Repository…") { store.addingRepository = true }
           .keyboardShortcut("o")
+        Button("Add SSH Host…") { store.addingHost = AddHostRequest() }
+          .keyboardShortcut("o", modifiers: [.command, .shift])
       }
       // File > Close (⌘W) would close the whole window; ⌘W closes a pane instead.
       CommandGroup(replacing: .saveItem) {}
       CommandGroup(after: .sidebar) {
         Button("Show Pull Request") { store.showingPullRequest.toggle() }
           .keyboardShortcut("p", modifiers: [.command, .option])
+          .disabled(store.selectedWorktree?.isRemote ?? false)
         Button("Refresh Pull Requests") { store.refreshPullRequests() }
           .keyboardShortcut("r")
         Button("Merge Pull Request…") {

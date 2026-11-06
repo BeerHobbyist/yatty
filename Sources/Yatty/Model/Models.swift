@@ -11,15 +11,23 @@ struct Repo: Codable, Identifiable, Hashable {
 }
 
 struct Worktree: Identifiable, Hashable {
-  /// Symlinks resolved, as git reports it.
+  /// Symlinks resolved, as git reports it; on a host, its absolute path there.
   let path: String
   /// nil when detached.
   let branch: String?
   let head: String?
   /// The repository's main working copy, which can't be closed.
   let isMain: Bool
+  /// The SSH host it's on; nil on this Mac.
+  var host: String? = nil
 
-  var id: String { path }
+  var id: String { host.map { SSHHost.directoryID(host: $0, path: path) } ?? path }
+
+  var isRemote: Bool { host != nil }
+
+  /// What its zmx session names are made from: the path here; on a host, the
+  /// host too, so two names for one machine never share a session.
+  var sessionKey: String { isRemote ? id : path }
 
   /// The branch's last segment (feature/login → login), else the directory.
   var name: String {
@@ -27,7 +35,40 @@ struct Worktree: Identifiable, Hashable {
     return URL(fileURLWithPath: path).lastPathComponent
   }
 
-  var exists: Bool { FileManager.default.fileExists(atPath: path) }
+  /// A remote directory is taken to exist: only the host could say.
+  var exists: Bool { isRemote || FileManager.default.fileExists(atPath: path) }
+}
+
+/// Sessions to end on a host that couldn't be reached when their pane,
+/// directory or host went: tried again whenever Yatty refreshes.
+struct RemoteCleanup: Codable, Hashable {
+  var host: String
+  var zmx: String
+  var needsPassword: Bool
+  var sessions: [String]
+}
+
+/// An SSH host and the directories on it the user added.
+struct SSHHost: Codable, Identifiable, Hashable {
+  /// What ssh is given: a `~/.ssh/config` alias, `user@host`…
+  var host: String
+  /// The remote user's `$HOME`, to show paths as `~/…`.
+  var home: String
+  /// zmx's absolute path there, found when the host was added.
+  var zmx: String
+  /// It logged in with a password (or a key's passphrase): background calls
+  /// wait for a live shared connection.
+  var needsPassword = false
+  /// Absolute paths there.
+  var directories: [String] = []
+
+  var id: String { "ssh:" + host }
+
+  static func directoryID(host: String, path: String) -> String { "ssh:\(host):\(path)" }
+
+  var worktrees: [Worktree] {
+    directories.map { Worktree(path: $0, branch: nil, head: nil, isMain: false, host: host) }
+  }
 }
 
 /// What Yatty remembers between launches: `~/.config/yatty/state.json`.
@@ -44,12 +85,16 @@ struct StoredState: Codable {
   var mergeMethod: MergeMethod?
   /// The diff viewer the user picked.
   var diffViewer: DiffViewer?
+  var hosts: [SSHHost] = []
+  var remoteCleanup: [RemoteCleanup] = []
 
   init(
     repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
     labels: [String: String] = [:], foldedSections: [String] = [], mergeMethod: MergeMethod? = nil,
-    diffViewer: DiffViewer? = nil
+    diffViewer: DiffViewer? = nil, hosts: [SSHHost] = [], remoteCleanup: [RemoteCleanup] = []
   ) {
+    self.hosts = hosts
+    self.remoteCleanup = remoteCleanup
     self.diffViewer = diffViewer
     self.repos = repos
     self.selectedWorktree = selectedWorktree
@@ -69,6 +114,8 @@ struct StoredState: Codable {
     foldedSections = try container.decodeIfPresent([String].self, forKey: .foldedSections) ?? []
     mergeMethod = try? container.decodeIfPresent(MergeMethod.self, forKey: .mergeMethod)
     diffViewer = try? container.decodeIfPresent(DiffViewer.self, forKey: .diffViewer)
+    hosts = try container.decodeIfPresent([SSHHost].self, forKey: .hosts) ?? []
+    remoteCleanup = (try? container.decodeIfPresent([RemoteCleanup].self, forKey: .remoteCleanup)) ?? []
   }
 }
 
