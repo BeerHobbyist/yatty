@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
   @Environment(AppStore.self) private var store
+  @Environment(\.openSettings) private var openSettings
   @State private var labelDraft = ""
 
   var body: some View {
@@ -29,6 +30,26 @@ struct ContentView: View {
     }
     .sheet(item: $store.addingHost) { request in
       AddHostSheet(request: request)
+    }
+    .task(id: store.openingSettings) {
+      guard store.openingSettings else { return }
+      store.openingSettings = false
+      openSettings()
+    }
+    .sheet(isPresented: $store.showingPalette, onDismiss: { store.paletteClosed() }) {
+      CommandPalette(commands: store.commands) { store.pickedCommand = $0 }
+    }
+    .sheet(isPresented: $store.showingHelp) {
+      VStack(spacing: 0) {
+        HelpView(commands: store.commands)
+        Divider()
+        HStack {
+          Spacer()
+          Button("Done") { store.showingHelp = false }.keyboardShortcut(.defaultAction)
+        }
+        .padding(12)
+      }
+      .frame(width: 560, height: 620)
     }
     .confirmationDialog(
       "Remove \(store.pendingHostRemoval?.host ?? "")?",

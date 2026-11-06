@@ -21,6 +21,8 @@ enum TerminalCommand: Sendable {
   case childExited
   /// A key pressed on a terminal whose command had exited.
   case closeAfterExit
+  /// Ghostty's own command palette key: Yatty's palette.
+  case togglePalette
 }
 
 enum GotoSplit: Sendable {
@@ -265,6 +267,8 @@ extension AppStore {
       if let tab = layout.tab(containing: key.pane) { equalize(tab.id, in: worktree) }
     case .title(let title):
       if paneTitles[key] != title { paneTitles[key] = title }
+    case .togglePalette:
+      showingPalette.toggle()
     case .closeAfterExit:
       // On a dropped connection: go back, rather than end the session.
       if disconnectedPanes.contains(key) { reconnect(key) } else { closePane(key) }

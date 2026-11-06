@@ -23,38 +23,47 @@ struct YattyApp: App {
     }
     .defaultSize(width: 1280, height: 800)
     .commands {
+      let context = store.commandContext
       CommandGroup(replacing: .newItem) {
         Button("New Worktree…") { store.newWorktreeForSelection() }
-          .keyboardShortcut("n")
-          // A remote directory isn't a repository's: no repo to offer.
-          .disabled(store.repos.isEmpty || store.selectedWorktree?.isRemote == true)
+          .keyboardShortcut(Shortcuts.newWorktree)
+          .disabled(!context.canNewWorktree)
         Button("Add Repository…") { store.addingRepository = true }
-          .keyboardShortcut("o")
+          .keyboardShortcut(Shortcuts.addRepository)
         Button("Add SSH Host…") { store.addingHost = AddHostRequest() }
-          .keyboardShortcut("o", modifiers: [.command, .shift])
+          .keyboardShortcut(Shortcuts.addHost)
+      }
+      CommandGroup(replacing: .help) {
+        Button("Keyboard Shortcuts") { store.showingHelp = true }
+          .keyboardShortcut(Shortcuts.help)
       }
       // File > Close (⌘W) would close the whole window; ⌘W closes a pane instead.
       CommandGroup(replacing: .saveItem) {}
       CommandGroup(after: .sidebar) {
+        Button("Command Palette…") { store.showingPalette = true }
+          .keyboardShortcut(Shortcuts.palette)
+        Divider()
         Button("Show Pull Request") { store.showingPullRequest.toggle() }
-          .keyboardShortcut("p", modifiers: [.command, .option])
-          .disabled(store.selectedWorktree?.isRemote ?? false)
+          .keyboardShortcut(Shortcuts.showPullRequest)
+          .disabled(!context.canShowPullRequest)
         Button("Refresh Pull Requests") { store.refreshPullRequests() }
-          .keyboardShortcut("r")
+          .keyboardShortcut(Shortcuts.refresh)
         Button("Merge Pull Request…") {
           if let worktree = store.selectedWorktree { store.mergingWorktree = worktree }
         }
-        .disabled(store.selectedWorktree.flatMap { store.pullRequests.badge(for: $0) }.map { $0.merged } ?? true)
+        .disabled(!context.canMerge)
         Divider()
       }
       CommandMenu("Worktree") {
-        Button("Close Worktree…") { store.requestCloseSelected() }
-          .disabled(store.selectedWorktree.map { $0.isMain } ?? true)
+        Button(context.selected?.isRemote == true ? "Remove Directory…" : "Close Worktree…") {
+          store.requestCloseSelected()
+        }
+        .disabled(!context.canCloseWorktree)
       }
       TerminalCommands(store: store)
       CommandMenu("Agents") {
         Button("Go to Next Agent") { store.jumpToNextAgent() }
-          .keyboardShortcut("j", modifiers: [.command, .shift])
+          .keyboardShortcut(Shortcuts.nextAgent)
         Divider()
         Toggle(
           "Track Every Claude",

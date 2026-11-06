@@ -77,6 +77,8 @@ final class GhosttyApp {
       return deliver(.childExited, to: target)
     case GHOSTTY_ACTION_NEW_TAB:
       return deliver(.newTab, to: target)
+    case GHOSTTY_ACTION_TOGGLE_COMMAND_PALETTE:
+      return deliver(.togglePalette, to: target)
     case GHOSTTY_ACTION_NEW_SPLIT:
       let command: TerminalCommand =
         switch action.action.new_split {

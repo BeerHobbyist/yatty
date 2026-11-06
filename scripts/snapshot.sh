@@ -3,12 +3,13 @@
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
 #   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff,
-#   ssh, add-host, disconnected
+#   ssh, add-host, disconnected, palette, help, settings
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
-app="$root/build/Yatty.app/Contents/MacOS/Yatty"
+# $YATTY_APP: a bundle other than build/Yatty.app (which may be the one in use).
+app="${YATTY_APP:-$root/build/Yatty.app}/Contents/MacOS/Yatty"
 out="$root/build/snapshots/$scene.png"
 [ -x "$app" ] || { echo "build the app first: make app" >&2; exit 1; }
 
@@ -132,6 +133,16 @@ EOF
       git -C "$login" -c user.name=y -c user.email=y@y commit -qam "Change number $n to the readme"
     done
     export YATTY_SNAPSHOT_SHEET=diff
+    ;;
+  palette|help|settings)
+    cat > "$state" <<EOF
+{
+  "repos": [{ "name": "sample-app", "path": "$repo" }],
+  "selectedWorktree": "$login",
+  "hosts": [{ "host": "devbox", "home": "/home/me", "zmx": "/usr/local/bin/zmx", "directories": ["/home/me/src/api"] }]
+}
+EOF
+    export YATTY_SNAPSHOT_SHEET="$scene"
     ;;
   ssh|add-host|disconnected)
     cat > "$state" <<EOF

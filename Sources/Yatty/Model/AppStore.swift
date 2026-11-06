@@ -61,6 +61,12 @@ final class AppStore {
   var pendingClose: PendingClose?
   var pendingRemoval: Repo?
   var addingHost: AddHostRequest?
+  var showingPalette = false
+  var showingHelp = false
+  /// Asks the window to open Settings (only a view can).
+  var openingSettings = false
+  /// What the palette picked, run once it has closed.
+  @ObservationIgnored var pickedCommand: Command?
   var pendingHostRemoval: SSHHost?
   var pendingDirectoryRemoval: Worktree?
   var renamingWorktree: Worktree?
@@ -132,6 +138,9 @@ final class AppStore {
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }
     if Snapshot.sheet == "add-host" { addingHost = AddHostRequest() }
+    if Snapshot.sheet == "palette" { showingPalette = true }
+    if Snapshot.sheet == "help" { showingHelp = true }
+    if Snapshot.sheet == "settings" { openingSettings = true }
     if Snapshot.sheet == "disconnected", let selection {
       disconnectedPanes.insert(PaneKey(worktree: selection, pane: "0"))
     }

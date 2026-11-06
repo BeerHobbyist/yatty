@@ -15,7 +15,6 @@ struct HelpView: View {
     ("⌥⌘← ↑ ↓ →", "go to the pane that way"),
     ("⌘+ / ⌘- / ⌘0", "font size"),
     ("⌘↑ / ⌘↓", "previous / next prompt"),
-    ("⇧⌘J", "go to the next agent that needs you"),
   ]
 
   var body: some View {
@@ -46,7 +45,8 @@ struct HelpView: View {
 
   private var groups: [(name: String, rows: [(keys: String, what: String)])] {
     var groups: [(name: String, rows: [(keys: String, what: String)])] = []
-    for command in commands {
+    // "Go to" entries name what's open now; the keys for tabs are listed once below.
+    for command in commands where !command.id.hasPrefix("go.") && !command.id.hasPrefix("tab.go.") {
       guard let shortcut = command.shortcut else { continue }
       let row = (keys: shortcut.label, what: command.title)
       if let index = groups.firstIndex(where: { $0.name == command.group }) {

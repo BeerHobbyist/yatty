@@ -8,39 +8,39 @@ struct TerminalCommands: Commands {
 
   var body: some Commands {
     CommandMenu("Terminal") {
-      let enabled = store.selectedWorktree != nil
+      let enabled = store.commandContext.hasTerminals
       Group {
         Button("New Tab") { store.performOnFocusedPane(.newTab) }
-          .keyboardShortcut("t")
+          .keyboardShortcut(Shortcuts.newTab)
         Button("New Agent Tab") {
           if let worktree = store.selectedWorktree { store.newTab(in: worktree, agent: true) }
         }
-        .keyboardShortcut("t", modifiers: [.command, .option])
+        .keyboardShortcut(Shortcuts.newAgentTab)
         Button("Open Diff…") { store.diffingWorktree = store.selectedWorktree }
-          .keyboardShortcut("d", modifiers: [.command, .option])
+          .keyboardShortcut(Shortcuts.openDiff)
           // Diffs run git here; a remote directory's files are there.
-          .disabled(store.selectedWorktree?.isRemote ?? false)
+          .disabled(!store.commandContext.canDiff)
         Divider()
         Button("Split Right") { store.performOnFocusedPane(.split(.horizontal, newFirst: false)) }
-          .keyboardShortcut("d")
+          .keyboardShortcut(Shortcuts.splitRight)
         Button("Split Down") { store.performOnFocusedPane(.split(.vertical, newFirst: false)) }
-          .keyboardShortcut("d", modifiers: [.command, .shift])
+          .keyboardShortcut(Shortcuts.splitDown)
         Button("Equalize Splits") { store.performOnFocusedPane(.equalize) }
-          .keyboardShortcut("=", modifiers: [.command, .control])
+          .keyboardShortcut(Shortcuts.equalize)
         Divider()
         Button("Next Pane") { store.performOnFocusedPane(.gotoSplit(.next)) }
-          .keyboardShortcut("]")
+          .keyboardShortcut(Shortcuts.nextPane)
         Button("Previous Pane") { store.performOnFocusedPane(.gotoSplit(.previous)) }
-          .keyboardShortcut("[")
+          .keyboardShortcut(Shortcuts.previousPane)
         Button("Next Tab") { store.performOnFocusedPane(.gotoTab(.next)) }
-          .keyboardShortcut("]", modifiers: [.command, .shift])
+          .keyboardShortcut(Shortcuts.nextTab)
         Button("Previous Tab") { store.performOnFocusedPane(.gotoTab(.previous)) }
-          .keyboardShortcut("[", modifiers: [.command, .shift])
+          .keyboardShortcut(Shortcuts.previousTab)
         Divider()
         Button("Close Pane") { store.performOnFocusedPane(.close) }
-          .keyboardShortcut("w")
+          .keyboardShortcut(Shortcuts.closePane)
         Button("Close Tab") { store.performOnFocusedPane(.closeTab) }
-          .keyboardShortcut("w", modifiers: [.command, .option])
+          .keyboardShortcut(Shortcuts.closeTab)
       }
       .disabled(!enabled)
     }

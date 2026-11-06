@@ -64,6 +64,25 @@ struct SSHHost: Codable, Identifiable, Hashable {
 
   var id: String { "ssh:" + host }
 
+  init(host: String, home: String, zmx: String, needsPassword: Bool = false, directories: [String] = []) {
+    self.host = host
+    self.home = home
+    self.zmx = zmx
+    self.needsPassword = needsPassword
+    self.directories = directories
+  }
+
+  // Only the host is needed: a field missing from an older or hand-edited
+  // state.json mustn't cost the whole file.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    host = try container.decode(String.self, forKey: .host)
+    home = try container.decodeIfPresent(String.self, forKey: .home) ?? ""
+    zmx = try container.decodeIfPresent(String.self, forKey: .zmx) ?? "zmx"
+    needsPassword = try container.decodeIfPresent(Bool.self, forKey: .needsPassword) ?? false
+    directories = try container.decodeIfPresent([String].self, forKey: .directories) ?? []
+  }
+
   static func directoryID(host: String, path: String) -> String { "ssh:\(host):\(path)" }
 
   var worktrees: [Worktree] {

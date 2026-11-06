@@ -57,3 +57,26 @@ import Testing
   #expect(reloaded.cloneDirectory == YattyConfig().cloneDirectory)
   #expect(reloaded.sandboxCommand == nil)
 }
+
+/// The menus and the palette ask these same rules.
+@Test func commandsApplyWhereTheMenusDo() {
+  let main = Worktree(path: "/r", branch: "main", head: nil, isMain: true)
+  let feature = Worktree(path: "/r/.worktrees/f", branch: "f", head: nil, isMain: false)
+  let remote = Worktree(path: "/srv/app", branch: nil, head: nil, isMain: false, host: "box")
+
+  let none = CommandContext(selected: nil, hasRepos: true, openPullRequest: false)
+  #expect(none.canNewWorktree && !none.canCloseWorktree && !none.hasTerminals && !none.canDiff && !none.canMerge)
+
+  let onMain = CommandContext(selected: main, hasRepos: true, openPullRequest: false)
+  #expect(onMain.canNewWorktree && !onMain.canCloseWorktree && onMain.canDiff && onMain.canShowPullRequest)
+  #expect(!onMain.canMerge)
+
+  let onFeature = CommandContext(selected: feature, hasRepos: true, openPullRequest: true)
+  #expect(onFeature.canCloseWorktree && onFeature.canMerge)
+
+  let onRemote = CommandContext(selected: remote, hasRepos: true, openPullRequest: true)
+  #expect(!onRemote.canNewWorktree && onRemote.canCloseWorktree && onRemote.hasTerminals)
+  #expect(!onRemote.canDiff && !onRemote.canShowPullRequest && !onRemote.canMerge)
+
+  #expect(!CommandContext(selected: nil, hasRepos: false, openPullRequest: false).canNewWorktree)
+}

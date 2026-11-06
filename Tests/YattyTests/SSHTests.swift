@@ -261,6 +261,10 @@ private struct FakeHosts {
   #expect(worktree.sessionKey == worktree.id)
   #expect(Worktree(path: "/x", branch: nil, head: nil, isMain: false).sessionKey == "/x")
   #expect(worktree.isRemote && worktree.exists)
+  // A host written with fewer fields still loads, and so does the rest of the file.
+  let sparse = #"{"repos":[],"hosts":[{"host":"box","directories":["/srv"]}]}"#
+  let host = try #require(try JSONDecoder().decode(StoredState.self, from: Data(sparse.utf8)).hosts.first)
+  #expect(host.host == "box" && host.directories == ["/srv"] && !host.needsPassword)
   // A state file from before hosts existed.
   let old = try JSONDecoder().decode(StoredState.self, from: Data(#"{"repos":[]}"#.utf8))
   #expect(old.hosts.isEmpty && old.remoteCleanup.isEmpty)
