@@ -115,13 +115,13 @@ Plan: `2026-11-06-phase-8-ssh.md`.
 - [x] Add an SSH host (typed or from `~/.ssh/config`) and directories on it; their terminals run there, kept alive by zmx on the host (install hint when missing); one shared connection per host (ControlMaster, short ControlPath).
 - [x] Password or key-passphrase logins through `SSH_ASKPASS`, never stored; background calls never log in on their own.
 
-## Phase 9 — Command palette, help and polish (in progress)
+## Phase 9 — Command palette, help and polish ✅
 
 Plan: `2026-11-06-phase-9-polish.md`.
 
-- [ ] Command palette (⇧⌘P) listing every action that applies, fuzzy-filtered.
-- [ ] Settings window for `agentCommand`, `cloneDirectory`, `sandboxCommand`, notifications.
-- [ ] Help / keyboard reference; README with screenshots; release build (`make app CONFIG=release`).
+- [x] Command palette (⇧⌘P) listing every action that applies, fuzzy-filtered.
+- [x] Settings window for `agentCommand`, `cloneDirectory`, `sandboxCommand`, notifications.
+- [x] Help / keyboard reference; README (screenshots still to take: snapshots can't draw terminals, and window capture needs Screen Recording permission); release build (`make app CONFIG=release`).
 
 ---
 
@@ -137,3 +137,4 @@ Plan: `2026-11-06-phase-9-polish.md`.
 | 2026-11-06 | 6 — diffs (verifier: no findings) | `dd8fb77` |
 | 2026-11-06 | 7 — agent CLI and fence (verifier: 6 findings fixed, re-verified; real-app e2e) | `a59a99e`…`ad964b4`+ |
 | 2026-11-06 | 8 — SSH projects (real-sshd e2e; verifier: 9 findings fixed, re-verified, 2 more fixed) | `728c90d`…`2bb4b0e` |
+| 2026-11-06 | 9 — command palette, help, settings, README, release build (verifier: 1 defect + 5 fixes, re-verified) | `d4bd4ba`…`8136ed7` |
