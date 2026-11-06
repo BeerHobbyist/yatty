@@ -10,11 +10,9 @@
 
 **Spec:** roadmap `2026-11-06-agentree-port.md` (Phase 2) and agentree's tabs/splits behaviour (DEVLOG: "Tabs + pane splitting", "Keybindings", "Mouse").
 
-## Status (resume here)
+## Status
 
-- Tasks 1–4 done and committed on `port`. Verifier: PASS on criteria 1–3, 6–9; its three minor findings (keyboard after rename, state.json writes during divider drags, untitled hidden tabs) are fixed but not re-verified.
-- Still open: Task 4 Step 2 and Task 5's visual check. After a session restart with the window server allowed in fence (`macos.mach.lookup`: `com.apple.windowserver.active`, `com.apple.CARenderServer`): `make app && scripts/snapshot.sh tabs-splits` (and `worktrees`, `empty`); read the PNGs; if it prints `snapshot: 0 visible windows`, name the missing mach service to the owner. Then one re-verify round of the three fixes and the snapshots, and tick this plan.
-- `knownSessions` lives on `Zmx` (not a free function as written below).
+Done. Two verifier rounds (all findings fixed); snapshots `empty`, `worktrees`, `tabs-splits` checked.
 
 ## Global Constraints
 
@@ -44,9 +42,9 @@ See the roadmap. In particular: pane `0` keeps the Phase 1 session name `yatty-<
 - Produces: `enum Snapshot { static func scheduleIfRequested() }`. With `YATTY_SNAPSHOT=<png path>` it waits `YATTY_SNAPSHOT_DELAY` seconds (default 3), draws every visible window's content view with `bitmapImageRepForCachingDisplay` + `cacheDisplay` into one PNG (stacked if several), writes it, and terminates the app.
 - Produces: `scripts/snapshot.sh <scene>` builds a throwaway sandbox (`XDG_CONFIG_HOME`, `HOME`-relative zmx dir untouched), a sample repo with worktrees, the scene's `state.json`, runs `build/Yatty.app/Contents/MacOS/Yatty` with `YATTY_SNAPSHOT=build/snapshots/<scene>.png`, and prints the path. Scenes: `empty`, `worktrees`, `tabs-splits`.
 
-- [ ] Step 1: `SmokeTests.swift` — `@Test func directoryNameSanitizesBranch()` asserting `Git.directoryName(for: "feature/login page") == "feature-login-page"` and `Git.directoryName(for: "///") == "worktree"`.
-- [ ] Step 2: `swift test --scratch-path .build/swift --disable-sandbox` → PASS (proves `@testable import Yatty` links GhosttyKit).
-- [ ] Step 3: Snapshot mode + script; `scripts/snapshot.sh worktrees` → a PNG that shows the sidebar with the sample repo and its worktrees.
+- [x] Step 1: `SmokeTests.swift` — `@Test func directoryNameSanitizesBranch()` asserting `Git.directoryName(for: "feature/login page") == "feature-login-page"` and `Git.directoryName(for: "///") == "worktree"`.
+- [x] Step 2: `swift test --scratch-path .build/swift --disable-sandbox` → PASS (proves `@testable import Yatty` links GhosttyKit).
+- [x] Step 3: Snapshot mode + script; `scripts/snapshot.sh worktrees` → a PNG that shows the sidebar with the sample repo and its worktrees.
 
 ### Task 2: Layout model
 
@@ -79,8 +77,8 @@ See the roadmap. In particular: pane `0` keeps the Phase 1 session name `yatty-<
 - `Zmx.sessionName(for worktreePath: String, pane: String) -> String` — `pane == "0"` → Phase 1 name, else `"<that>-<pane>"`.
 - `func knownSessions(worktrees: [Worktree], layouts: [String: WorktreeLayout]) -> Set<String>` — each worktree's pane-0 session plus every pane of its stored layout.
 
-- [ ] Step 1: Tests — `splitThenRemoveCollapses`, `removingLastPaneIsNil`, `ratioClampsAndFollowsPath`, `neighborInUnevenSplit` (tree: horizontal(0.3, a, vertical(0.5, b, c)) → `neighbor(of: "c", .left) == "a"`, `neighbor(of: "a", .right)` is `b` or `c` whichever overlaps a's centre row → `b` for top half), `closeFocusedPaneFocusesSibling`, `closingLastPaneOfTabSelectsNeighbour`, `phase1StateDecodes` (JSON `{"repos":[{"name":"r","path":"/x"}],"selectedWorktree":"/x"}` → one repo, empty layouts), `layoutRoundTrips`, `sessionNames` (`"0"` → `yatty-<10 hex>`, `"ab12cd"` → `yatty-<10 hex>-ab12cd`), `knownSessionsIncludeUnopenedLayouts`.
-- [ ] Step 2: Run → FAIL (symbols missing). Step 3: implement. Step 4: Run → PASS.
+- [x] Step 1: Tests — `splitThenRemoveCollapses`, `removingLastPaneIsNil`, `ratioClampsAndFollowsPath`, `neighborInUnevenSplit` (tree: horizontal(0.3, a, vertical(0.5, b, c)) → `neighbor(of: "c", .left) == "a"`, `neighbor(of: "a", .right)` is `b` or `c` whichever overlaps a's centre row → `b` for top half), `closeFocusedPaneFocusesSibling`, `closingLastPaneOfTabSelectsNeighbour`, `phase1StateDecodes` (JSON `{"repos":[{"name":"r","path":"/x"}],"selectedWorktree":"/x"}` → one repo, empty layouts), `layoutRoundTrips`, `sessionNames` (`"0"` → `yatty-<10 hex>`, `"ab12cd"` → `yatty-<10 hex>-ab12cd`), `knownSessionsIncludeUnopenedLayouts`.
+- [x] Step 2: Run → FAIL (symbols missing). Step 3: implement. Step 4: Run → PASS.
 
 ### Task 3: Store — panes, operations, Ghostty actions
 
@@ -103,8 +101,8 @@ See the roadmap. In particular: pane `0` keeps the Phase 1 session name `yatty-<
 - Teardown: `closeWorktree` / `removeRepository` / vanished worktrees kill every pane session of the layout and drop the layout; `reapOrphanSessions` uses `knownSessions`.
 - Focus: split → new pane; close → the layout's new focused pane; tab switch → that tab's focused pane; worktree switch → no focus change (Return in the sidebar focuses the selected tab's focused pane).
 
-- [ ] Step 1: Tests — `agentInputOnlyForFirstPaneOfNewSession` on `AppStore.agentInput(for pane: String, sessionIsNew: Bool, agentTab: Bool) -> String?` (a `static` helper), `gotoTabResolves` on `WorktreeLayout.tabID(for: GotoTab) -> String?` (wraps around for previous/next).
-- [ ] Step 2: Run → FAIL. Step 3: implement. Step 4: Run → PASS; `make app` succeeds.
+- [x] Step 1: Tests — `agentInputOnlyForFirstPaneOfNewSession` on `AppStore.agentInput(for pane: String, sessionIsNew: Bool, agentTab: Bool) -> String?` (a `static` helper), `gotoTabResolves` on `WorktreeLayout.tabID(for: GotoTab) -> String?` (wraps around for previous/next).
+- [x] Step 2: Run → FAIL. Step 3: implement. Step 4: Run → PASS; `make app` succeeds.
 
 ### Task 4: Views — tab bar and splits
 
@@ -119,11 +117,11 @@ See the roadmap. In particular: pane `0` keeps the Phase 1 session name `yatty-<
 - Unfocused panes, when a tab has more than one: overlay `Color.black.opacity(0.18)` that doesn't take hits.
 - No tabs: `ContentUnavailableView("No Terminals", …)` with a "New Terminal" button.
 
-- [ ] Step 1: Implement; `make app`.
-- [ ] Step 2: `scripts/snapshot.sh tabs-splits` → PNG shows two tabs, the second selected with a horizontal split whose right half is split vertically; check alignment, truncation and dimming by eye.
+- [x] Step 1: Implement; `make app`.
+- [x] Step 2: `scripts/snapshot.sh tabs-splits` → PNG shows two tabs, the second selected with a horizontal split whose right half is split vertically; check alignment, truncation and dimming by eye.
 
 ### Task 5: Verify and commit
 
-- [ ] Step 1: `swift test --scratch-path .build/swift --disable-sandbox` → PASS; `make app` → OK; snapshots for `empty`, `worktrees`, `tabs-splits`.
-- [ ] Step 2: Fresh `verifier` agent: this plan's acceptance items (roadmap Phase 2) and Review Focus against the code, tests and snapshots. Fix what holds up; one re-verify round.
-- [ ] Step 3: Tick Phase 2 in the roadmap, add the progress-log row, commit.
+- [x] Step 1: `swift test --scratch-path .build/swift --disable-sandbox` → PASS; `make app` → OK; snapshots for `empty`, `worktrees`, `tabs-splits`.
+- [x] Step 2: Fresh `verifier` agent: this plan's acceptance items (roadmap Phase 2) and Review Focus against the code, tests and snapshots. Fix what holds up; one re-verify round.
+- [x] Step 3: Tick Phase 2 in the roadmap, add the progress-log row, commit.

@@ -12,8 +12,8 @@
 
 ## Status (resume here)
 
-- Task 1: `GitHub.swift`, the `Git` branch/PR/remote helpers and `Tests/YattyTests/GitHubTests.swift` are done (tests pass). Still to do in Task 1: `Repo.nameWithOwner`, `YattyConfig.cloneDirectory` + `cloneRoot` (both `decodeIfPresent`).
-- Task 2: `Sources/Yatty/Model/RepoCatalog.swift` done; the sheet is drafted in `Sources/Yatty/Views/AddRepositorySheet.swift.draft` (rename to `.swift` once `AppStore.catalog`, `addingRepository` and `addRemote(_:)` exist). The owner's `~/.config/yatty/config.json` should get `"cloneDirectory": "~/agentree"`.
+- Task 1 done (`16ad5ae`, `40bd20e`). Task 2 done (`40bd20e`): Add Repository sheet (⌘O / toolbar), `AppStore.addRemote`, `cloneDirectory` (the owner's is `~/agentree`), snapshot scene `add-repository` (fixture via `YATTY_REPO_FIXTURE`). Repos learn their `nameWithOwner` from `origin` on refresh.
+- Next: Task 3 (New Worktree from an existing branch or a pull request; labels; missing worktrees), then Task 4.
 
 ## Global Constraints
 

@@ -40,7 +40,7 @@
 
 - `swift test --scratch-path .build/swift --disable-sandbox` passes.
 - `make app` succeeds.
-- `scripts/snapshot.sh <scene>` renders the app window with sample data to `build/snapshots/<scene>.png` (SwiftUI chrome only: terminals draw through Metal and come out blank). A fresh `verifier` agent checks the phase's acceptance list against the code and those images.
+- `scripts/snapshot.sh <scene>` renders the app window with sample data to `build/snapshots/<scene>.png`. Needs fence's `macos.mach.lookup` to allow `com.apple.windowserver.active` and `com.apple.CARenderServer`. In snapshot mode the window is laid out as a plain sidebar | detail row and panes are placeholders (the real split view's sidebar and libghostty can't be drawn or started there). A fresh `verifier` agent checks the phase's acceptance list against the code and those images.
 - The owner runs the app and confirms what snapshots can't show.
 
 ---
@@ -53,7 +53,7 @@
 - [x] One Ghostty terminal per worktree, kept alive while hidden, persistent through zmx; a new session types `agentCommand` from `~/.config/yatty/config.json`.
 - [x] Reviewed twice; startup crash (main-actor executor check in C callbacks) fixed.
 
-## Phase 2 — Tabs and splits (built; visual check pending)
+## Phase 2 — Tabs and splits ✅
 
 Plan: `2026-11-06-phase-2-tabs-splits.md`.
 
@@ -118,4 +118,5 @@ Plan: `2026-11-06-phase-3-github-worktrees.md`.
 | Date | Phase | Commit |
 |---|---|---|
 | 2026-11-06 | 1 — app shell and worktrees | `e19b370` |
-| 2026-11-06 | 2 — tabs and splits (verifier PASS on code; visuals pending) | see `git log` |
+| 2026-11-06 | 2 — tabs and splits (two verifier rounds; snapshots checked) | `8504a15`…`ecfbb85` |
+| 2026-11-06 | 3 — add repository from GitHub (Tasks 1–2) | `16ad5ae`, `40bd20e` |
