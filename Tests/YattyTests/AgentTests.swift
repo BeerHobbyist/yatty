@@ -19,18 +19,19 @@ import Testing
 
 @Test func interruptedWorkBecomesIdle() {
   let report = AgentReport(state: .working, since: 100)
-  #expect(AgentStatus.effective(report, lastScreenChange: 100, now: 109) == .working)
-  #expect(AgentStatus.effective(report, lastScreenChange: 100, now: 111) == .idle)
+  #expect(AgentStatus.effective(report, lastScreenChange: 100, movedSinceReport: false, now: 109) == .working)
+  #expect(AgentStatus.effective(report, lastScreenChange: 100, movedSinceReport: false, now: 111) == .idle)
   // Still drawing its spinner: working.
-  #expect(AgentStatus.effective(report, lastScreenChange: 110, now: 115) == .working)
+  #expect(AgentStatus.effective(report, lastScreenChange: 110, movedSinceReport: true, now: 115) == .working)
   // Nothing known about the screen yet: trust the report.
-  #expect(AgentStatus.effective(report, lastScreenChange: nil, now: 200) == .working)
+  #expect(AgentStatus.effective(report, lastScreenChange: nil, movedSinceReport: false, now: 200) == .working)
 }
 
 @Test func answeredPromptBecomesWorking() {
   let report = AgentReport(state: .needsAction, since: 100)
-  #expect(AgentStatus.effective(report, lastScreenChange: 101, now: 120) == .needsAction)
-  #expect(AgentStatus.effective(report, lastScreenChange: 102, now: 120) == .working)
+  // However late the first sample lands, the prompt as first seen is the baseline.
+  #expect(AgentStatus.effective(report, lastScreenChange: 103, movedSinceReport: false, now: 120) == .needsAction)
+  #expect(AgentStatus.effective(report, lastScreenChange: 104, movedSinceReport: true, now: 120) == .working)
 }
 
 @Test func combinePicksMostUrgentThenNewest() {
@@ -80,7 +81,7 @@ import Testing
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "SessionEnd",
   ])
   let preToolUse = try #require(hooks["PreToolUse"])
-  #expect(preToolUse.compactMap { $0["matcher"] as? String } == ["*", "AskUserQuestion|ExitPlanMode"])
+  #expect(preToolUse.compactMap { $0["matcher"] as? String } == ["AskUserQuestion|ExitPlanMode"])
 }
 
 private func hookCommands(_ settings: [String: Any]) -> [String] {
@@ -135,4 +136,23 @@ private func hookCommands(_ settings: [String: Any]) -> [String] {
   #expect(AgentMonitor.nextTarget(order: order, states: states, after: "d") == "a")
   #expect(AgentMonitor.nextTarget(order: order, states: ["b": .done, "c": .working], after: "c") == "b")
   #expect(AgentMonitor.nextTarget(order: order, states: ["c": .working], after: nil) == nil)
+}
+
+@Test func mergeLeavesUnexpectedShapesAlone() {
+  let odd: [String: Any] = [
+    "hooks": ["Stop": "not a list", "PreToolUse": [["matcher": "Bash"]]],
+  ]
+  let merged = ClaudeSettings.merging(odd, install: true)
+  let hooks = merged["hooks"] as? [String: Any] ?? [:]
+  #expect(hooks["Stop"] as? String == "not a list")
+  #expect(((hooks["PreToolUse"] as? [Any])?.first as? [String: Any])?["matcher"] as? String == "Bash")
+  let removed = ClaudeSettings.merging(merged, install: false)
+  #expect((removed["hooks"] as? [String: Any])?["Stop"] as? String == "not a list")
+  // A `hooks` that isn't an object: nothing is touched at all.
+  let strange: [String: Any] = ["hooks": ["a list"]]
+  #expect((ClaudeSettings.merging(strange, install: true)["hooks"] as? [String]) == ["a list"])
+}
+
+@Test func hooksWriteThroughTheirOwnTempFiles() {
+  #expect(AgentHooks.command(for: .working).contains(".$$.tmp"))
 }

@@ -38,15 +38,21 @@ enum AgentStatus {
   static let workingSilence = 10
 
   /// The report, corrected by what its pane's screen did. `lastScreenChange`:
-  /// when the screen last changed, nil when nobody has looked yet.
-  static func effective(_ report: AgentReport, lastScreenChange: Int?, now: Int) -> AgentState {
-    guard let lastScreenChange else { return report.state }
+  /// when the screen was last seen to change, nil when nobody has looked yet.
+  /// `movedSinceReport`: the screen differs from how it looked the first
+  /// time it was sampled after this report (the prompt as asked).
+  static func effective(
+    _ report: AgentReport, lastScreenChange: Int?, movedSinceReport: Bool, now: Int
+  ) -> AgentState {
     switch report.state {
-    case .working where now - lastScreenChange >= workingSilence && now - report.since >= workingSilence:
+    case .working:
+      guard let lastScreenChange, now - lastScreenChange >= workingSilence,
+        now - report.since >= workingSilence
+      else { return .working }
       return .idle
     // The prompt was answered: the agent is drawing again.
-    case .needsAction where lastScreenChange > report.since + 1:
-      return .working
+    case .needsAction:
+      return movedSinceReport ? .working : .needsAction
     default:
       return report.state
     }

@@ -13,15 +13,20 @@ enum ClaudeSettings {
   }
 
   /// `settings` without Yatty's hooks, then (with `install`) with them. A
-  /// hook is Yatty's when its command mentions `YATTY_AGENT_DIR`.
+  /// hook is Yatty's when its command mentions `YATTY_AGENT_DIR`. Anything
+  /// shaped in a way Yatty doesn't expect is kept exactly as it was.
   static func merging(_ settings: [String: Any], install: Bool) -> [String: Any] {
+    if let other = settings["hooks"], !(other is [String: Any]) { return settings }
     var result = settings
     var hooks = (settings["hooks"] as? [String: Any]) ?? [:]
     for (event, value) in hooks {
-      let entries = (value as? [[String: Any]]) ?? []
-      let kept = entries.compactMap { entry -> [String: Any]? in
-        let commands = (entry["hooks"] as? [[String: Any]]) ?? []
-        let others = commands.filter { !(($0["command"] as? String) ?? "").contains("YATTY_AGENT_DIR") }
+      guard let entries = value as? [Any] else { continue }
+      let kept = entries.compactMap { item -> Any? in
+        guard let entry = item as? [String: Any], let commands = entry["hooks"] as? [Any] else { return item }
+        let others = commands.filter { command in
+          !((command as? [String: Any])?["command"] as? String ?? "").contains("YATTY_AGENT_DIR")
+        }
+        if others.count == commands.count { return item }
         guard !others.isEmpty else { return nil }
         var copy = entry
         copy["hooks"] = others
@@ -31,7 +36,12 @@ enum ClaudeSettings {
     }
     if install, let ours = AgentHooks.settings()["hooks"] as? [String: [[String: Any]]] {
       for (event, entries) in ours {
-        hooks[event] = ((hooks[event] as? [[String: Any]]) ?? []) + entries
+        guard let existing = hooks[event] else {
+          hooks[event] = entries
+          continue
+        }
+        // An event whose value isn't a list isn't Yatty's to touch.
+        if let list = existing as? [Any] { hooks[event] = list + entries }
       }
     }
     result["hooks"] = hooks.isEmpty ? nil : hooks
@@ -40,10 +50,12 @@ enum ClaudeSettings {
 
   static func isInstalled() -> Bool {
     guard let settings = read() else { return false }
-    let hooks = (settings["hooks"] as? [String: [[String: Any]]]) ?? [:]
-    return hooks.values.joined().contains { entry in
-      ((entry["hooks"] as? [[String: Any]]) ?? []).contains {
-        (($0["command"] as? String) ?? "").contains("YATTY_AGENT_DIR")
+    let hooks = (settings["hooks"] as? [String: Any]) ?? [:]
+    return hooks.values.contains { value in
+      ((value as? [Any]) ?? []).contains { entry in
+        (((entry as? [String: Any])?["hooks"] as? [Any]) ?? []).contains {
+          (($0 as? [String: Any])?["command"] as? String ?? "").contains("YATTY_AGENT_DIR")
+        }
       }
     }
   }
@@ -58,9 +70,11 @@ enum ClaudeSettings {
       settings = existing
     }
     let data = try JSONSerialization.data(
-      withJSONObject: merging(settings, install: on), options: [.prettyPrinted, .sortedKeys])
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try data.write(to: url, options: .atomic)
+      withJSONObject: merging(settings, install: on), options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+    // Through a symlink (dotfiles repos link it), not over it.
+    let target = url.resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try data.write(to: target, options: .atomic)
   }
 
   private static func read() -> [String: Any]? {

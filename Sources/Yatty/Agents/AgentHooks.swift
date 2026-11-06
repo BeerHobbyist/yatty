@@ -11,10 +11,11 @@ enum AgentHooks {
   static let events: [(event: String, matcher: String?, state: AgentState?)] = [
     ("SessionStart", nil, .idle),
     ("UserPromptSubmit", nil, .working),
-    // Tool events keep "working" fresh; a question or a plan to approve waits
-    // on the user (listed after "*", so it's the last word).
-    ("PreToolUse", "*", .working),
+    // A question or a plan to approve waits on the user. No catch-all
+    // PreToolUse "working" next to it: Claude runs an event's hooks at the
+    // same time, so that one could land last and overwrite it.
     ("PreToolUse", "AskUserQuestion|ExitPlanMode", .needsAction),
+    // Keeps "working" fresh, and ends a question once it's answered.
     ("PostToolUse", "*", .working),
     ("Notification", "permission_prompt|elicitation_dialog|elicitation_url_dialog|agent_needs_input", .needsAction),
     ("Stop", nil, .done),
@@ -27,9 +28,10 @@ enum AgentHooks {
     let file = #""$YATTY_AGENT_DIR/$YATTY_PANE""#
     let action =
       if let state {
+        // Each hook writes its own temp file ($$), then renames it into place.
         #"mkdir -p "$YATTY_AGENT_DIR""#
-          + #" && printf '%s %s\n' \#(state.rawValue) "$(date +%s)" > \#(file).tmp"#
-          + " && mv -f \(file).tmp \(file)"
+          + #" && printf '%s %s\n' \#(state.rawValue) "$(date +%s)" > \#(file).$$.tmp"#
+          + " && mv -f \(file).$$.tmp \(file)"
       } else {
         "rm -f \(file)"
       }

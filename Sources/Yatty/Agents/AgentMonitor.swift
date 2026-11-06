@@ -15,8 +15,11 @@ final class AgentMonitor {
   @ObservationIgnored private var polling = false
   @ObservationIgnored private var tick = 0
   @ObservationIgnored private let launchedAt = Int(Date().timeIntervalSince1970)
-  /// Per zmx session: a hash of its screen and when it last changed.
+  /// Per zmx session: a hash of its screen and when it was seen to change.
   @ObservationIgnored private var screens: [String: (hash: Int, changedAt: Int)] = [:]
+  /// Per zmx session reporting "needs you": its screen as first sampled after
+  /// that report — the prompt as asked. A different screen means answered.
+  @ObservationIgnored private var baselines: [String: (since: Int, hash: Int)] = [:]
   /// Per worktree: when the user last looked at it ("done" clears then).
   @ObservationIgnored private var viewed: [String: Int] = [:]
   @ObservationIgnored private var notificationsAllowed: Bool?
@@ -74,15 +77,17 @@ final class AgentMonitor {
       // A working or waiting agent's screen tells whether it still is.
       if tick % 2 == 0 {
         for (session, report) in reports where report.state == .working || report.state == .needsAction {
-          await sample(session, now: now)
+          await sample(session, report: report, now: now)
         }
       }
-      // An agent that died fires no SessionEnd: its session is gone instead.
+      // An agent that died fires no SessionEnd, and a closed pane's report
+      // stays behind: their sessions are gone instead.
       if tick % 5 == 0, let live = await Zmx.sessions() {
-        for session in reports.keys where !live.contains(session) {
-          try? FileManager.default.removeItem(at: AgentHooks.directory.appendingPathComponent(session))
-          reports[session] = nil
-          screens[session] = nil
+        for name in files where !name.hasSuffix(".tmp") && !live.contains(name) {
+          try? FileManager.default.removeItem(at: AgentHooks.directory.appendingPathComponent(name))
+          reports[name] = nil
+          screens[name] = nil
+          baselines[name] = nil
         }
       }
     }
@@ -90,7 +95,10 @@ final class AgentMonitor {
     var states: [PaneKey: AgentState] = [:]
     for (session, report) in reports {
       guard let key = paneOf[session] else { continue }
-      var state = AgentStatus.effective(report, lastScreenChange: screens[session]?.changedAt, now: now)
+      let baseline = baselines[session]
+      let moved = baseline.map { $0.since == report.since && screens[session]?.hash != $0.hash } ?? false
+      var state = AgentStatus.effective(
+        report, lastScreenChange: screens[session]?.changedAt, movedSinceReport: moved, now: now)
       if state == .done, let seen = viewed[key.worktree], seen >= report.since { state = .idle }
       states[key] = state
       let viewing = NSApp.isActive && store.selection == key.worktree
@@ -101,10 +109,13 @@ final class AgentMonitor {
     if states != panes { panes = states }
   }
 
-  private func sample(_ session: String, now: Int) async {
+  private func sample(_ session: String, report: AgentReport, now: Int) async {
     let result = await Run.run(Zmx.executable, ["history", session, "--screen"], env: Zmx.environment)
     guard result.ok else { return }
     let hash = result.stdout.hashValue
+    if report.state == .needsAction, baselines[session]?.since != report.since {
+      baselines[session] = (report.since, hash)
+    }
     if screens[session]?.hash == hash { return }
     screens[session] = (hash, now)
   }
