@@ -80,6 +80,7 @@ final class AppStore {
         title: "Couldn't read Yatty's state",
         message: "It was moved to \(aside.path). Add your repositories again; their terminals are still running.")
     }
+    AgentHooks.install()
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }
     if Snapshot.sheet?.hasPrefix("new-worktree") == true {

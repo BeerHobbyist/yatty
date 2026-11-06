@@ -90,9 +90,12 @@ extension AppStore {
 
     var environment = Zmx.environment
     environment["YATTY_WORKTREE"] = worktree.path
+    // Where this pane's agent reports its state (see AgentHooks).
+    environment["YATTY_AGENT_DIR"] = AgentHooks.directory.path
+    environment["YATTY_PANE"] = session
     let input = AppStore.agentInput(
-      config.agentCommand, pane: key.pane, sessionIsNew: !live.contains(session),
-      agentTab: agentPanes.remove(key) != nil)
+      AgentHooks.withStatusHooks(config.agentCommand, settingsPath: AgentHooks.settingsURL.path),
+      pane: key.pane, sessionIsNew: !live.contains(session), agentTab: agentPanes.remove(key) != nil)
     let launch = TerminalLaunch(
       command: Snapshot.isActive ? "/bin/cat" : Zmx.attachCommand(session: session),
       workingDirectory: worktree.path,
