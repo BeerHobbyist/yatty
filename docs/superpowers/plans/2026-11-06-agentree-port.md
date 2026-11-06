@@ -119,7 +119,7 @@ Plan: `2026-11-06-phase-8-ssh.md`.
 
 Plan: `2026-11-06-phase-9-polish.md`.
 
-- [ ] Command palette (⌘K) listing every action that applies, fuzzy-filtered.
+- [ ] Command palette (⇧⌘P) listing every action that applies, fuzzy-filtered.
 - [ ] Settings window for `agentCommand`, `cloneDirectory`, `sandboxCommand`, notifications.
 - [ ] Help / keyboard reference; README with screenshots; release build (`make app CONFIG=release`).
 

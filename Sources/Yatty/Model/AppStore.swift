@@ -419,11 +419,16 @@ final class AppStore {
   }
 
   func requestCloseSelected() {
-    if let worktree = selectedWorktree, worktree.isRemote {
+    if let worktree = selectedWorktree { requestClose(worktree) }
+  }
+
+  /// Asks before closing a worktree, or removing a remote directory.
+  func requestClose(_ worktree: Worktree) {
+    if worktree.isRemote {
       pendingDirectoryRemoval = worktree
       return
     }
-    guard let worktree = selectedWorktree, !worktree.isMain, let repo = repo(of: worktree) else { return }
+    guard !worktree.isMain, let repo = repo(of: worktree) else { return }
     pendingClose = PendingClose(repo: repo, worktree: worktree)
   }
 
@@ -546,7 +551,11 @@ final class AppStore {
 
   /// Settings apply at once: to terminals started from now on, the next
   /// clone, the next notification.
-  func applySettings(_ settings: YattyConfig) {
+  func applySettings(_ draft: YattyConfig) {
+    // What applies now is what the file will say: a cleared clone folder is
+    // the default one, never "/".
+    let settings = draft.normalized
+    guard settings != config else { return }
     config = settings
     do {
       try ConfigFiles.saveConfig(settings)

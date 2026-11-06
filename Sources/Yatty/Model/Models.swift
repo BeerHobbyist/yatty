@@ -154,12 +154,25 @@ struct YattyConfig: Codable, Equatable {
 
   init() {}
 
+  // A value of the wrong type costs only itself, not the rest of the file.
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    agentCommand = try container.decodeIfPresent(String.self, forKey: .agentCommand) ?? agentCommand
-    cloneDirectory = try container.decodeIfPresent(String.self, forKey: .cloneDirectory) ?? cloneDirectory
-    notifications = try container.decodeIfPresent(Bool.self, forKey: .notifications) ?? notifications
-    sandboxCommand = try container.decodeIfPresent(String.self, forKey: .sandboxCommand)
+    agentCommand = (try? container.decodeIfPresent(String.self, forKey: .agentCommand)) ?? agentCommand
+    cloneDirectory = (try? container.decodeIfPresent(String.self, forKey: .cloneDirectory)) ?? cloneDirectory
+    notifications = (try? container.decodeIfPresent(Bool.self, forKey: .notifications)) ?? notifications
+    sandboxCommand = try? container.decodeIfPresent(String.self, forKey: .sandboxCommand)
+    self = normalized
+  }
+
+  /// As it applies: a blank clone directory is the default one, a blank
+  /// sandbox command is none, and surrounding spaces don't count.
+  var normalized: YattyConfig {
+    var settings = self
+    let clone = cloneDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+    settings.cloneDirectory = clone.isEmpty ? YattyConfig().cloneDirectory : clone
+    let sandbox = sandboxCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    settings.sandboxCommand = sandbox.isEmpty ? nil : sandbox
+    return settings
   }
 
   var cloneRoot: URL {

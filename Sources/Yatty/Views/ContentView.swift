@@ -39,7 +39,7 @@ struct ContentView: View {
     .sheet(isPresented: $store.showingPalette, onDismiss: { store.paletteClosed() }) {
       CommandPalette(commands: store.commands) { store.pickedCommand = $0 }
     }
-    .sheet(isPresented: $store.showingHelp) {
+    .sheet(isPresented: $store.showingHelp, onDismiss: { store.focusSelectedTerminal() }) {
       VStack(spacing: 0) {
         HelpView(commands: store.commands)
         Divider()

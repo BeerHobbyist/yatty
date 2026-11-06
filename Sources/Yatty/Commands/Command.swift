@@ -20,13 +20,14 @@ enum CommandMatch {
   /// at the start beats at a word's start, which beats inside, which beats
   /// its letters in order.
   static func score(_ query: String, _ text: String) -> Int {
-    let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+    let q = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
     let t = text.lowercased()
     if q.isEmpty { return 1 }
     if let range = t.range(of: q) {
       if range.lowerBound == t.startIndex { return 100 }
+      // agentree's `\W`: letters, digits and `_` continue a word.
       let before = t[t.index(before: range.lowerBound)]
-      return before.isLetter || before.isNumber ? 60 : 80
+      return before.isLetter || before.isNumber || before == "_" ? 60 : 80
     }
     var rest = Substring(q)
     for character in t where character == rest.first { rest = rest.dropFirst() }
@@ -36,7 +37,7 @@ enum CommandMatch {
   /// The commands matching `query`, best first, the title counting double
   /// against the group; all of them, grouped, when it's empty.
   static func filter(_ commands: [Command], query: String) -> [Command] {
-    if query.trimmingCharacters(in: .whitespaces).isEmpty {
+    if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       var order: [String] = []
       for command in commands where !order.contains(command.group) { order.append(command.group) }
       return commands.enumerated()

@@ -7,10 +7,15 @@ extension ConfigFiles {
   /// blank agent command stays: no agent.
   static func saveConfig(_ settings: YattyConfig, to url: URL = config) throws {
     var object: [String: Any] = [:]
-    if let data = try? Data(contentsOf: url),
-      let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    {
-      object = existing
+    if let data = try? Data(contentsOf: url) {
+      if let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        object = existing
+      } else {
+        // Not JSON Yatty can read: kept aside rather than lost.
+        let aside = url.deletingPathExtension().appendingPathExtension("unreadable.json")
+        try? FileManager.default.removeItem(at: aside)
+        try? FileManager.default.moveItem(at: url, to: aside)
+      }
     }
     object["agentCommand"] = settings.agentCommand
     object["notifications"] = settings.notifications

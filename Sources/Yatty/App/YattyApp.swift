@@ -40,7 +40,7 @@ struct YattyApp: App {
       // File > Close (⌘W) would close the whole window; ⌘W closes a pane instead.
       CommandGroup(replacing: .saveItem) {}
       CommandGroup(after: .sidebar) {
-        Button("Command Palette…") { store.showingPalette = true }
+        Button("Command Palette…") { store.showingPalette.toggle() }
           .keyboardShortcut(Shortcuts.palette)
         Divider()
         Button("Show Pull Request") { store.showingPullRequest.toggle() }

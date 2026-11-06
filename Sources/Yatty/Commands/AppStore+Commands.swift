@@ -69,40 +69,44 @@ extension AppStore {
     add("worktree.new", "New Worktree…", "Worktree", Shortcuts.newWorktree, when: context.canNewWorktree) {
       self.newWorktreeForSelection()
     }
-    add(
-      "worktree.close", selected?.isRemote == true ? "Remove Directory…" : "Close Worktree…", "Worktree",
-      detail: name, when: context.canCloseWorktree
-    ) { self.requestCloseSelected() }
+    if let selected {
+      add(
+        "worktree.close", selected.isRemote ? "Remove Directory…" : "Close Worktree…", "Worktree",
+        detail: name, when: context.canCloseWorktree
+      ) { self.requestClose(selected) }
+    }
     if let selected {
       add("worktree.rename", "Rename…", "Worktree", detail: name) { self.renamingWorktree = selected }
     }
 
+    // Everything acts on what the palette showed: the worktree selected when
+    // it opened, and the pane focused then.
     if let selected {
-      add("tab.new", "New Tab", "Terminal", Shortcuts.newTab) { self.performOnFocusedPane(.newTab) }
+      let focused = layout(for: selected).selected.map { PaneKey(worktree: selected.id, pane: $0.focusedPane) }
+      func onPane(_ command: TerminalCommand) -> @MainActor () -> Void {
+        {
+          if let focused { self.handle(command, from: focused) } else if case .newTab = command {
+            self.newTab(in: selected, agent: false)
+          }
+        }
+      }
+      add("tab.new", "New Tab", "Terminal", Shortcuts.newTab, onPane(.newTab))
       add("tab.agent", "New Agent Tab", "Terminal", Shortcuts.newAgentTab) { self.newTab(in: selected, agent: true) }
       add("diff.open", "Open Diff…", "Terminal", Shortcuts.openDiff, when: context.canDiff) {
         self.diffingWorktree = selected
       }
-      add("split.right", "Split Right", "Terminal", Shortcuts.splitRight) {
-        self.performOnFocusedPane(.split(.horizontal, newFirst: false))
-      }
-      add("split.down", "Split Down", "Terminal", Shortcuts.splitDown) {
-        self.performOnFocusedPane(.split(.vertical, newFirst: false))
-      }
-      add("split.equalize", "Equalize Splits", "Terminal", Shortcuts.equalize) { self.performOnFocusedPane(.equalize) }
-      add("pane.next", "Next Pane", "Terminal", Shortcuts.nextPane) { self.performOnFocusedPane(.gotoSplit(.next)) }
-      add("pane.previous", "Previous Pane", "Terminal", Shortcuts.previousPane) {
-        self.performOnFocusedPane(.gotoSplit(.previous))
-      }
-      add("tab.next", "Next Tab", "Terminal", Shortcuts.nextTab) { self.performOnFocusedPane(.gotoTab(.next)) }
-      add("tab.previous", "Previous Tab", "Terminal", Shortcuts.previousTab) {
-        self.performOnFocusedPane(.gotoTab(.previous))
-      }
-      add("pane.close", "Close Pane", "Terminal", Shortcuts.closePane) { self.performOnFocusedPane(.close) }
-      add("tab.close", "Close Tab", "Terminal", Shortcuts.closeTab) { self.performOnFocusedPane(.closeTab) }
+      add("split.right", "Split Right", "Terminal", Shortcuts.splitRight, onPane(.split(.horizontal, newFirst: false)))
+      add("split.down", "Split Down", "Terminal", Shortcuts.splitDown, onPane(.split(.vertical, newFirst: false)))
+      add("split.equalize", "Equalize Splits", "Terminal", Shortcuts.equalize, onPane(.equalize))
+      add("pane.next", "Next Pane", "Terminal", Shortcuts.nextPane, onPane(.gotoSplit(.next)))
+      add("pane.previous", "Previous Pane", "Terminal", Shortcuts.previousPane, onPane(.gotoSplit(.previous)))
+      add("tab.next", "Next Tab", "Terminal", Shortcuts.nextTab, onPane(.gotoTab(.next)))
+      add("tab.previous", "Previous Tab", "Terminal", Shortcuts.previousTab, onPane(.gotoTab(.previous)))
+      add("pane.close", "Close Pane", "Terminal", Shortcuts.closePane, onPane(.close))
+      add("tab.close", "Close Tab", "Terminal", Shortcuts.closeTab, onPane(.closeTab))
+      // No key shown: ⌘1–9 are Ghostty's (and may be rebound there), not a menu's.
       for (index, tab) in layout(for: selected).tabs.enumerated() {
-        let shortcut = index < 9 ? KeyboardShortcut(KeyEquivalent(Character("\(index + 1)"))) : nil
-        add("tab.go.\(tab.id)", "Go to Tab \(index + 1)", "Terminal", shortcut, detail: title(of: tab, in: selected)) {
+        add("tab.go.\(tab.id)", "Go to Tab \(index + 1)", "Terminal", detail: title(of: tab, in: selected)) {
           self.selectTab(tab.id, in: selected)
         }
       }

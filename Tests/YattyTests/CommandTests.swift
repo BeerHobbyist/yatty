@@ -11,6 +11,9 @@ import Testing
   #expect(CommandMatch.score("xyz", "New Worktree…") == 0)
   #expect(CommandMatch.score("  ", "anything") == 1)
   #expect(CommandMatch.score("NEW", "new tab") == 100)
+  // `_` continues a word, as agentree's \W has it.
+  #expect(CommandMatch.score("tree", "git_tree") == 60)
+  #expect(CommandMatch.score("tree", "git-tree") == 80)
 }
 
 @Test func filterRanksTitleOverGroup() {
@@ -79,4 +82,34 @@ import Testing
   #expect(!onRemote.canDiff && !onRemote.canShowPullRequest && !onRemote.canMerge)
 
   #expect(!CommandContext(selected: nil, hasRepos: false, openPullRequest: false).canNewWorktree)
+}
+
+/// What applies live is what the file says: a cleared clone folder is the
+/// default one (never "/"), a blank sandbox command is none.
+@Test func settingsApplyAsSaved() throws {
+  var settings = YattyConfig()
+  settings.cloneDirectory = "  "
+  settings.sandboxCommand = " fence -- "
+  let normalized = settings.normalized
+  #expect(normalized.cloneDirectory == YattyConfig().cloneDirectory)
+  #expect(normalized.cloneRoot.path != "/")
+  #expect(normalized.sandboxCommand == "fence --")
+  settings.sandboxCommand = "   "
+  #expect(settings.normalized.sandboxCommand == nil)
+
+  // One value of the wrong type doesn't reset the others.
+  let decoded = try JSONDecoder().decode(
+    YattyConfig.self, from: Data(#"{"agentCommand":"claude","notifications":"yes","cloneDirectory":"~/src"}"#.utf8))
+  #expect(decoded.agentCommand == "claude" && decoded.cloneDirectory == "~/src" && decoded.notifications)
+}
+
+@Test func unreadableConfigIsKeptAside() throws {
+  let dir = FileManager.default.temporaryDirectory.appendingPathComponent("yatty-cfg-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: dir) }
+  let url = dir.appendingPathComponent("config.json")
+  try Data("{ not json".utf8).write(to: url)
+  try ConfigFiles.saveConfig(YattyConfig(), to: url)
+  #expect(try String(contentsOf: dir.appendingPathComponent("config.unreadable.json"), encoding: .utf8) == "{ not json")
+  #expect((try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])?["agentCommand"] != nil)
 }
