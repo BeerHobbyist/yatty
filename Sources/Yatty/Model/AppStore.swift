@@ -54,7 +54,10 @@ final class AppStore {
   let agents = AgentMonitor()
   let gitStatus = GitStatusMonitor()
   let pullRequests = PullRequestStore()
-  var showingPullRequest = false
+  var showingPullRequest = Snapshot.sheet == "pr-panel"
+  var mergingWorktree: Worktree?
+  var foldedSections: Set<String> = []
+  var mergeMethod: MergeMethod?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
   var trackingEveryClaude = ClaudeSettings.isInstalled()
@@ -82,6 +85,8 @@ final class AppStore {
       selection = stored.selectedWorktree
       layouts = stored.layouts
       labels = stored.labels
+      foldedSections = Set(stored.foldedSections)
+      mergeMethod = stored.mergeMethod
       reposKnown = true
     case .unreadable(let aside):
       repos = []
@@ -98,6 +103,17 @@ final class AppStore {
     if !Snapshot.isActive { UNUserNotificationCenter.current().delegate = notificationDelegate }
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }
+    if Snapshot.sheet == "merge" {
+      Task {
+        await refreshAll()
+        try? await Task.sleep(for: .seconds(1))
+        if let worktree = selectedWorktree, let repo = repo(of: worktree) {
+          pullRequests.refreshDetails(for: worktree, in: repo)
+          try? await Task.sleep(for: .milliseconds(500))
+          mergingWorktree = worktree
+        }
+      }
+    }
     if Snapshot.sheet?.hasPrefix("new-worktree") == true {
       Task {
         await refreshAll()
@@ -336,6 +352,21 @@ final class AppStore {
     await refresh(pending.repo)
   }
 
+  // MARK: Pull requests
+
+  func toggleSection(_ name: String) {
+    if foldedSections.remove(name) == nil { foldedSections.insert(name) }
+    saveState()
+  }
+
+  /// Badges, and the inspector's details, asked again now.
+  func refreshPullRequests() {
+    pullRequests.refreshAll(force: true)
+    if let worktree = selectedWorktree, let repo = repo(of: worktree) {
+      pullRequests.refreshDetails(for: worktree, in: repo)
+    }
+  }
+
   // MARK: Agents
 
   /// Shows the pane a notification is about: its worktree, tab, keyboard.
@@ -371,6 +402,8 @@ final class AppStore {
 
   func saveState() {
     ConfigFiles.saveState(
-      StoredState(repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels))
+      StoredState(
+        repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
+        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod))
   }
 }

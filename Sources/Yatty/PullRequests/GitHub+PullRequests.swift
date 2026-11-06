@@ -84,6 +84,8 @@ extension GitHub {
   }
 
   static func mergeSettings(_ nameWithOwner: String) async throws -> MergeSettings {
+    // Snapshots can't reach GitHub: every method, auto-merge on.
+    if Snapshot.isActive { return MergeSettings(methods: MergeMethod.allCases, autoMerge: true) }
     let data = try await run(["api", "repos/\(nameWithOwner)"])
     let json = (try JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     return MergeSettings.decode(json)

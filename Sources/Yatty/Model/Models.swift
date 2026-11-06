@@ -38,15 +38,21 @@ struct StoredState: Codable {
   var layouts: [String: WorktreeLayout] = [:]
   /// Per worktree path: the name the sidebar shows instead of the branch's.
   var labels: [String: String] = [:]
+  /// Pull request inspector sections the user folded.
+  var foldedSections: [String] = []
+  /// The merge method used last, offered first.
+  var mergeMethod: MergeMethod?
 
   init(
     repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
-    labels: [String: String] = [:]
+    labels: [String: String] = [:], foldedSections: [String] = [], mergeMethod: MergeMethod? = nil
   ) {
     self.repos = repos
     self.selectedWorktree = selectedWorktree
     self.layouts = layouts
     self.labels = labels
+    self.foldedSections = foldedSections
+    self.mergeMethod = mergeMethod
   }
 
   // Every field may be missing: a file from an older Yatty must still load.
@@ -56,6 +62,8 @@ struct StoredState: Codable {
     selectedWorktree = try container.decodeIfPresent(String.self, forKey: .selectedWorktree)
     layouts = try container.decodeIfPresent([String: WorktreeLayout].self, forKey: .layouts) ?? [:]
     labels = try container.decodeIfPresent([String: String].self, forKey: .labels) ?? [:]
+    foldedSections = try container.decodeIfPresent([String].self, forKey: .foldedSections) ?? []
+    mergeMethod = try? container.decodeIfPresent(MergeMethod.self, forKey: .mergeMethod)
   }
 }
 

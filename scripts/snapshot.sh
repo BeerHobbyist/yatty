@@ -2,7 +2,7 @@
 # Renders Yatty with sample data to build/snapshots/<scene>.png, in a
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
-#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status
+#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -92,7 +92,7 @@ EOF
     echo "working $now" > "$sandbox/config/yatty/agents/$(session "$repo/.worktrees/crash-on-start")"
     echo "done $now" > "$sandbox/config/yatty/agents/$(session "$repo")"
     ;;
-  status)
+  status|pr-panel|merge)
     cat > "$state" <<EOF
 { "repos": [{ "name": "sample-app", "path": "$repo", "nameWithOwner": "me/sample-app" }], "selectedWorktree": "$login" }
 EOF
@@ -104,6 +104,23 @@ EOF
   "main": null }
 EOF
     export YATTY_BADGE_FIXTURE="$sandbox/badges.json"
+    cat > "$sandbox/details.json" <<'EOF'
+{"number":42,"title":"Login with magic links","url":"https://github.com/me/sample-app/pull/42","state":"OPEN","isDraft":false,
+ "author":{"login":"octo"},"baseRefName":"main","headRefName":"feature/login","headRefOid":"4f2a9c1e","additions":214,"deletions":37,"changedFiles":9,
+ "updatedAt":"2026-11-06T10:00:00Z","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED",
+ "latestReviews":[{"author":{"login":"reviewer"},"state":"APPROVED","submittedAt":"2026-11-06T09:00:00Z","body":""},
+                  {"author":{"login":"lead"},"state":"CHANGES_REQUESTED","submittedAt":"2026-11-06T08:00:00Z","body":"See inline"}],
+ "reviewRequests":[{"login":"security-team"}],
+ "reviews":[{"author":{"login":"lead"},"state":"CHANGES_REQUESTED","submittedAt":"2026-11-06T08:00:00Z","body":"The token expiry needs a test."}],
+ "comments":[{"author":{"login":"octo"},"body":"Ready for another look — **expiry** is now configurable.","createdAt":"2026-11-06T09:30:00Z","url":"https://github.com"}],
+ "labels":[{"name":"feature","color":"0e8a16"},{"name":"needs-review","color":"fbca04"}],
+ "statusCheckRollup":[{"name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://github.com"},
+                      {"name":"unit tests","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com"},
+                      {"name":"lint","status":"IN_PROGRESS","detailsUrl":"https://github.com"}],
+ "body":"Adds **magic link** login.\n\n- emails a one-time link\n- links expire after 15 minutes"}
+EOF
+    export YATTY_PR_DETAILS_FIXTURE="$sandbox/details.json"
+    [ "$scene" = status ] || export YATTY_SNAPSHOT_SHEET="$scene"
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

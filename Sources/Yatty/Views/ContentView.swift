@@ -27,6 +27,9 @@ struct ContentView: View {
     .sheet(isPresented: $store.addingRepository) {
       AddRepositorySheet()
     }
+    .sheet(item: $store.mergingWorktree) { worktree in
+      MergeSheet(worktree: worktree)
+    }
     .sheet(item: $store.newWorktreeRepo) { repo in
       NewWorktreeSheet(repo: repo)
     }
@@ -263,6 +266,17 @@ struct DetailView: View {
       }
       .navigationTitle(store.label(for: worktree))
       .navigationSubtitle(store.repo(of: worktree)?.name ?? "")
+      .modifier(PullRequestColumn(worktree: worktree))
+      .toolbar {
+        ToolbarItem {
+          Button {
+            store.showingPullRequest.toggle()
+          } label: {
+            Label("Pull Request", systemImage: "sidebar.right")
+          }
+          .help("Show the pull request (⌥⌘P)")
+        }
+      }
     } else {
       ContentUnavailableView(
         "No Worktree Selected", systemImage: "sidebar.left",
@@ -280,6 +294,30 @@ private struct SidebarListStyle: ViewModifier {
       content.listStyle(.inset)
     } else {
       content.listStyle(.sidebar)
+    }
+  }
+}
+
+/// The pull request inspector beside the terminals. In snapshots it's a
+/// plain column: macOS draws an inspector outside the app, like a sidebar.
+private struct PullRequestColumn: ViewModifier {
+  let worktree: Worktree
+  @Environment(AppStore.self) private var store
+
+  func body(content: Content) -> some View {
+    if Snapshot.isActive {
+      HStack(spacing: 0) {
+        content
+        if store.showingPullRequest {
+          Divider()
+          PullRequestInspector(worktree: worktree).frame(width: 340)
+        }
+      }
+    } else {
+      content.inspector(isPresented: Bindable(store).showingPullRequest) {
+        PullRequestInspector(worktree: worktree)
+          .inspectorColumnWidth(min: 260, ideal: 320, max: 520)
+      }
     }
   }
 }

@@ -30,6 +30,17 @@ struct YattyApp: App {
       }
       // File > Close (⌘W) would close the whole window; ⌘W closes a pane instead.
       CommandGroup(replacing: .saveItem) {}
+      CommandGroup(after: .sidebar) {
+        Button("Show Pull Request") { store.showingPullRequest.toggle() }
+          .keyboardShortcut("p", modifiers: [.command, .option])
+        Button("Refresh Pull Requests") { store.refreshPullRequests() }
+          .keyboardShortcut("r")
+        Button("Merge Pull Request…") {
+          if let worktree = store.selectedWorktree { store.mergingWorktree = worktree }
+        }
+        .disabled(store.selectedWorktree.flatMap { store.pullRequests.badge(for: $0) }.map { $0.merged } ?? true)
+        Divider()
+      }
       CommandMenu("Worktree") {
         Button("Close Worktree…") { store.requestCloseSelected() }
           .disabled(store.selectedWorktree.map { $0.isMain } ?? true)
