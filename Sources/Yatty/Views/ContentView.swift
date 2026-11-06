@@ -27,6 +27,9 @@ struct ContentView: View {
     .sheet(isPresented: $store.addingRepository) {
       AddRepositorySheet()
     }
+    .sheet(item: $store.diffingWorktree) { worktree in
+      DiffSheet(worktree: worktree)
+    }
     .sheet(item: $store.mergingWorktree) { worktree in
       MergeSheet(worktree: worktree)
     }

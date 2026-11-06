@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A worktree's pull request: `#N` tinted by its checks, `◌` for a draft,
+/// A worktree's pull request: `#N` tinted by its checks, `draft` for one,
 /// `✓#N` once merged. A click shows it in the inspector.
 struct PullRequestBadge: View {
   let pullRequest: BranchPullRequest
@@ -13,12 +13,14 @@ struct PullRequestBadge: View {
         .foregroundStyle(tint)
     }
     .buttonStyle(.borderless)
+    .fixedSize()
+    .layoutPriority(1)
     .help(pullRequest.title.isEmpty ? "Pull request #\(pullRequest.number)" : pullRequest.title)
   }
 
   private var label: String {
     if pullRequest.merged { return "✓#\(pullRequest.number)" }
-    return "#\(pullRequest.number)" + (pullRequest.isDraft ? "◌" : "")
+    return "#\(pullRequest.number)" + (pullRequest.isDraft ? " draft" : "")
   }
 
   private var tint: Color {

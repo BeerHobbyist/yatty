@@ -2,7 +2,7 @@
 # Renders Yatty with sample data to build/snapshots/<scene>.png, in a
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
-#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge
+#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -121,6 +121,16 @@ EOF
 EOF
     export YATTY_PR_DETAILS_FIXTURE="$sandbox/details.json"
     [ "$scene" = status ] || export YATTY_SNAPSHOT_SHEET="$scene"
+    ;;
+  diff)
+    cat > "$state" <<EOF
+{ "repos": [{ "name": "sample-app", "path": "$repo" }], "selectedWorktree": "$login" }
+EOF
+    for n in 1 2 3; do
+      echo "change $n" >> "$login/README.md"
+      git -C "$login" -c user.name=y -c user.email=y@y commit -qam "Change number $n to the readme"
+    done
+    export YATTY_SNAPSHOT_SHEET=diff
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

@@ -42,11 +42,15 @@ struct StoredState: Codable {
   var foldedSections: [String] = []
   /// The merge method used last, offered first.
   var mergeMethod: MergeMethod?
+  /// The diff viewer the user picked.
+  var diffViewer: DiffViewer?
 
   init(
     repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
-    labels: [String: String] = [:], foldedSections: [String] = [], mergeMethod: MergeMethod? = nil
+    labels: [String: String] = [:], foldedSections: [String] = [], mergeMethod: MergeMethod? = nil,
+    diffViewer: DiffViewer? = nil
   ) {
+    self.diffViewer = diffViewer
     self.repos = repos
     self.selectedWorktree = selectedWorktree
     self.layouts = layouts
@@ -64,6 +68,7 @@ struct StoredState: Codable {
     labels = try container.decodeIfPresent([String: String].self, forKey: .labels) ?? [:]
     foldedSections = try container.decodeIfPresent([String].self, forKey: .foldedSections) ?? []
     mergeMethod = try? container.decodeIfPresent(MergeMethod.self, forKey: .mergeMethod)
+    diffViewer = try? container.decodeIfPresent(DiffViewer.self, forKey: .diffViewer)
   }
 }
 

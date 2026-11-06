@@ -58,6 +58,8 @@ final class AppStore {
   var mergingWorktree: Worktree?
   var foldedSections: Set<String> = []
   var mergeMethod: MergeMethod?
+  var diffViewer: DiffViewer?
+  var diffingWorktree: Worktree?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
   var trackingEveryClaude = ClaudeSettings.isInstalled()
@@ -66,6 +68,9 @@ final class AppStore {
   @ObservationIgnored var starting: Set<PaneKey> = []
   /// Panes opened with "New Agent": their new session gets the agent command.
   @ObservationIgnored var agentPanes: Set<PaneKey> = []
+  /// Panes that run a command (a diff viewer) instead of a shell; the pane
+  /// closes when it exits.
+  @ObservationIgnored var commandPanes: [PaneKey: String] = [:]
   /// Worktrees being closed or removed: no terminal may start for them.
   @ObservationIgnored var retiring: Set<String> = []
   @ObservationIgnored var focusWhenStarted: PaneKey?
@@ -87,6 +92,7 @@ final class AppStore {
       labels = stored.labels
       foldedSections = Set(stored.foldedSections)
       mergeMethod = stored.mergeMethod
+      diffViewer = stored.diffViewer
       reposKnown = true
     case .unreadable(let aside):
       repos = []
@@ -103,6 +109,12 @@ final class AppStore {
     if !Snapshot.isActive { UNUserNotificationCenter.current().delegate = notificationDelegate }
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }
+    if Snapshot.sheet == "diff" {
+      Task {
+        await refreshAll()
+        diffingWorktree = selectedWorktree
+      }
+    }
     if Snapshot.sheet == "merge" {
       Task {
         await refreshAll()
@@ -354,6 +366,11 @@ final class AppStore {
 
   // MARK: Pull requests
 
+  func setDiffViewer(_ viewer: DiffViewer) {
+    diffViewer = viewer
+    saveState()
+  }
+
   func toggleSection(_ name: String) {
     if foldedSections.remove(name) == nil { foldedSections.insert(name) }
     saveState()
@@ -404,6 +421,6 @@ final class AppStore {
     ConfigFiles.saveState(
       StoredState(
         repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
-        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod))
+        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod, diffViewer: diffViewer))
   }
 }

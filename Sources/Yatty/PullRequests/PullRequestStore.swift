@@ -59,10 +59,11 @@ final class PullRequestStore {
     }
   }
 
-  /// At most once every 15 seconds per worktree unless forced, four at once.
+  /// At most once every 15 seconds per worktree unless forced; GitHub isn't
+  /// asked while Yatty is in the background (activating it refreshes all).
   func refresh(_ worktree: Worktree, in repo: Repo, force: Bool = false) {
     guard let nameWithOwner = repo.nameWithOwner, let branch = worktree.branch, worktree.exists,
-      !asking.contains(worktree.id), asking.count < 4
+      !asking.contains(worktree.id), NSApp.isActive || force || Snapshot.isActive
     else { return }
     if let fixture = Self.badgeFixture() {
       badges[worktree.id] = .some(fixture[branch])

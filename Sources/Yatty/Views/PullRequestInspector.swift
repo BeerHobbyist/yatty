@@ -218,7 +218,7 @@ struct PullRequestInspector: View {
     return HStack {
       Text(state).font(.caption).foregroundStyle(.secondary)
       Spacer()
-      Button("Refresh") { store.refreshPullRequests() }.keyboardShortcut("r")
+      Button("Refresh") { store.refreshPullRequests() }.help("Refresh (⌘R)")
       Button("Open") { if let url = URL(string: badge.url) { openURL(url) } }
     }
     .buttonStyle(.borderless)

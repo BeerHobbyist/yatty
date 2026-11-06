@@ -96,11 +96,15 @@ extension AppStore {
     let input = AppStore.agentInput(
       AgentHooks.withStatusHooks(config.agentCommand, settingsPath: AgentHooks.settingsURL.path),
       pane: key.pane, sessionIsNew: !live.contains(session), agentTab: agentPanes.remove(key) != nil)
+    let paneCommand = commandPanes.removeValue(forKey: key)
+    if paneCommand != nil { environment["PATH"] = Run.loginPath }
     let launch = TerminalLaunch(
-      command: Snapshot.isActive ? "/bin/cat" : Zmx.attachCommand(session: session),
+      command: Snapshot.isActive
+        ? "/bin/cat"
+        : Zmx.attachCommand(session: session, command: paneCommand.map { ["/bin/sh", "-c", $0] }),
       workingDirectory: worktree.path,
       environment: environment,
-      initialInput: Snapshot.isActive ? nil : input)
+      initialInput: Snapshot.isActive || paneCommand != nil ? nil : input)
     guard let terminal = TerminalView(app: app, launch: launch) else {
       Snapshot.note("libghostty didn't create a surface")
       failedPanes.insert(key)
@@ -205,6 +209,19 @@ extension AppStore {
     focusPane(key)
   }
 
+  /// A tab running `command` (a diff viewer) instead of a shell, named
+  /// `name`; it closes when the command exits.
+  func newTab(in worktree: Worktree, command: String, name: String) {
+    let key = PaneKey(worktree: worktree.id, pane: newPaneID())
+    commandPanes[key] = command
+    let tabID = "t" + newPaneID()
+    updateLayout(worktree.id) {
+      $0.addTab(pane: key.pane, id: tabID)
+      $0.rename(tabID, to: name)
+    }
+    focusPane(key)
+  }
+
   func split(_ key: PaneKey, axis: SplitAxis, newFirst: Bool) {
     let new = PaneKey(worktree: key.worktree, pane: newPaneID())
     updateLayout(key.worktree) { $0.split(key.pane, new: new.pane, axis: axis, newFirst: newFirst) }
@@ -264,6 +281,7 @@ extension AppStore {
     failedPanes.remove(key)
     paneTitles[key] = nil
     agentPanes.remove(key)
+    commandPanes[key] = nil
   }
 
   /// Destroys every terminal of the worktree, forgets its layout and ends

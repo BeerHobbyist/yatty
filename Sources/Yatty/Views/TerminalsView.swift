@@ -83,6 +83,7 @@ struct TabBar: View {
     Menu {
       Button("New Shell") { store.newTab(in: worktree, agent: false) }
       Button("New Agent") { store.newTab(in: worktree, agent: true) }
+      Button("New Diff…") { store.diffingWorktree = worktree }
     } label: {
       Image(systemName: "plus")
     }

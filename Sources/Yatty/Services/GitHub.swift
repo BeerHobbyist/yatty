@@ -95,9 +95,40 @@ enum GitHub {
     return stderr.isEmpty ? "gh failed (exit \(result.status))." : stderr
   }
 
+  /// Every gh call waits its turn: at most four run at once.
+  private static let limiter = Limiter(4)
+
   static func run(_ args: [String]) async throws -> Data {
+    await limiter.acquire()
     let result = await Run.run("/usr/bin/env", ["gh"] + args)
+    await limiter.release()
     guard result.ok else { throw GitError(message: errorMessage(for: result)) }
     return Data(result.stdout.utf8)
+  }
+}
+
+/// At most `limit` holders at a time; the rest wait in order.
+actor Limiter {
+  private let limit: Int
+  private var running = 0
+  private var waiting: [CheckedContinuation<Void, Never>] = []
+
+  init(_ limit: Int) { self.limit = limit }
+
+  func acquire() async {
+    if running < limit {
+      running += 1
+      return
+    }
+    await withCheckedContinuation { waiting.append($0) }
+  }
+
+  /// Hands the slot straight to the next waiter, if any.
+  func release() {
+    if waiting.isEmpty {
+      running -= 1
+    } else {
+      waiting.removeFirst().resume()
+    }
   }
 }

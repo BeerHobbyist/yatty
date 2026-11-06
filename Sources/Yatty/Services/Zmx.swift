@@ -63,11 +63,11 @@ enum Zmx {
     _ = await Run.run(executable, ["kill", name], env: environment)
   }
 
-  /// The terminal's command: attach to the session, starting the login shell
-  /// in it if it doesn't exist yet. libghostty runs it as
+  /// The terminal's command: attach to the session, starting `command` (by
+  /// default the login shell) in it if it doesn't exist yet. libghostty runs it as
   /// `bash -c "exec -l <command>"`, so it's plain shell words.
-  static func attachCommand(session: String) -> String {
-    [executable, "attach", session, loginShell, "-l"].map(shellQuote).joined(separator: " ")
+  static func attachCommand(session: String, command: [String]? = nil) -> String {
+    ([executable, "attach", session] + (command ?? [loginShell, "-l"])).map(shellQuote).joined(separator: " ")
   }
 
   static var loginShell: String {

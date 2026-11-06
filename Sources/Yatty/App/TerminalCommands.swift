@@ -16,6 +16,8 @@ struct TerminalCommands: Commands {
           if let worktree = store.selectedWorktree { store.newTab(in: worktree, agent: true) }
         }
         .keyboardShortcut("t", modifiers: [.command, .option])
+        Button("Open Diff…") { store.diffingWorktree = store.selectedWorktree }
+          .keyboardShortcut("d", modifiers: [.command, .option])
         Divider()
         Button("Split Right") { store.performOnFocusedPane(.split(.horizontal, newFirst: false)) }
           .keyboardShortcut("d")
