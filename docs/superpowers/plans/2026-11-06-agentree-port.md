@@ -65,16 +65,18 @@ Plan: `2026-11-06-phase-2-tabs-splits.md`.
 - [x] Closing a pane kills its session; closing the last pane leaves "No Terminals" with a button to open one.
 - [x] `scripts/snapshot.sh` and the in-app snapshot mode exist (used by every later phase).
 
-## Phase 3 — Repositories and worktrees from GitHub (in progress)
+## Phase 3 — Repositories and worktrees from GitHub ✅
 
 Plan: `2026-11-06-phase-3-github-worktrees.md`.
 
-- [ ] Add Repository (⌘O) lists every repo `gh` can see (owned, collaborator, organization; most recently pushed first; paged in the background), ranked filter (exact name > prefix > contains > owner/name contains), clones with `gh repo clone` into `cloneDirectory` (config; default `~/yatty`), or reuses an existing clone; "Choose Local Folder…" stays.
-- [ ] New Worktree offers: a new branch from a base picked from local and remote branches; an existing branch; an open pull request (fetched as `refs/pull/<n>/head`, forks included, named after its head branch), hiding PRs that already have a worktree.
-- [ ] Worktree labels: rename a worktree's display name (stored by worktree path); branch and directory unchanged.
-- [ ] A worktree whose directory vanished shows as missing and can be closed.
+- [x] Add Repository (⌘O) lists every repo `gh` can see (owned, collaborator, organization; most recently pushed first; paged in the background), ranked filter (exact name > prefix > contains > owner/name contains), clones with `gh repo clone` into `cloneDirectory` (config; default `~/yatty`), or reuses an existing clone; "Choose Local Folder…" stays.
+- [x] New Worktree offers: a new branch from a base picked from local and remote branches; an existing branch; an open pull request (fetched as `refs/pull/<n>/head`, forks included; our own PR's branch is its head branch, a fork's is always `pr/<n>-<head>` so it can't clash or change), hiding PRs that already have a worktree.
+- [x] Worktree labels: rename a worktree's display name (stored by worktree path); branch and directory unchanged.
+- [x] A worktree whose directory vanished shows as missing and can be closed.
 
-## Phase 4 — Agent status and notifications
+## Phase 4 — Agent status and notifications (in progress)
+
+Plan: `2026-11-06-phase-4-agent-status.md`.
 
 - [ ] Agents Yatty starts run with Claude Code hooks (a `--settings` file under `~/.config/yatty/`) writing `<state> <epoch>` per pane under `~/.config/yatty/agents/`: needs you, working, done, idle.
 - [ ] Optional "Track every claude": the same hooks merged into `~/.claude/settings.json` (asks first, reversible, idempotent), inert outside Yatty.
@@ -119,4 +121,4 @@ Plan: `2026-11-06-phase-3-github-worktrees.md`.
 |---|---|---|
 | 2026-11-06 | 1 — app shell and worktrees | `e19b370` |
 | 2026-11-06 | 2 — tabs and splits (two verifier rounds; snapshots checked) | `8504a15`…`ecfbb85` |
-| 2026-11-06 | 3 — add repository from GitHub (Tasks 1–2) | `16ad5ae`, `40bd20e` |
+| 2026-11-06 | 3 — repositories and worktrees from GitHub (verifier + re-verify) | `16ad5ae`…`503ca7f` |

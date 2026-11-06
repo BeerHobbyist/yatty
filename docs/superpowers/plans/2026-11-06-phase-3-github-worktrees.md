@@ -10,10 +10,9 @@
 
 **Spec:** roadmap Phase 3; agentree `README.md` (Features: "Worktrees, not branches you switch between") and `docs/DEVLOG.md` ("Add / load worktree", `src/services/gh.ts`, `src/components/AddWorktreeModal.tsx` in agentree-tui).
 
-## Status (resume here)
+## Status
 
-- Task 1 done (`16ad5ae`, `40bd20e`). Task 2 done (`40bd20e`): Add Repository sheet (⌘O / toolbar), `AppStore.addRemote`, `cloneDirectory` (the owner's is `~/agentree`), snapshot scene `add-repository` (fixture via `YATTY_REPO_FIXTURE`). Repos learn their `nameWithOwner` from `origin` on refresh.
-- Next: Task 3 (New Worktree from an existing branch or a pull request; labels; missing worktrees), then Task 4.
+Done. Verifier: PASS on 1–6; its one finding (fork PR branch name flipped once its worktree existed) fixed in `503ca7f` and re-verified. A fork PR's branch is always `pr/<n>-<head>` (deviates from Task 3's wording below).
 
 ## Global Constraints
 
@@ -46,8 +45,8 @@ See the roadmap. `Repo` gains `nameWithOwner: String?` and `StoredState` gains `
 - `Git.addWorktree(root:path:existingBranch:) async throws` (`git worktree add <path> <branch>`; a remote branch `origin/x` checks out as local `x` with `--track`); `Git.fetchPullRequest(root:number:into branch:) async throws` (`git fetch origin +refs/pull/<n>/head:refs/heads/<branch>`).
 - `Repo.nameWithOwner: String?`; `YattyConfig.cloneDirectory: String` (default `~/yatty`) and `var cloneRoot: URL` (tilde expanded).
 
-- [ ] Tests: `rankingOrdersByMatchQuality`, `rankingKeepsOrderForEmptyQuery`, `slugFromEveryRemoteForm`, `remoteMatchesIgnoresCase`, `branchesSkipRemoteHead`, `errorMessagesForMissingAndLoggedOutGh`, `repoJSONDecodes` (a 2-item `/user/repos` sample), `prJSONDecodes`.
-- [ ] Run → FAIL; implement; Run → PASS.
+- [x] Tests: `rankingOrdersByMatchQuality`, `rankingKeepsOrderForEmptyQuery`, `slugFromEveryRemoteForm`, `remoteMatchesIgnoresCase`, `branchesSkipRemoteHead`, `errorMessagesForMissingAndLoggedOutGh`, `repoJSONDecodes` (a 2-item `/user/repos` sample), `prJSONDecodes`.
+- [x] Run → FAIL; implement; Run → PASS.
 
 ### Task 2: Add Repository sheet and cloning
 
@@ -58,7 +57,7 @@ See the roadmap. `Repo` gains `nameWithOwner: String?` and `StoredState` gains `
 - `AppStore.addRemote(_ repo: RemoteRepo) async throws`: an already-added repo (by `nameWithOwner`, else by clone path) is selected; else `<cloneRoot>/<name>`: cloned when missing; when present, accepted only if `Git.remoteMatches(origin, repo.nameWithOwner)`, else `GitError("<path> already holds another repository")`; then added with `nameWithOwner` and its main copy selected.
 - Sheet: search field (focused), ↑↓ move the highlight, Return clones/adds the highlighted repo, Esc cancels; each row: name, `owner/name` secondary, lock for private, description one line; footer: "<n> repositories · loading more…" and "Choose Local Folder…"; while cloning: "Cloning owner/name…" with a spinner; errors inline with "Try Again".
 
-- [ ] `make app`; snapshot scene `add-repository` (catalog injected from a JSON fixture via `YATTY_REPO_FIXTURE`) shows the sheet with ranked rows.
+- [x] `make app`; snapshot scene `add-repository` (catalog injected from a JSON fixture via `YATTY_REPO_FIXTURE`) shows the sheet with ranked rows.
 
 ### Task 3: New Worktree from a branch or a pull request; labels
 
@@ -71,9 +70,9 @@ See the roadmap. `Repo` gains `nameWithOwner: String?` and `StoredState` gains `
 - Labels: `StoredState.labels: [String: String]` (worktree path → label); `AppStore.renameWorktree(_:to:)` (empty clears); sidebar row shows the label, else the branch leaf; context menu "Rename…", inline edit; closing a worktree drops its label.
 - A worktree whose directory is gone shows "missing" and only offers Close.
 
-- [ ] Tests: `prBranchNameAvoidsExistingLocalBranch`, `labelsDecodeWhenMissing`, `choiceDirectoryNames`.
-- [ ] Run → FAIL; implement; Run → PASS; `make app`; snapshot scenes `new-worktree-branch`, `new-worktree-pr`.
+- [x] Tests: `prBranchNameAvoidsExistingLocalBranch`, `labelsDecodeWhenMissing`, `choiceDirectoryNames`.
+- [x] Run → FAIL; implement; Run → PASS; `make app`; snapshot scenes `new-worktree-branch`, `new-worktree-pr`.
 
 ### Task 4: Verify and commit
 
-- [ ] `make test`, `make app`, snapshots; fresh `verifier` agent on this plan + roadmap Phase 3 + Review Focus; fix; one re-verify round; tick the roadmap; progress-log row; commit.
+- [x] `make test`, `make app`, snapshots; fresh `verifier` agent on this plan + roadmap Phase 3 + Review Focus; fix; one re-verify round; tick the roadmap; progress-log row; commit.
