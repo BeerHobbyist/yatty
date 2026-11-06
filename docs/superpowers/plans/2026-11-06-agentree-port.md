@@ -108,14 +108,16 @@ Plan: `2026-11-06-phase-7-agent-cli.md`.
 - [x] Agents Yatty starts are told about the CLI by a silent-except-SessionStart hook; a Claude Code skill ships with it.
 - [x] Inside fence the CLI's requests run on the sandbox's terms: started commands wrapped in `sandboxCommand` (config), typing only into panes started that way, no argument tmux/zmx could turn into a command.
 
-## Phase 8 — SSH projects (in progress)
+## Phase 8 — SSH projects ✅
 
 Plan: `2026-11-06-phase-8-ssh.md`.
 
-- [ ] Add an SSH host (typed or from `~/.ssh/config`) and directories on it; their terminals run there, kept alive by zmx on the host (install hint when missing); one shared connection per host (ControlMaster, short ControlPath).
-- [ ] Password or key-passphrase logins through `SSH_ASKPASS`, never stored; background calls never log in on their own.
+- [x] Add an SSH host (typed or from `~/.ssh/config`) and directories on it; their terminals run there, kept alive by zmx on the host (install hint when missing); one shared connection per host (ControlMaster, short ControlPath).
+- [x] Password or key-passphrase logins through `SSH_ASKPASS`, never stored; background calls never log in on their own.
 
-## Phase 9 — Command palette, help and polish
+## Phase 9 — Command palette, help and polish (in progress)
+
+Plan: `2026-11-06-phase-9-polish.md`.
 
 - [ ] Command palette (⌘K) listing every action that applies, fuzzy-filtered.
 - [ ] Settings window for `agentCommand`, `cloneDirectory`, `sandboxCommand`, notifications.
@@ -134,3 +136,4 @@ Plan: `2026-11-06-phase-8-ssh.md`.
 | 2026-11-06 | 5 — git status and pull requests (verifier + re-verify) | `aa039ab`…`dd8fb77` |
 | 2026-11-06 | 6 — diffs (verifier: no findings) | `dd8fb77` |
 | 2026-11-06 | 7 — agent CLI and fence (verifier: 6 findings fixed, re-verified; real-app e2e) | `a59a99e`…`ad964b4`+ |
+| 2026-11-06 | 8 — SSH projects (real-sshd e2e; verifier: 9 findings fixed, re-verified, 2 more fixed) | `728c90d`…`2bb4b0e` |
