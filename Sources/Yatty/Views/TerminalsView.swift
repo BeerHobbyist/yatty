@@ -35,24 +35,20 @@ struct TabBar: View {
 
   var body: some View {
     HStack(spacing: 2) {
-      ScrollView(.horizontal, showsIndicators: false) {
+      // `+` follows the last tab; once the tabs overflow and scroll, it stays
+      // pinned beside them.
+      ViewThatFits(in: .horizontal) {
         HStack(spacing: 2) {
-          ForEach(layout.tabs) { tab in
-            TabButton(worktree: worktree, tab: tab, isSelected: tab.id == layout.selectedTab)
-          }
-          Menu {
-            Button("New Shell") { store.newTab(in: worktree, agent: false) }
-            Button("New Agent") { store.newTab(in: worktree, agent: true) }
-          } label: {
-            Image(systemName: "plus")
-          }
-          .menuStyle(.borderlessButton)
-          .menuIndicator(.hidden)
-          .fixedSize()
-          .padding(.leading, 4)
-          .help("New tab")
+          tabs
+          newTabMenu
         }
         .padding(.horizontal, 6)
+        HStack(spacing: 2) {
+          ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) { tabs }.padding(.horizontal, 6)
+          }
+          newTabMenu
+        }
       }
       Spacer(minLength: 8)
       if let tab = layout.selected {
@@ -75,6 +71,26 @@ struct TabBar: View {
     .padding(.horizontal, 8)
     .frame(height: 30)
     .background(.bar)
+  }
+
+  private var tabs: some View {
+    ForEach(layout.tabs) { tab in
+      TabButton(worktree: worktree, tab: tab, isSelected: tab.id == layout.selectedTab)
+    }
+  }
+
+  private var newTabMenu: some View {
+    Menu {
+      Button("New Shell") { store.newTab(in: worktree, agent: false) }
+      Button("New Agent") { store.newTab(in: worktree, agent: true) }
+    } label: {
+      Image(systemName: "plus")
+    }
+    .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
+    .fixedSize()
+    .padding(.leading, 4)
+    .help("New tab")
   }
 }
 
@@ -103,10 +119,8 @@ private struct TabButton: View {
           }
           .onChange(of: fieldFocused) { _, focused in if !focused { finishRename() } }
       } else {
-        Text(store.title(of: tab, in: worktree))
+        Text(middleTruncated(store.title(of: tab, in: worktree), to: 24))
           .lineLimit(1)
-          .truncationMode(.middle)
-          .frame(maxWidth: 180)
       }
       Button {
         store.closeTab(tab.id, in: worktree)
@@ -288,4 +302,13 @@ struct TerminalHost: NSViewRepresentable {
     terminal.autoresizingMask = [.width, .height]
     container.addSubview(terminal)
   }
+}
+
+/// `text` cut to `limit` characters by an ellipsis in the middle, so both
+/// ends of a long tab title stay readable.
+func middleTruncated(_ text: String, to limit: Int) -> String {
+  guard text.count > limit, limit > 1 else { return text }
+  let head = (limit - 1) / 2
+  let tail = limit - 1 - head
+  return String(text.prefix(head)) + "…" + String(text.suffix(tail))
 }
