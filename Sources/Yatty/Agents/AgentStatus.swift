@@ -36,6 +36,8 @@ enum AgentStatus {
   /// A working agent whose screen hasn't changed for this long was stopped
   /// (Esc fires no hook): Claude's spinner keeps a working screen moving.
   static let workingSilence = 10
+  /// How long after a "needs you" report its prompt may still be drawing.
+  static let promptSettle = 2
 
   /// The report, corrected by what its pane's screen did. `lastScreenChange`:
   /// when the screen was last seen to change, nil when nobody has looked yet.
@@ -44,15 +46,19 @@ enum AgentStatus {
   static func effective(
     _ report: AgentReport, lastScreenChange: Int?, movedSinceReport: Bool, now: Int
   ) -> AgentState {
-    switch report.state {
-    case .working:
+    func workingOrStopped() -> AgentState {
       guard let lastScreenChange, now - lastScreenChange >= workingSilence,
         now - report.since >= workingSilence
       else { return .working }
       return .idle
-    // The prompt was answered: the agent is drawing again.
+    }
+    switch report.state {
+    case .working:
+      return workingOrStopped()
+    // The prompt was answered: the agent is drawing again — and like any
+    // working agent, one whose screen then stops was stopped.
     case .needsAction:
-      return movedSinceReport ? .working : .needsAction
+      return movedSinceReport ? workingOrStopped() : .needsAction
     default:
       return report.state
     }

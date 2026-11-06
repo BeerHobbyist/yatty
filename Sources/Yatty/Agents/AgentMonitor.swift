@@ -113,7 +113,10 @@ final class AgentMonitor {
     let result = await Run.run(Zmx.executable, ["history", session, "--screen"], env: Zmx.environment)
     guard result.ok else { return }
     let hash = result.stdout.hashValue
-    if report.state == .needsAction, baselines[session]?.since != report.since {
+    // The hook fires a moment before the prompt is drawn: the baseline waits.
+    if report.state == .needsAction, baselines[session]?.since != report.since,
+      now - report.since >= AgentStatus.promptSettle
+    {
       baselines[session] = (report.since, hash)
     }
     if screens[session]?.hash == hash { return }

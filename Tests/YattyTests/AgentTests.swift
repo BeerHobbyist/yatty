@@ -31,7 +31,9 @@ import Testing
   let report = AgentReport(state: .needsAction, since: 100)
   // However late the first sample lands, the prompt as first seen is the baseline.
   #expect(AgentStatus.effective(report, lastScreenChange: 103, movedSinceReport: false, now: 120) == .needsAction)
-  #expect(AgentStatus.effective(report, lastScreenChange: 104, movedSinceReport: true, now: 120) == .working)
+  #expect(AgentStatus.effective(report, lastScreenChange: 104, movedSinceReport: true, now: 110) == .working)
+  // Answered, then stopped (Esc on the prompt): idle once the screen settles.
+  #expect(AgentStatus.effective(report, lastScreenChange: 104, movedSinceReport: true, now: 120) == .idle)
 }
 
 @Test func combinePicksMostUrgentThenNewest() {
