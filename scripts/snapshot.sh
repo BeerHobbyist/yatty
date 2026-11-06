@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Renders Yatty with sample data to build/snapshots/<scene>.png, in a
 # throwaway config and zmx directory that never touch the real ones.
-# Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository
+# Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
+#   new-worktree-branch, new-worktree-existing, new-worktree-pr
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -23,6 +24,7 @@ git -C "$repo" -c user.name=y -c user.email=y@y commit -q --allow-empty -m init
 git -C "$repo" worktree add -q "$repo/.worktrees/login" -b feature/login
 git -C "$repo" worktree add -q "$repo/.worktrees/crash-on-start" -b fix/crash-on-start
 login="$repo/.worktrees/login"
+git -C "$repo" branch -q release/1.0
 
 state="$sandbox/config/yatty/state.json"
 case "$scene" in
@@ -65,6 +67,17 @@ EOF
  {"name":"a-repository-with-a-very-long-name-that-should-truncate","full_name":"some-organization/a-repository-with-a-very-long-name-that-should-truncate","description":"Long description that goes on and on to check that one line is all a row gets in the picker list","private":false}]
 EOF
     export YATTY_SNAPSHOT_SHEET=add-repository YATTY_REPO_FIXTURE="$sandbox/repos.json"
+    ;;
+  new-worktree-branch|new-worktree-existing|new-worktree-pr)
+    cat > "$state" <<EOF
+{ "repos": [{ "name": "sample-app", "path": "$repo", "nameWithOwner": "me/sample-app" }], "selectedWorktree": "$repo" }
+EOF
+    cat > "$sandbox/prs.json" <<'EOF'
+[{"number":42,"title":"Login with magic links","headRefName":"feature/magic-links","isCrossRepository":false,"author":{"login":"octo"}},
+ {"number":41,"title":"Fix the crash on start","headRefName":"fix/crash-on-start","isCrossRepository":false,"author":{"login":"octo"}},
+ {"number":37,"title":"Translate the settings screen into Polish, with a title long enough to need cutting","headRefName":"main","isCrossRepository":true,"author":{"login":"contributor"}}]
+EOF
+    export YATTY_SNAPSHOT_SHEET="$scene" YATTY_PR_FIXTURE="$sandbox/prs.json"
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

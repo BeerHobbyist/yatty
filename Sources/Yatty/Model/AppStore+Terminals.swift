@@ -271,6 +271,7 @@ extension AppStore {
     let panes = Set(layout(for: worktree).allPanes).union(["0"])
     for pane in panes { dropTerminal(PaneKey(worktree: worktree.id, pane: pane)) }
     layouts[worktree.id] = nil
+    labels[worktree.id] = nil
     saveState()
     for pane in panes { await Zmx.kill(Zmx.sessionName(for: worktree.path, pane: pane)) }
   }

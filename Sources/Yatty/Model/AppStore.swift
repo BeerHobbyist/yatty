@@ -32,6 +32,8 @@ final class AppStore {
   }
   /// Per worktree path; see `layout(for:)`.
   var layouts: [String: WorktreeLayout] = [:]
+  /// Per worktree path: a name the user gave it; see `label(for:)`.
+  var labels: [String: String] = [:]
   /// Panes whose terminal couldn't start; they wait for "Try Again".
   var failedPanes: Set<PaneKey> = []
   /// What each pane's terminal calls itself (OSC 0/2).
@@ -44,6 +46,7 @@ final class AppStore {
   var newWorktreeRepo: Repo?
   var pendingClose: PendingClose?
   var pendingRemoval: Repo?
+  var renamingWorktree: Worktree?
 
   let config = ConfigFiles.loadConfig()
   let catalog = RepoCatalog()
@@ -68,6 +71,7 @@ final class AppStore {
       repos = stored.repos
       selection = stored.selectedWorktree
       layouts = stored.layouts
+      labels = stored.labels
       reposKnown = true
     case .unreadable(let aside):
       repos = []
@@ -78,6 +82,12 @@ final class AppStore {
     }
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }
+    if Snapshot.sheet?.hasPrefix("new-worktree") == true {
+      Task {
+        await refreshAll()
+        newWorktreeForSelection()
+      }
+    }
     // Worktrees made outside Yatty (by hand, by an agent) show up on return.
     NotificationCenter.default.addObserver(
       forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
@@ -231,17 +241,54 @@ final class AppStore {
     pendingClose = PendingClose(repo: repo, worktree: worktree)
   }
 
-  /// A new branch from `base` in `<repo>/.worktrees/<branch>`, opened with
-  /// its agent and the keyboard in its terminal.
-  func createWorktree(in repo: Repo, branch: String, base: String) async throws {
+  /// A worktree in `<repo>/.worktrees/<branch>` from what the user picked,
+  /// opened with the keyboard in its terminal. A branch that has a worktree
+  /// already gets that one selected instead.
+  func createWorktree(in repo: Repo, choice: NewWorktreeChoice) async throws {
     await Git.ignoreWorktreesDir(root: repo.path)
+    let local = Set(try await Git.listBranches(root: repo.path).local)
+    let branch = choice.branch(existing: local)
+    if let open = worktrees[repo.id]?.first(where: { $0.branch == branch }) {
+      selection = open.id
+      focusSelectedTerminal()
+      return
+    }
     let path = URL(fileURLWithPath: repo.path)
       .appendingPathComponent(".worktrees")
-      .appendingPathComponent(Git.directoryName(for: branch)).path
-    try await Git.addWorktree(root: repo.path, path: path, branch: branch, base: base)
+      .appendingPathComponent(choice.directoryName(existing: local)).path
+    switch choice {
+    case .newBranch(let name, let base):
+      try await Git.addWorktree(root: repo.path, path: path, branch: name, base: base)
+    case .existingBranch(let name):
+      try await Git.addWorktree(root: repo.path, path: path, existingBranch: name)
+    case .remoteBranch(let remote, let name):
+      if local.contains(name) {
+        try await Git.addWorktree(root: repo.path, path: path, existingBranch: name)
+      } else {
+        try await Git.addWorktree(root: repo.path, path: path, remote: remote, branch: name)
+      }
+    case .pullRequest(let pr):
+      // Our own pull request's branch is already here; anything else is fetched.
+      if pr.isCrossRepository || !local.contains(branch) {
+        try await Git.fetchPullRequest(root: repo.path, number: pr.number, into: branch)
+      }
+      try await Git.addWorktree(root: repo.path, path: path, existingBranch: branch)
+    }
     await refresh(repo)
     selection = canonicalPath(path)
     focusSelectedTerminal()
+  }
+
+  /// The sidebar's name for the worktree: its label, else its branch's.
+  func label(for worktree: Worktree) -> String {
+    labels[worktree.id] ?? worktree.name
+  }
+
+  /// Only the sidebar's name changes; an empty name gives back the branch's.
+  func renameWorktree(_ worktree: Worktree, to name: String) {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    labels[worktree.id] = trimmed.isEmpty ? nil : trimmed
+    saveState()
   }
 
   /// Deletes the worktree's directory (uncommitted changes too) and ends its
@@ -259,6 +306,7 @@ final class AppStore {
   }
 
   func saveState() {
-    ConfigFiles.saveState(StoredState(repos: repos, selectedWorktree: selection, layouts: layouts))
+    ConfigFiles.saveState(
+      StoredState(repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels))
   }
 }

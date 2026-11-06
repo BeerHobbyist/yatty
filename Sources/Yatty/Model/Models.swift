@@ -36,11 +36,17 @@ struct StoredState: Codable {
   var selectedWorktree: String?
   /// Per worktree path; a worktree without one has `WorktreeLayout.initial`.
   var layouts: [String: WorktreeLayout] = [:]
+  /// Per worktree path: the name the sidebar shows instead of the branch's.
+  var labels: [String: String] = [:]
 
-  init(repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:]) {
+  init(
+    repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
+    labels: [String: String] = [:]
+  ) {
     self.repos = repos
     self.selectedWorktree = selectedWorktree
     self.layouts = layouts
+    self.labels = labels
   }
 
   // Every field may be missing: a file from an older Yatty must still load.
@@ -49,6 +55,7 @@ struct StoredState: Codable {
     repos = try container.decodeIfPresent([Repo].self, forKey: .repos) ?? []
     selectedWorktree = try container.decodeIfPresent(String.self, forKey: .selectedWorktree)
     layouts = try container.decodeIfPresent([String: WorktreeLayout].self, forKey: .layouts) ?? [:]
+    labels = try container.decodeIfPresent([String: String].self, forKey: .labels) ?? [:]
   }
 }
 

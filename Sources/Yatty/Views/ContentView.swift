@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
   @Environment(AppStore.self) private var store
+  @State private var labelDraft = ""
 
   var body: some View {
     @Bindable var store = store
@@ -51,6 +52,20 @@ struct ContentView: View {
         "Deletes \(pending.worktree.path) and any uncommitted changes in it, and ends its terminal. "
           + "The branch \(pending.worktree.branch ?? "") stays.")
     }
+    .alert(
+      "Rename Worktree",
+      isPresented: Binding(get: { store.renamingWorktree != nil }, set: { if !$0 { store.renamingWorktree = nil } }),
+      presenting: store.renamingWorktree
+    ) { worktree in
+      TextField("Name", text: $labelDraft)
+      Button("Rename") { store.renameWorktree(worktree, to: labelDraft) }
+      Button("Cancel", role: .cancel) {}
+    } message: { worktree in
+      Text("Only the sidebar's name changes: the branch \(worktree.branch ?? "") and its folder keep theirs. Leave it empty to use the branch's name.")
+    }
+    .onChange(of: store.renamingWorktree) { _, worktree in
+      labelDraft = worktree.map { store.labels[$0.id] ?? "" } ?? ""
+    }
     .confirmationDialog(
       "Remove \(store.pendingRemoval?.name ?? "")?",
       isPresented: Binding(get: { store.pendingRemoval != nil }, set: { if !$0 { store.pendingRemoval = nil } }),
@@ -81,6 +96,7 @@ struct Sidebar: View {
               .tag(worktree.id)
               .contextMenu {
                 Button("New Worktree…") { store.newWorktreeRepo = repo }
+                Button("Rename…") { store.renamingWorktree = worktree }
                 if !worktree.isMain {
                   Button("Close Worktree…", role: .destructive) {
                     store.pendingClose = PendingClose(repo: repo, worktree: worktree)
@@ -133,11 +149,18 @@ struct Sidebar: View {
 
 struct WorktreeRow: View {
   let worktree: Worktree
+  @Environment(AppStore.self) private var store
 
   var body: some View {
     Label {
-      Text(worktree.name)
-        .foregroundStyle(worktree.exists ? .primary : .secondary)
+      HStack(spacing: 4) {
+        Text(store.label(for: worktree))
+          .foregroundStyle(worktree.exists ? .primary : .secondary)
+          .lineLimit(1)
+        if !worktree.exists {
+          Text("missing").font(.caption).foregroundStyle(.secondary)
+        }
+      }
     } icon: {
       Image(systemName: worktree.isMain ? "house" : "arrow.triangle.branch")
     }
@@ -159,7 +182,7 @@ struct DetailView: View {
           TerminalsView(worktree: worktree)
         }
       }
-      .navigationTitle(worktree.name)
+      .navigationTitle(store.label(for: worktree))
       .navigationSubtitle(store.repo(of: worktree)?.name ?? "")
     } else {
       ContentUnavailableView(
@@ -167,60 +190,6 @@ struct DetailView: View {
         description: Text(
           store.repos.isEmpty ? "Add a repository with ⌘O." : "Pick one in the sidebar, or press ⌘N for a new one."))
     }
-  }
-}
-
-struct NewWorktreeSheet: View {
-  let repo: Repo
-  @Environment(AppStore.self) private var store
-  @Environment(\.dismiss) private var dismiss
-  @State private var branch = ""
-  @State private var base = ""
-  @State private var error: String?
-  @State private var busy = false
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Text("New Worktree in \(repo.name)").font(.headline)
-      Form {
-        TextField("Branch", text: $branch, prompt: Text("feature/login"))
-        TextField("Based on", text: $base, prompt: Text("HEAD"))
-      }
-      if let error {
-        Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
-      }
-      HStack {
-        Spacer()
-        Button("Cancel", role: .cancel) { dismiss() }
-          .keyboardShortcut(.cancelAction)
-        Button("Create") { create() }
-          .keyboardShortcut(.defaultAction)
-          .disabled(trimmed(branch).isEmpty || busy)
-      }
-    }
-    .padding(20)
-    .frame(width: 420)
-    .task { base = await Git.defaultBase(root: repo.path) }
-  }
-
-  private func create() {
-    busy = true
-    error = nil
-    let branch = trimmed(branch)
-    let base = trimmed(base).isEmpty ? "HEAD" : trimmed(base)
-    Task {
-      do {
-        try await store.createWorktree(in: repo, branch: branch, base: base)
-        dismiss()
-      } catch {
-        self.error = error.localizedDescription
-        busy = false
-      }
-    }
-  }
-
-  private func trimmed(_ s: String) -> String {
-    s.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 }
 

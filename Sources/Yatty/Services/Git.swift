@@ -81,6 +81,11 @@ enum Git {
   static func removeWorktree(root: String, path: String) async throws {
     let tracked = try await listWorktrees(root: root).contains { $0.path == canonicalPath(path) }
     guard tracked else { return }
+    if !FileManager.default.fileExists(atPath: path) {
+      // Its directory is gone already: git only has to forget it.
+      try await run(["worktree", "prune"], in: root)
+      return
+    }
     try await run(["worktree", "remove", "--force", path], in: root)
   }
 
@@ -128,16 +133,19 @@ enum Git {
     return branches
   }
 
-  /// Checks out an existing branch in a new worktree. A remote branch
-  /// (`origin/x`) becomes a local `x` tracking it.
+  /// Checks out a local branch in a new worktree.
   static func addWorktree(root: String, path: String, existingBranch branch: String) async throws {
-    let remotes = (try? await run(["remote"], in: root))?.split(separator: "\n").map(String.init) ?? []
-    if let remote = remotes.first(where: { branch.hasPrefix($0 + "/") }) {
-      let local = String(branch.dropFirst(remote.count + 1))
-      try await run(["worktree", "add", "--track", "-b", local, path, branch], in: root)
-    } else {
-      try await run(["worktree", "add", path, branch], in: root)
-    }
+    try await run(["worktree", "add", path, branch], in: root)
+  }
+
+  /// Checks out `remote/branch` as a new local `branch` tracking it.
+  static func addWorktree(root: String, path: String, remote: String, branch: String) async throws {
+    try await run(["worktree", "add", "--track", "-b", branch, path, "\(remote)/\(branch)"], in: root)
+  }
+
+  /// The remote names (`origin`, `upstream`…).
+  static func remotes(root: String) async -> [String] {
+    ((try? await run(["remote"], in: root)) ?? "").split(separator: "\n").map(String.init)
   }
 
   /// Fetches a pull request's head into local `branch` (created or moved).

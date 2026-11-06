@@ -66,6 +66,12 @@ enum GitHub {
   }
 
   static func openPullRequests(_ nameWithOwner: String) async throws -> [OpenPullRequest] {
+    // `YATTY_PR_FIXTURE=<json file>` stands in for gh (snapshots, tests).
+    if let path = ProcessInfo.processInfo.environment["YATTY_PR_FIXTURE"], !path.isEmpty,
+      let data = FileManager.default.contents(atPath: path)
+    {
+      return try JSONDecoder().decode([OpenPullRequest].self, from: data)
+    }
     let out = try await run([
       "pr", "list", "-R", nameWithOwner, "--state", "open", "--limit", "100",
       "--json", "number,title,headRefName,isCrossRepository,author",
