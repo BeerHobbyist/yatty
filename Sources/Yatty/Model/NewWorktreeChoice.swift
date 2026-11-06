@@ -9,25 +9,22 @@ enum NewWorktreeChoice: Hashable {
   case remoteBranch(remote: String, branch: String)
   case pullRequest(OpenPullRequest)
 
-  /// The local branch the worktree has checked out. `existing`: the local
-  /// branches there are.
-  func branch(existing: Set<String>) -> String {
+  /// The local branch the worktree has checked out.
+  var branch: String {
     switch self {
     case .newBranch(let name, _): name
     case .existingBranch(let name): name
     case .remoteBranch(_, let branch): branch
-    case .pullRequest(let pr): Self.branchName(for: pr, existing: existing)
+    case .pullRequest(let pr): Self.branchName(for: pr)
     }
   }
 
-  func directoryName(existing: Set<String>) -> String {
-    Git.directoryName(for: branch(existing: existing))
-  }
+  var directoryName: String { Git.directoryName(for: branch) }
 
-  /// A pull request's branch is its head branch, unless that's one of ours
-  /// already and the pull request comes from a fork: then `pr/<n>-<head>`.
-  static func branchName(for pr: OpenPullRequest, existing: Set<String>) -> String {
-    guard pr.isCrossRepository, existing.contains(pr.headRefName) else { return pr.headRefName }
-    return "pr/\(pr.number)-\(pr.headRefName)"
+  /// Our own pull request's branch is its head branch. A fork's is always
+  /// `pr/<n>-<head>`: its head name may be one of ours (`main`), and a name
+  /// that never depends on which branches exist can't flip once it does.
+  static func branchName(for pr: OpenPullRequest) -> String {
+    pr.isCrossRepository ? "pr/\(pr.number)-\(pr.headRefName)" : pr.headRefName
   }
 }

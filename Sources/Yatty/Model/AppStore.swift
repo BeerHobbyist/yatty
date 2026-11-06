@@ -247,7 +247,7 @@ final class AppStore {
   func createWorktree(in repo: Repo, choice: NewWorktreeChoice) async throws {
     await Git.ignoreWorktreesDir(root: repo.path)
     let local = Set(try await Git.listBranches(root: repo.path).local)
-    let branch = choice.branch(existing: local)
+    let branch = choice.branch
     if let open = worktrees[repo.id]?.first(where: { $0.branch == branch }) {
       selection = open.id
       focusSelectedTerminal()
@@ -255,7 +255,7 @@ final class AppStore {
     }
     let path = URL(fileURLWithPath: repo.path)
       .appendingPathComponent(".worktrees")
-      .appendingPathComponent(choice.directoryName(existing: local)).path
+      .appendingPathComponent(choice.directoryName).path
     switch choice {
     case .newBranch(let name, let base):
       try await Git.addWorktree(root: repo.path, path: path, branch: name, base: base)

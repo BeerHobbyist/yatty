@@ -148,10 +148,7 @@ struct NewWorktreeSheet: View {
   /// Open pull requests whose branch has no worktree yet.
   private var visiblePullRequests: [OpenPullRequest] {
     let checkedOut = Set((store.worktrees[repo.id] ?? []).compactMap(\.branch))
-    let local = Set(branches.local)
-    return pullRequests.filter {
-      !checkedOut.contains(NewWorktreeChoice.branchName(for: $0, existing: local))
-    }
+    return pullRequests.filter { !checkedOut.contains(NewWorktreeChoice.branchName(for: $0)) }
   }
 
   @ViewBuilder
