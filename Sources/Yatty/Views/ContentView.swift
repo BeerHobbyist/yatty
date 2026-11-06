@@ -38,7 +38,7 @@ struct ContentView: View {
     ) { host in
       Button("Remove Host", role: .destructive) { Task { await store.removeHost(host) } }
     } message: { _ in
-      Text("Ends the terminals of its directories there. Nothing on the host is touched.")
+      Text("Ends the terminals of its directories there (once it can be reached). Nothing on the host is touched.")
     }
     .confirmationDialog(
       "Remove \(store.pendingDirectoryRemoval.map { store.label(for: $0) } ?? "")?",
@@ -48,7 +48,7 @@ struct ContentView: View {
     ) { worktree in
       Button("Remove Directory", role: .destructive) { Task { await store.removeRemoteDirectory(worktree) } }
     } message: { _ in
-      Text("Ends its terminals on the host. Its files stay.")
+      Text("Ends its terminals on the host (once it can be reached). Its files stay.")
     }
     .sheet(item: $store.diffingWorktree) { worktree in
       DiffSheet(worktree: worktree)

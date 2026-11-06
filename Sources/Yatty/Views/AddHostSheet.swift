@@ -49,6 +49,12 @@ struct AddHostSheet: View {
       }
       .onSubmit(add)
       .disabled(connecting)
+      // A password typed for one host is never sent to another.
+      .onChange(of: host) {
+        asksPassword = false
+        password = ""
+        message = nil
+      }
 
       if let message {
         Text(message).font(.callout).foregroundStyle(.red)

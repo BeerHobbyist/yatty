@@ -58,7 +58,7 @@ final class GhosttyApp {
       write_clipboard_cb: { _, location, content, count, confirm in
         GhosttyApp.writeClipboard(location: location, content: content, count: count, confirm: confirm)
       },
-      close_surface_cb: { userdata, _ in GhosttyApp.closeSurface(userdata: userdata) }
+      close_surface_cb: { userdata, processAlive in GhosttyApp.closeSurface(userdata: userdata, processAlive: processAlive) }
     )
   }
 
@@ -185,11 +185,12 @@ final class GhosttyApp {
     }
   }
 
-  /// A `close_surface` keybind (⌘W) closes the pane.
-  nonisolated private static func closeSurface(userdata: UnsafeMutableRawPointer?) {
+  /// A `close_surface` keybind (⌘W) closes the pane. With the process
+  /// gone, it's a key pressed on a terminal whose command ended.
+  nonisolated private static func closeSurface(userdata: UnsafeMutableRawPointer?, processAlive: Bool) {
     guard let view = TerminalRef(userdata) else { return }
     DispatchQueue.main.async {
-      MainActor.assumeIsolated { view.resolve()?.perform(.close) }
+      MainActor.assumeIsolated { view.resolve()?.perform(processAlive ? .close : .closeAfterExit) }
     }
   }
 

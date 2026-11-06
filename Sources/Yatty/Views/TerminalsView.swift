@@ -259,7 +259,20 @@ struct PaneView: View {
 
   var body: some View {
     Group {
-      if store.disconnectedPanes.contains(key) {
+      if store.disconnectedPanes.contains(key), let terminal = store.terminals[key] {
+        // What ssh said stays readable above the way back.
+        TerminalHost(terminal: terminal)
+          .overlay(alignment: .bottom) {
+            HStack(spacing: 10) {
+              Image(systemName: "wifi.slash")
+              Text("Disconnected from \(worktree.host ?? "the host"). The session is still there.")
+              Spacer()
+              Button("Reconnect") { store.reconnect(key) }
+            }
+            .padding(10)
+            .background(.regularMaterial)
+          }
+      } else if store.disconnectedPanes.contains(key) {
         ContentUnavailableView {
           Label("Disconnected", systemImage: "wifi.slash")
         } description: {

@@ -44,10 +44,11 @@ enum SSH {
 
   // MARK: The shared connection
 
-  /// ssh refuses a ControlPath longer than a socket path may be (104 bytes
-  /// on macOS); `%C` expands to 40 hex digits.
-  static let maxSocketPath = 100
-  static let controlNameLength = 40
+  /// A socket path's limit on macOS, its terminating NUL left out.
+  static let maxSocketPath = 103
+  /// What ssh makes of `<dir>/%C` while it binds: `/`, 40 hex digits, and a
+  /// temporary `.` plus 16 random characters, renamed away once bound.
+  static let controlNameLength = 1 + 40 + 17
 
   /// Where the per-host master connections' sockets live: the first
   /// candidate short enough, and ours and private. None: no sharing.
@@ -57,7 +58,7 @@ enum SSH {
       CLIPaths.directory().appendingPathComponent("ssh").path,
       "/tmp/yatty-ssh-\(uid)",
     ]
-    for dir in dirs where dir.utf8.count + 1 + controlNameLength <= maxSocketPath {
+    for dir in dirs where dir.utf8.count + controlNameLength <= maxSocketPath {
       try? FileManager.default.createDirectory(
         atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
       // In a shared place (/tmp), only a directory that's ours and private will do.
@@ -76,7 +77,7 @@ enum SSH {
   /// password or a host key; otherwise batch mode, failing fast instead of
   /// waiting on a prompt nobody sees.
   static func argv(host: String, command: String, tty: Bool, setup: SSHSetup = .standard) -> [String] {
-    let mode = tty ? ["-t"] : ["-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    let mode = tty ? ["-t", "-o", "ConnectTimeout=10"] : ["-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
     return [setup.executable] + setup.sharingOptions + mode + ["--", host, "exec sh -c " + CLIRules.portableQuote(command)]
   }
 
@@ -123,14 +124,16 @@ enum SSH {
 
   // MARK: Logging in
 
-  /// The `SSH_ASKPASS` program: answers ssh's password or passphrase prompt
-  /// with the secret in its environment and refuses anything else (a
-  /// host-key question or a one-time code mustn't get the password). It
-  /// holds no secret itself.
+  /// The `SSH_ASKPASS` program: answers ssh's password prompt (`…'s
+  /// password: `, `Password:`) or key passphrase prompt (`Enter passphrase
+  /// for …`) with the secret in its environment, and refuses anything else:
+  /// a host-key question or a one-time code mustn't get the password, even
+  /// when a host or key is named "password". It holds no secret itself.
   static let askpassScript = """
     #!/bin/sh
     case "$1" in
-      *assword*|*assphrase*) printf '%s\\n' "$YATTY_SSH_SECRET" ;;
+      *"(yes/no"*|*[Ff]ingerprint*|*[Oo]ne-[Tt]ime*|*OTP*|*[Cc]ode*|*[Tt]oken*) exit 1 ;;
+      "Enter passphrase for "*|*"'s password: "|*[Pp]assword:|*[Pp]assword:" ") printf '%s\\n' "$YATTY_SSH_SECRET" ;;
       *) exit 1 ;;
     esac
 

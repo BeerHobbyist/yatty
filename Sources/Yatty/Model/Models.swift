@@ -25,6 +25,10 @@ struct Worktree: Identifiable, Hashable {
 
   var isRemote: Bool { host != nil }
 
+  /// What its zmx session names are made from: the path here; on a host, the
+  /// host too, so two names for one machine never share a session.
+  var sessionKey: String { isRemote ? id : path }
+
   /// The branch's last segment (feature/login → login), else the directory.
   var name: String {
     if let branch, let leaf = branch.split(separator: "/").last { return String(leaf) }
@@ -33,6 +37,15 @@ struct Worktree: Identifiable, Hashable {
 
   /// A remote directory is taken to exist: only the host could say.
   var exists: Bool { isRemote || FileManager.default.fileExists(atPath: path) }
+}
+
+/// Sessions to end on a host that couldn't be reached when their pane,
+/// directory or host went: tried again whenever Yatty refreshes.
+struct RemoteCleanup: Codable, Hashable {
+  var host: String
+  var zmx: String
+  var needsPassword: Bool
+  var sessions: [String]
 }
 
 /// An SSH host and the directories on it the user added.
@@ -73,13 +86,15 @@ struct StoredState: Codable {
   /// The diff viewer the user picked.
   var diffViewer: DiffViewer?
   var hosts: [SSHHost] = []
+  var remoteCleanup: [RemoteCleanup] = []
 
   init(
     repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
     labels: [String: String] = [:], foldedSections: [String] = [], mergeMethod: MergeMethod? = nil,
-    diffViewer: DiffViewer? = nil, hosts: [SSHHost] = []
+    diffViewer: DiffViewer? = nil, hosts: [SSHHost] = [], remoteCleanup: [RemoteCleanup] = []
   ) {
     self.hosts = hosts
+    self.remoteCleanup = remoteCleanup
     self.diffViewer = diffViewer
     self.repos = repos
     self.selectedWorktree = selectedWorktree
@@ -100,6 +115,7 @@ struct StoredState: Codable {
     mergeMethod = try? container.decodeIfPresent(MergeMethod.self, forKey: .mergeMethod)
     diffViewer = try? container.decodeIfPresent(DiffViewer.self, forKey: .diffViewer)
     hosts = try container.decodeIfPresent([SSHHost].self, forKey: .hosts) ?? []
+    remoteCleanup = (try? container.decodeIfPresent([RemoteCleanup].self, forKey: .remoteCleanup)) ?? []
   }
 }
 

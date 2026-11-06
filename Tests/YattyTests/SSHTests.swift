@@ -29,7 +29,7 @@ private struct FakeHosts {
     try fm.createDirectory(at: dir.appendingPathComponent("bin"), withIntermediateDirectories: true)
     if zmx {
       // Logs what it's asked to do, and where.
-      let script = "#!/bin/sh\nprintf '%s|' \"$(pwd -P)\" \"$@\" >>\"\(dir.path)/zmx.log\"\necho >>\"\(dir.path)/zmx.log\"\n"
+      let script = "#!/bin/sh\nprintf '%s|' \"$(pwd -P)\" \"$TERM\" \"$@\" >>\"\(dir.path)/zmx.log\"\necho >>\"\(dir.path)/zmx.log\"\n"
       try write(script, to: dir.appendingPathComponent("bin/zmx"), executable: true)
     }
     if let password { try write(password, to: dir.appendingPathComponent("password")) }
@@ -104,10 +104,12 @@ private struct FakeHosts {
   defer { try? FileManager.default.removeItem(atPath: base) }
   let open = base + "/open"
   try FileManager.default.createDirectory(atPath: open, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o755])
-  let long = base + "/" + String(repeating: "x", count: 80)
-  let good = base + "/good"
-  #expect(SSH.controlDirectory(candidates: [long, open, good]) == good)
-  #expect(SSH.controlDirectory(candidates: [long]) == nil)
+  // ssh binds `<dir>/<40 hex>.<16 random>` first: 45 bytes of directory fit, 46 don't.
+  let fits = base + "/" + String(repeating: "f", count: 45 - base.utf8.count - 1)
+  let tooLong = base + "/" + String(repeating: "t", count: 46 - base.utf8.count - 1)
+  #expect(fits.utf8.count == 45 && tooLong.utf8.count == 46)
+  #expect(SSH.controlDirectory(candidates: [tooLong, open, fits]) == fits)
+  #expect(SSH.controlDirectory(candidates: [tooLong]) == nil)
 }
 
 @Test func askpassAnswersOnlyPasswords() throws {
@@ -116,11 +118,18 @@ private struct FakeHosts {
   defer { try? FileManager.default.removeItem(atPath: dir) }
   let helper = try #require(SSH.askpassHelper(in: dir))
   let env = ["YATTY_SSH_SECRET": "s3cret pass"]
-  for prompt in ["me@box's password: ", "Enter passphrase for key '/Users/me/.ssh/id_ed25519': "] {
+  for prompt in [
+    "me@box's password: ", "Enter passphrase for key '/Users/me/.ssh/id_ed25519': ", "Password:", "(me@box) Password: ",
+    "Enter passphrase for key '/x/assword_key': ",
+  ] {
     let result = Run.runSync(helper, [prompt], env: env)
     #expect(result.ok && result.stdout == "s3cret pass\n", "\(prompt)")
   }
-  for prompt in ["Are you sure you want to continue connecting (yes/no/[fingerprint])? ", "Verification code: "] {
+  for prompt in [
+    "Are you sure you want to continue connecting (yes/no/[fingerprint])? ", "Verification code: ",
+    "One-time password (OATH) for me: ",
+    "The authenticity of host 'password-box (10.0.0.9)' can't be established.\nAre you sure you want to continue connecting (yes/no)? ",
+  ] {
     let result = Run.runSync(helper, [prompt], env: env)
     #expect(!result.ok && result.stdout.isEmpty, "\(prompt)")
   }
@@ -147,6 +156,9 @@ private struct FakeHosts {
   let box = try hosts.host("box")
   let odd = "we ird;$x 'q'"
   try FileManager.default.createDirectory(at: box.appendingPathComponent("home/\(odd)"), withIntermediateDirectories: true)
+  let newline = "new\nline"
+  try FileManager.default.createDirectory(at: box.appendingPathComponent("home/\(newline)"), withIntermediateDirectories: true)
+  #expect(try await SSH.probe(host: "box", path: "~/\(newline)", setup: hosts.setup).get().path.hasSuffix("/" + newline))
   let found = try await SSH.probe(host: "box", path: "~/\(odd)", setup: hosts.setup).get()
   let home = box.appendingPathComponent("home").path
   #expect(found == RemoteDirectory(path: home + "/" + odd, home: home, zmx: box.appendingPathComponent("bin/zmx").path))
@@ -210,7 +222,7 @@ private struct FakeHosts {
   let box = try hosts.host("box")
   let host = SSHHost(host: "box", home: "", zmx: box.appendingPathComponent("bin/zmx").path, directories: [])
   #expect(await SSH.kill(["yatty-1", "yatty-1-a b"], on: host, setup: hosts.setup))
-  #expect(hosts.zmxLog("box").map { $0.split(separator: "|").dropFirst().joined(separator: "|") } == ["kill|yatty-1|yatty-1-a b"])
+  #expect(hosts.zmxLog("box").map { $0.split(separator: "|").dropFirst(2).joined(separator: "|") } == ["kill|yatty-1|yatty-1-a b"])
 }
 
 /// The terminal's command, run as libghostty would: into the directory,
@@ -223,9 +235,18 @@ private struct FakeHosts {
   try FileManager.default.createDirectory(at: odd, withIntermediateDirectories: true)
   let host = SSHHost(host: "box", home: "", zmx: box.appendingPathComponent("bin/zmx").path, directories: [odd.path])
   let command = SSH.attachCommand(host: host, directory: odd.path, session: "yatty-0a1b", setup: hosts.setup)
-  let result = Run.runSync("/bin/bash", ["-c", "exec -l \(command)"], env: hosts.setup.environment)
+  var env = hosts.setup.environment
+  env["TERM"] = "xterm-ghostty"
+  let result = Run.runSync("/bin/bash", ["-c", "exec -l \(command)"], env: env)
   #expect(result.ok, "\(result.stderr)")
-  #expect(hosts.zmxLog("box") == ["\(canonicalPath(odd.path))|attach|yatty-0a1b|"])
+  // A TERM every host knows, not Ghostty's own.
+  #expect(hosts.zmxLog("box") == ["\(canonicalPath(odd.path))|xterm-256color|attach|yatty-0a1b|"])
+
+  // A "New Agent" session starts claude itself: nothing is typed.
+  let agent = SSH.attachCommand(
+    host: host, directory: odd.path, session: "yatty-0a1b-c", program: SSH.agentProgram, setup: hosts.setup)
+  _ = Run.runSync("/bin/bash", ["-c", "exec -l \(agent)"], env: env)
+  #expect(hosts.zmxLog("box").last == "\(canonicalPath(odd.path))|xterm-256color|attach|yatty-0a1b-c|" + SSH.agentProgram.joined(separator: "|") + "|")
 }
 
 @Test func hostsAndRemoteWorktreesPersist() throws {
@@ -235,9 +256,13 @@ private struct FakeHosts {
   #expect(decoded.hosts == state.hosts)
   let worktree = try #require(decoded.hosts.first?.worktrees.first)
   #expect(worktree.id == "ssh:box:/home/me/app")
+  // Two names for one machine never share a session.
+  #expect(worktree.sessionKey == worktree.id)
+  #expect(Worktree(path: "/x", branch: nil, head: nil, isMain: false).sessionKey == "/x")
   #expect(worktree.isRemote && worktree.exists)
   // A state file from before hosts existed.
-  #expect(try JSONDecoder().decode(StoredState.self, from: Data(#"{"repos":[]}"#.utf8)).hosts.isEmpty)
+  let old = try JSONDecoder().decode(StoredState.self, from: Data(#"{"repos":[]}"#.utf8))
+  #expect(old.hosts.isEmpty && old.remoteCleanup.isEmpty)
 }
 
 /// sshd runs the command through the remote login shell, whichever it is.

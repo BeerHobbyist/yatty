@@ -17,18 +17,19 @@ enum ProbeFailure: Error, Equatable {
 }
 
 extension SSH {
-  /// What the probe runs there: into the directory (or exit 3), where that
-  /// is, `$HOME`, and where zmx is. A non-interactive ssh has a thin PATH,
-  /// so the user's login shell is asked too.
+  /// What the probe runs there: into the directory (or exit 3), then where
+  /// that is, `$HOME` and where zmx is, NUL-separated after a marker (a
+  /// directory may hold a newline; a login script may print). A
+  /// non-interactive ssh has a thin PATH, so the login shell is asked too.
   static func probeScript(path: String) -> String {
     [
       "cd -- \(remotePathExpr(path)) || exit 3",
-      "pwd",
-      #"printf '%s\n' "$HOME""#,
       #"z=$(command -v zmx 2>/dev/null) || z=$("${SHELL:-/bin/sh}" -l -c 'command -v zmx' </dev/null 2>/dev/null | tail -n 1)"#,
-      #"printf '%s\n' "$z""#,
+      #"printf '\#(probeMarker)\0%s\0%s\0%s\0' "$PWD" "$HOME" "$z""#,
     ].joined(separator: "; ")
   }
+
+  static let probeMarker = "yatty-probe"
 
   /// The probe's answer, or why the directory can't be added.
   static func parseProbe(status: Int32, stdout: String, stderr: String, host: String, path: String)
@@ -41,15 +42,19 @@ extension SSH {
       }
       return .failure(.failed(connectError(host: host, stderr: stderr)))
     }
-    let lines = stdout.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    guard lines.count >= 3, lines[0].hasPrefix("/") else { return .failure(.failed("Couldn't read \(path) on \(host).")) }
-    let zmx = lines[2].trimmingCharacters(in: .whitespaces)
+    guard let start = stdout.range(of: probeMarker + "\0") else {
+      return .failure(.failed("Couldn't read \(path) on \(host)."))
+    }
+    let fields = stdout[start.upperBound...].split(separator: "\0", omittingEmptySubsequences: false).map(String.init)
+    guard fields.count >= 3, fields[0].hasPrefix("/") else { return .failure(.failed("Couldn't read \(path) on \(host).")) }
+
+    let zmx = fields[2].trimmingCharacters(in: .whitespacesAndNewlines)
     guard zmx.hasPrefix("/") else {
       return .failure(.failed(
         "zmx isn't installed on \(host). Yatty runs remote terminals in zmx so they outlive the connection: "
           + "install it there (github.com/neurosnap/zmx) and try again."))
     }
-    return .success(RemoteDirectory(path: lines[0], home: lines[1], zmx: zmx))
+    return .success(RemoteDirectory(path: fields[0], home: fields[1], zmx: zmx))
   }
 
   /// Checks a directory on `host` before it's added. With `password`, ssh's
@@ -88,13 +93,22 @@ extension SSH {
     return await setup.run(argv(host: host.host, command: command, tty: false, setup: setup), timeout: 20)
   }
 
+  /// What a remote "New Agent" session runs: claude through the login
+  /// shell, then that shell. Started by zmx, never typed, so it can't land
+  /// in a password prompt.
+  static let agentProgram = ["sh", "-c", #""${SHELL:-/bin/sh}" -l -c claude; exec "${SHELL:-/bin/sh}" -l"#]
+
   /// A remote pane's terminal: ssh with a terminal, into the directory, then
-  /// zmx attach (creating the session, with the user's login shell, if it's
-  /// new). Plain shell words for libghostty's `bash -c "exec -l …"`.
-  static func attachCommand(host: SSHHost, directory: String, session: String, setup: SSHSetup = .standard) -> String {
+  /// zmx attach (creating the session if it's new: the login shell, or
+  /// `program`). TERM is one every host knows; few have xterm-ghostty's
+  /// terminfo. Plain shell words for libghostty's `bash -c "exec -l …"`.
+  static func attachCommand(
+    host: SSHHost, directory: String, session: String, program: [String] = [], setup: SSHSetup = .standard
+  ) -> String {
     let remote = "cd -- \(remotePathExpr(directory)) && ZMX_NO_DETACH_KEY=1 exec "
-      + [host.zmx, "attach", session].map(shellQuote).joined(separator: " ")
-    return argv(host: host.host, command: remote, tty: true, setup: setup).map(shellQuote).joined(separator: " ")
+      + ([host.zmx, "attach", session] + program).map(shellQuote).joined(separator: " ")
+    let ssh = argv(host: host.host, command: remote, tty: true, setup: setup)
+    return (["/usr/bin/env", "TERM=xterm-256color"] + ssh).map(shellQuote).joined(separator: " ")
   }
 
   /// Whether `session` is running on `host`; nil when the host couldn't be

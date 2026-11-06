@@ -94,7 +94,8 @@ cat >"$tmp/config/yatty/state.json" <<EOF
               "directories": ["$json_dir"] }] }
 EOF
 printf '{ "agentCommand": "" }\n' >"$tmp/config/yatty/config.json"
-session="yatty-$(printf '%s' "$dir" | shasum -a 256 | cut -c1-10)"
+# Named after the host and the directory (Worktree.sessionKey).
+session="yatty-$(printf '%s' "$id" | shasum -a 256 | cut -c1-10)"
 rzmx() { ZMX_DIR="$tmp/rzmx" "$tmp/bin/zmx" "$@"; }
 launch() {
   XDG_CONFIG_HOME="$tmp/config" YATTY_STATE_DIR="$tmp/state" YATTY_ZMX_DIR="$tmp/zmx" YATTY_SSH="$tmp/ssh" \

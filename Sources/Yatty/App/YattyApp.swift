@@ -26,7 +26,8 @@ struct YattyApp: App {
       CommandGroup(replacing: .newItem) {
         Button("New Worktree…") { store.newWorktreeForSelection() }
           .keyboardShortcut("n")
-          .disabled(store.repos.isEmpty)
+          // A remote directory isn't a repository's: no repo to offer.
+          .disabled(store.repos.isEmpty || store.selectedWorktree?.isRemote == true)
         Button("Add Repository…") { store.addingRepository = true }
           .keyboardShortcut("o")
         Button("Add SSH Host…") { store.addingHost = AddHostRequest() }

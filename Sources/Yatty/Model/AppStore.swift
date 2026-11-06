@@ -29,6 +29,9 @@ final class AppStore {
   var repos: [Repo]
   /// SSH hosts and the directories on them, after the repositories.
   var hosts: [SSHHost] = []
+  /// Remote sessions still to end; see `RemoteCleanup`.
+  @ObservationIgnored var remoteCleanup: [RemoteCleanup] = []
+  @ObservationIgnored private var cleaningUp = false
   /// Per repository path, main working copy first.
   var worktrees: [String: [Worktree]] = [:]
   var loadErrors: [String: String] = [:]
@@ -108,6 +111,7 @@ final class AppStore {
       mergeMethod = stored.mergeMethod
       diffViewer = stored.diffViewer
       hosts = stored.hosts
+      remoteCleanup = stored.remoteCleanup
       reposKnown = true
     case .unreadable(let aside):
       repos = []
@@ -186,6 +190,7 @@ final class AppStore {
   func refreshAll() async {
     for repo in repos { await refresh(repo) }
     await reapOrphanSessions()
+    await retryRemoteCleanup()
     gitStatus.refresh()
     pullRequests.refreshAll()
   }
@@ -342,14 +347,42 @@ final class AppStore {
     return nil
   }
 
-  /// Forgets the directory and ends its sessions on the host (when it can be
-  /// reached); its files stay. A host left with none goes too.
+  /// Forgets the directory and ends its sessions on the host (now, or once
+  /// it can be reached); its files stay. A host left with none goes too.
   func removeRemoteDirectory(_ worktree: Worktree) async {
-    guard let index = hosts.firstIndex(where: { $0.host == worktree.host }) else { return }
+    guard hosts.contains(where: { $0.host == worktree.host }) else { return }
     if selection == worktree.id { selection = nil }
     await endTerminals(of: worktree)
+    // Found again: the list may have changed while the host was asked.
+    guard let index = hosts.firstIndex(where: { $0.host == worktree.host }) else { return }
     hosts[index].directories.removeAll { $0 == worktree.path }
     if hosts[index].directories.isEmpty { hosts.remove(at: index) }
+    saveState()
+  }
+
+  /// Ends the sessions a host couldn't be asked to end before. A password
+  /// host is only asked over a connection that's already up.
+  func retryRemoteCleanup() async {
+    guard !cleaningUp, !remoteCleanup.isEmpty, !Snapshot.isActive else { return }
+    cleaningUp = true
+    defer { cleaningUp = false }
+    for entry in remoteCleanup {
+      let host = SSHHost(host: entry.host, home: "", zmx: entry.zmx, needsPassword: entry.needsPassword)
+      if await SSH.kill(entry.sessions, on: host) {
+        remoteCleanup.removeAll { $0 == entry }
+        saveState()
+      }
+    }
+  }
+
+  /// Sessions `host` couldn't be asked to end now, for `retryRemoteCleanup`.
+  func remember(_ sessions: [String], toEndOn host: SSHHost) {
+    if let index = remoteCleanup.firstIndex(where: { $0.host == host.host && $0.zmx == host.zmx }) {
+      remoteCleanup[index].sessions = Array(Set(remoteCleanup[index].sessions + sessions)).sorted()
+    } else {
+      remoteCleanup.append(
+        RemoteCleanup(host: host.host, zmx: host.zmx, needsPassword: host.needsPassword, sessions: sessions.sorted()))
+    }
     saveState()
   }
 
@@ -495,6 +528,7 @@ final class AppStore {
     ConfigFiles.saveState(
       StoredState(
         repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
-        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod, diffViewer: diffViewer, hosts: hosts))
+        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod, diffViewer: diffViewer, hosts: hosts,
+        remoteCleanup: remoteCleanup))
   }
 }

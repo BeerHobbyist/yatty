@@ -19,6 +19,8 @@ enum TerminalCommand: Sendable {
   case title(String)
   /// The pane's command exited.
   case childExited
+  /// A key pressed on a terminal whose command had exited.
+  case closeAfterExit
 }
 
 enum GotoSplit: Sendable {
@@ -153,12 +155,14 @@ extension AppStore {
       failedPanes.insert(key)
       return
     }
-    let session = Zmx.sessionName(for: worktree.path, pane: key.pane)
+    let session = Zmx.sessionName(for: worktree.sessionKey, pane: key.pane)
+    let command = SSH.attachCommand(
+      host: host, directory: worktree.path, session: session, program: agent ? SSH.agentProgram : [])
     let launch = TerminalLaunch(
-      command: Snapshot.isActive ? "/bin/cat" : SSH.attachCommand(host: host, directory: worktree.path, session: session),
+      command: Snapshot.isActive ? "/bin/cat" : command,
       workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
       environment: [:],
-      initialInput: agent && !Snapshot.isActive ? "claude\n" : nil)
+      initialInput: nil)
     install(launch, for: key, app: app)
   }
 
@@ -181,7 +185,9 @@ extension AppStore {
 
   /// Starts every pane of every tab of the worktree that isn't running yet.
   func startTerminals(of worktree: Worktree) {
-    guard !Snapshot.isActive else { return }
+    // A remote one starts its panes as they're shown: a password host would
+    // otherwise ask once per hidden pane, each a login that could fail.
+    guard !Snapshot.isActive, !worktree.isRemote else { return }
     for pane in layout(for: worktree).allPanes {
       _ = terminal(for: PaneKey(worktree: worktree.id, pane: pane), in: worktree)
     }
@@ -256,6 +262,9 @@ extension AppStore {
       if let tab = layout.tab(containing: key.pane) { equalize(tab.id, in: worktree) }
     case .title(let title):
       if paneTitles[key] != title { paneTitles[key] = title }
+    case .closeAfterExit:
+      // On a dropped connection: go back, rather than end the session.
+      if disconnectedPanes.contains(key) { reconnect(key) } else { closePane(key) }
     case .childExited:
       if worktree.isRemote {
         remotePaneExited(key, in: worktree)
@@ -364,9 +373,10 @@ extension AppStore {
 
   /// Ends the panes' zmx sessions: here, or on the worktree's host.
   func endSessions(_ panes: [String], of worktree: Worktree) async {
-    let names = panes.map { Zmx.sessionName(for: worktree.path, pane: $0) }
+    let names = panes.map { Zmx.sessionName(for: worktree.sessionKey, pane: $0) }
     if worktree.isRemote {
-      if let host = host(of: worktree) { _ = await SSH.kill(names, on: host) }
+      // Unreachable now: they're ended once it can be reached.
+      if let host = host(of: worktree), !(await SSH.kill(names, on: host)) { remember(names, toEndOn: host) }
     } else {
       for name in names { await Zmx.kill(name) }
     }
@@ -378,9 +388,10 @@ extension AppStore {
   /// that's gone closes the pane; one still there, or a host that can't be
   /// asked, leaves it waiting to reconnect.
   private func remotePaneExited(_ key: PaneKey, in worktree: Worktree) {
-    disconnect(key)
+    // The terminal stays, showing what ssh said, under a Reconnect bar.
+    disconnectedPanes.insert(key)
     guard let host = host(of: worktree) else { return }
-    let session = Zmx.sessionName(for: worktree.path, pane: key.pane)
+    let session = Zmx.sessionName(for: worktree.sessionKey, pane: key.pane)
     Task {
       if await SSH.sessionExists(session, on: host) == false, disconnectedPanes.contains(key) {
         closePane(key)
@@ -388,15 +399,8 @@ extension AppStore {
     }
   }
 
-  /// The connection went: the terminal goes, the session stays, and the
-  /// pane offers to reconnect.
-  func disconnect(_ key: PaneKey) {
-    dropTerminal(key)
-    disconnectedPanes.insert(key)
-  }
-
   func reconnect(_ key: PaneKey) {
-    disconnectedPanes.remove(key)
+    dropTerminal(key)
     focusPane(key)
   }
 }
