@@ -199,21 +199,51 @@ struct WorktreeRow: View {
   @Environment(AppStore.self) private var store
 
   var body: some View {
+    let status = store.gitStatus.status(of: worktree)
+    let selected = store.selection == worktree.id
     Label {
-      HStack(spacing: 4) {
-        Text(store.label(for: worktree))
-          .foregroundStyle(worktree.exists ? .primary : .secondary)
-          .lineLimit(1)
-        if !worktree.exists {
-          Text("missing").font(.caption).foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 4) {
+          Text(store.label(for: worktree))
+            .foregroundStyle(worktree.exists ? .primary : .secondary)
+            .lineLimit(1)
+          if !worktree.exists {
+            Text("missing").font(.caption).foregroundStyle(.secondary)
+          }
+          if let changed = status?.changed, changed > 0 {
+            Text("●\(changed)").font(.caption.monospacedDigit()).foregroundStyle(.orange)
+              .help("\(changed) changed file\(changed == 1 ? "" : "s")")
+          }
+          Spacer(minLength: 4)
+          if let pullRequest = store.pullRequests.badge(for: worktree) {
+            PullRequestBadge(pullRequest: pullRequest) {
+              store.selection = worktree.id
+              store.showingPullRequest = true
+            }
+          }
+          AgentGlyph(state: store.agents.state(of: worktree))
         }
-        Spacer(minLength: 4)
-        AgentGlyph(state: store.agents.state(of: worktree))
+        if selected, let details = secondLine(status) {
+          Text(details).font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+        }
       }
     } icon: {
       Image(systemName: worktree.isMain ? "house" : "arrow.triangle.branch")
     }
     .help(worktree.branch ?? worktree.path)
+  }
+
+  /// The selected row's details: the branch when it isn't the name shown,
+  /// then +/− and ahead/behind, each only when there's something to say.
+  private func secondLine(_ status: GitStatus?) -> String? {
+    var parts: [String] = []
+    if let branch = worktree.branch, branch != store.label(for: worktree) { parts.append(branch) }
+    if let status {
+      if status.added + status.removed > 0 { parts.append("+\(status.added) −\(status.removed)") }
+      if status.ahead > 0 { parts.append("↑\(status.ahead)") }
+      if status.behind > 0 { parts.append("↓\(status.behind)") }
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: "  ")
   }
 }
 

@@ -2,7 +2,7 @@
 # Renders Yatty with sample data to build/snapshots/<scene>.png, in a
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
-#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents
+#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -20,7 +20,9 @@ printf '{ "agentCommand": "" }\n' > "$sandbox/config/yatty/config.json"
 # A sample repository with two worktrees.
 repo="$sandbox/repos/sample-app"
 git init -q -b main "$repo"
-git -C "$repo" -c user.name=y -c user.email=y@y commit -q --allow-empty -m init
+printf '# Sample\n' > "$repo/README.md"
+git -C "$repo" add README.md
+git -C "$repo" -c user.name=y -c user.email=y@y commit -q -m init
 git -C "$repo" worktree add -q "$repo/.worktrees/login" -b feature/login
 git -C "$repo" worktree add -q "$repo/.worktrees/crash-on-start" -b fix/crash-on-start
 login="$repo/.worktrees/login"
@@ -90,14 +92,29 @@ EOF
     echo "working $now" > "$sandbox/config/yatty/agents/$(session "$repo/.worktrees/crash-on-start")"
     echo "done $now" > "$sandbox/config/yatty/agents/$(session "$repo")"
     ;;
+  status)
+    cat > "$state" <<EOF
+{ "repos": [{ "name": "sample-app", "path": "$repo", "nameWithOwner": "me/sample-app" }], "selectedWorktree": "$login" }
+EOF
+    printf 'More\nlines\n' >> "$login/README.md"
+    touch "$login/new-file.swift"
+    cat > "$sandbox/badges.json" <<'EOF'
+{ "feature/login": { "number": 42, "title": "Login with magic links", "checks": "pass" },
+  "fix/crash-on-start": { "number": 41, "title": "Fix the crash on start", "checks": "fail", "isDraft": true },
+  "main": null }
+EOF
+    export YATTY_BADGE_FIXTURE="$sandbox/badges.json"
+    ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac
 
 rm -f "$out"
+# Window restoration off: snapshots share the real app's bundle id, so they'd
+# reopen at whatever size the real window last had.
 log="$sandbox/app.log"
 XDG_CONFIG_HOME="$sandbox/config" YATTY_ZMX_DIR="$sandbox/zmx" \
   YATTY_SNAPSHOT="$out" YATTY_SNAPSHOT_DELAY="${YATTY_SNAPSHOT_DELAY:-3}" \
-  "$app" >"$log" 2>&1 || true
+  "$app" -ApplePersistenceIgnoreState YES >"$log" 2>&1 || true
 grep '^snapshot:' "$log" | sort -u >&2 || true
 [ -f "$out" ] || { echo "no snapshot written" >&2; exit 1; }
 echo "$out"

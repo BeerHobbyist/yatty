@@ -74,17 +74,19 @@ Plan: `2026-11-06-phase-3-github-worktrees.md`.
 - [x] Worktree labels: rename a worktree's display name (stored by worktree path); branch and directory unchanged.
 - [x] A worktree whose directory vanished shows as missing and can be closed.
 
-## Phase 4 — Agent status and notifications (in progress)
+## Phase 4 — Agent status and notifications ✅
 
 Plan: `2026-11-06-phase-4-agent-status.md`.
 
-- [ ] Agents Yatty starts run with Claude Code hooks (a `--settings` file under `~/.config/yatty/`) writing `<state> <epoch>` per pane under `~/.config/yatty/agents/`: needs you, working, done, idle.
-- [ ] Optional "Track every claude": the same hooks merged into `~/.claude/settings.json` (asks first, reversible, idempotent), inert outside Yatty.
-- [ ] Sidebar shows each worktree's most urgent agent status, animated (working spins, needs-you pulses); "done" clears once viewed; stale reports corrected against pane activity.
-- [ ] A system notification when an agent needs you or finishes while you aren't looking at it; clicking it opens that worktree and pane.
-- [ ] "Next agent that needs you" command with a shortcut, and agent counts in the sidebar footer.
+- [x] Agents Yatty starts run with Claude Code hooks (a `--settings` file under `~/.config/yatty/`) writing `<state> <epoch>` per pane under `~/.config/yatty/agents/`: needs you, working, done, idle.
+- [x] Optional "Track every claude": the same hooks merged into `~/.claude/settings.json` (asks first, reversible, idempotent), inert outside Yatty.
+- [x] Sidebar shows each worktree's most urgent agent status, animated (working spins, needs-you pulses); "done" clears once viewed; stale reports corrected against pane activity.
+- [x] A system notification when an agent needs you or finishes while you aren't looking at it; clicking it opens that worktree and pane.
+- [x] "Next agent that needs you" command with a shortcut, and agent counts in the sidebar footer.
 
-## Phase 5 — Git status and pull requests
+## Phase 5 — Git status and pull requests (in progress)
+
+Plan: `2026-11-06-phase-5-git-status-prs.md`.
 
 - [ ] Sidebar: uncommitted-file count, and for the selected worktree: branch, +/−, ahead/behind; refreshed every 5s and on agent state changes.
 - [ ] PR badge per worktree (open PR for the branch, else a merged one that was this branch's), coloured by CI, draft and merged variants; refreshed every 60s, paused while the app is inactive.
@@ -122,3 +124,4 @@ Plan: `2026-11-06-phase-4-agent-status.md`.
 | 2026-11-06 | 1 — app shell and worktrees | `e19b370` |
 | 2026-11-06 | 2 — tabs and splits (two verifier rounds; snapshots checked) | `8504a15`…`ecfbb85` |
 | 2026-11-06 | 3 — repositories and worktrees from GitHub (verifier + re-verify) | `16ad5ae`…`503ca7f` |
+| 2026-11-06 | 4 — agent status and notifications (verifier + re-verify) | `c8d8216`…`040e347` |

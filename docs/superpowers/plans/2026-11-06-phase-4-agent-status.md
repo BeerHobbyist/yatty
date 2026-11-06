@@ -10,6 +10,10 @@
 
 **Spec:** roadmap Phase 4; agentree `docs/DEVLOG.md` "Agent status" and `src/services/agents.ts` (hook events, `hookCommand`, `withStatusHooks`, `effectiveState`, `combineReports`, `withGlobalHooks`).
 
+## Status
+
+Done. Verifier round 1: 4 findings fixed (`cd4c2ff`); re-verify: 3 new, 2 fixed (`040e347`). Open, accepted: moving the highlight inside a prompt counts as answering it (agentree's tmux heuristic had the same blind spot); the generic PreToolUse "working" hook was dropped (deviates from Task 1 below).
+
 ## Global Constraints
 
 See the roadmap. Hooks print nothing (Claude feeds SessionStart/UserPromptSubmit stdout into the conversation) and do nothing outside a Yatty terminal. Report files are written atomically (`.tmp` + `mv`). The state words stay agentree's: `needs-action`, `working`, `done`, `idle`. Fenced agents may write `~/.config/yatty/agents/` (fence allows `~/.config/**`) and never reach zmx.
@@ -43,7 +47,7 @@ See the roadmap. Hooks print nothing (Claude feeds SessionStart/UserPromptSubmit
   - `static func withStatusHooks(_ command: String, settingsPath: String) -> String` — agentree's rule: if a word is exactly `claude` and no `--settings` follows it, append `--settings '<path>'`.
 - Pane environment: `YATTY_AGENT_DIR` and `YATTY_PANE=<zmx session name>` added in `startTerminal`; the agent command typed into a new session goes through `withStatusHooks`.
 
-- [ ] Tests: `reportParses`, `stateOrdersByUrgency`, `interruptedWorkBecomesIdle`, `answeredPromptBecomesWorking`, `combinePicksMostUrgentThenNewest`, `statusHooksAppendOnlyForClaude` (`caffeinate -is fence -- claude` gets it; `fence --settings x -- claude` gets it; `claude --settings mine.json` doesn't; `codex` doesn't), `hookCommandIsSilentAndGuarded`, `settingsListEveryEvent`.
+- [x] Tests: `reportParses`, `stateOrdersByUrgency`, `interruptedWorkBecomesIdle`, `answeredPromptBecomesWorking`, `combinePicksMostUrgentThenNewest`, `statusHooksAppendOnlyForClaude` (`caffeinate -is fence -- claude` gets it; `fence --settings x -- claude` gets it; `claude --settings mine.json` doesn't; `codex` doesn't), `hookCommandIsSilentAndGuarded`, `settingsListEveryEvent`.
 
 ### Task 2: Track every claude (global hooks)
 
@@ -55,7 +59,7 @@ See the roadmap. Hooks print nothing (Claude feeds SessionStart/UserPromptSubmit
 - `static func isInstalled() -> Bool`, `static func setInstalled(_ on: Bool) throws` — a file that isn't valid JSON is left alone (throws `GitError("… isn't valid JSON")`).
 - Menu: Agents ▸ "Track Every Claude…" (checkmark when on); turning it on asks first (what it does, that it's reversible).
 
-- [ ] Tests: `mergeKeepsOtherHooksAndKeys`, `mergeIsIdempotent`, `removeLeavesNoTrace`.
+- [x] Tests: `mergeKeepsOtherHooksAndKeys`, `mergeIsIdempotent`, `removeLeavesNoTrace`.
 
 ### Task 3: Monitor, sidebar, jump, notifications
 
@@ -71,9 +75,9 @@ See the roadmap. Hooks print nothing (Claude feeds SessionStart/UserPromptSubmit
 - `AppStore.jumpToNextAgent()` — the next worktree in sidebar order after the selected one whose agent needs you, else is done; selects it and focuses that pane. Menu Agents ▸ "Go to Next Agent" ⌘⇧J; footer counts click to it too.
 - `AgentGlyph(state:)` — needs-action: `exclamationmark.circle.fill`, orange, pulsing (`.symbolEffect(.pulse)`); working: `circle.dotted`, accent, rotating; done: `checkmark.circle.fill`, green; idle: nothing. Sidebar row: glyph before the label; a folded repository shows its most urgent glyph.
 
-- [ ] Tests: `notifyOnlyForNewReportsOffScreen`, `jumpOrderWrapsAndPrefersNeedsAction` (on a pure `AgentMonitor.nextTarget(order:states:after:)`).
-- [ ] Snapshot scene `agents`: sample reports (needs-action, working, done) under the sandbox's agents directory → sidebar glyphs and footer counts.
+- [x] Tests: `notifyOnlyForNewReportsOffScreen`, `jumpOrderWrapsAndPrefersNeedsAction` (on a pure `AgentMonitor.nextTarget(order:states:after:)`).
+- [x] Snapshot scene `agents`: sample reports (needs-action, working, done) under the sandbox's agents directory → sidebar glyphs and footer counts.
 
 ### Task 4: Verify and commit
 
-- [ ] `make test`, `make app`, snapshots; fresh `verifier` on this plan + roadmap Phase 4 + Review Focus; fix; one re-verify round; tick the roadmap; progress-log row; commit.
+- [x] `make test`, `make app`, snapshots; fresh `verifier` on this plan + roadmap Phase 4 + Review Focus; fix; one re-verify round; tick the roadmap; progress-log row; commit.

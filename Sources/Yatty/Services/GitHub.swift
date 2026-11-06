@@ -95,7 +95,7 @@ enum GitHub {
     return stderr.isEmpty ? "gh failed (exit \(result.status))." : stderr
   }
 
-  private static func run(_ args: [String]) async throws -> Data {
+  static func run(_ args: [String]) async throws -> Data {
     let result = await Run.run("/usr/bin/env", ["gh"] + args)
     guard result.ok else { throw GitError(message: errorMessage(for: result)) }
     return Data(result.stdout.utf8)

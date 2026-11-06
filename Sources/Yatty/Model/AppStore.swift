@@ -52,6 +52,9 @@ final class AppStore {
   let config = ConfigFiles.loadConfig()
   let catalog = RepoCatalog()
   let agents = AgentMonitor()
+  let gitStatus = GitStatusMonitor()
+  let pullRequests = PullRequestStore()
+  var showingPullRequest = false
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
   var trackingEveryClaude = ClaudeSettings.isInstalled()
@@ -63,6 +66,7 @@ final class AppStore {
   /// Worktrees being closed or removed: no terminal may start for them.
   @ObservationIgnored var retiring: Set<String> = []
   @ObservationIgnored var focusWhenStarted: PaneKey?
+  @ObservationIgnored private var excludeChecked: Set<String> = []
 
   /// False when state.json couldn't be read: the repos it listed are unknown,
   /// so their sessions must not be reaped as orphans.
@@ -88,6 +92,8 @@ final class AppStore {
     }
     AgentHooks.install()
     agents.start(store: self)
+    gitStatus.start(store: self)
+    pullRequests.start(store: self)
     notificationDelegate.store = self
     if !Snapshot.isActive { UNUserNotificationCenter.current().delegate = notificationDelegate }
     Task { await refreshAll() }
@@ -127,6 +133,18 @@ final class AppStore {
   func refreshAll() async {
     for repo in repos { await refresh(repo) }
     await reapOrphanSessions()
+    gitStatus.refresh()
+    pullRequests.refreshAll()
+  }
+
+  /// An agent changed state: it has probably just edited or pushed.
+  func agentStatesChanged(in worktreeIDs: Set<String>) {
+    gitStatus.refresh()
+    for repo in repos {
+      for worktree in worktrees[repo.id] ?? [] where worktreeIDs.contains(worktree.id) {
+        pullRequests.refresh(worktree, in: repo)
+      }
+    }
   }
 
   /// Ends Yatty sessions no known worktree owns: their worktree was deleted,
@@ -144,6 +162,9 @@ final class AppStore {
   }
 
   func refresh(_ repo: Repo) async {
+    // `.worktrees/` must not make the main copy look dirty, however its
+    // worktrees were made (once per repository per launch).
+    if excludeChecked.insert(repo.id).inserted { await Git.ignoreWorktreesDir(root: repo.path) }
     do {
       let list = try await Git.listWorktrees(root: repo.path)
       let alive = Set(list.map(\.id))

@@ -106,7 +106,11 @@ final class AgentMonitor {
         notify(key, state)
       }
     }
-    if states != panes { panes = states }
+    if states != panes {
+      let changed = Set(states.keys.filter { states[$0] != panes[$0] }.map(\.worktree))
+      panes = states
+      store.agentStatesChanged(in: changed)
+    }
   }
 
   private func sample(_ session: String, report: AgentReport, now: Int) async {
