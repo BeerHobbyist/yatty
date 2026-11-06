@@ -42,6 +42,8 @@ extension AppStore {
     case .tabList: return tabList(request, in: worktree)
     case .tabNew: return try tabNew(request, in: worktree, sandboxed: sandboxed)
     case .tabRead:
+      // The CLI checks it too, but anything can write to the socket.
+      if let lines = request.lines, lines < 1 { throw CLIError("--lines needs a positive number") }
       let (tab, number) = try cliTab(request.tab, in: worktree)
       guard let history = await Zmx.history(Zmx.sessionName(for: worktree.path, pane: tab.focusedPane)) else {
         throw CLIError("tab \(number)'s terminal isn't running")
@@ -62,9 +64,13 @@ extension AppStore {
       return ""
     case .tabRename:
       let (tab, _) = try cliTab(request.tab, in: worktree)
-      guard let name = request.name, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
+      guard let name = request.name?.trimmingCharacters(in: .whitespacesAndNewlines) else {
         throw CLIError("rename to what? give a NAME")
       }
+      if let bad = CLIRules.badName(name) { throw CLIError(bad) }
+      var others = tabTitles(in: worktree)
+      if let index = layout(for: worktree).tabs.firstIndex(where: { $0.id == tab.id }) { others[index] = "" }
+      if let clash = CLIRules.nameClash(name, titles: others) { throw CLIError(clash) }
       renameTab(tab.id, to: name, in: worktree)
       return ""
     case .tabClose:
@@ -130,6 +136,7 @@ extension AppStore {
   /// one burst can't both find a name free.
   private func tabNew(_ request: CLIRequest, in worktree: Worktree, sandboxed: Bool) throws -> String {
     let name = request.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let name, let bad = CLIRules.badName(name) { throw CLIError(bad) }
     if let clash = CLIRules.nameClash(name, titles: tabTitles(in: worktree)) { throw CLIError(clash) }
     var cwd = request.cwd
     // A sandboxed one moves there inside the sandbox; asking the app whether
@@ -145,7 +152,8 @@ extension AppStore {
     let tabID = "t" + newPaneID()
     paneLaunches[key] = PaneLaunch(input: CLIRules.commandLine(request.command), cwd: cwd)
     updateLayout(worktree.id) {
-      $0.addTab(pane: key.pane, id: tabID, select: request.select)
+      // At the end, as agentree does: the number it prints stays the tab's.
+      $0.addTab(pane: key.pane, id: tabID, select: request.select, atEnd: true)
       if let name { $0.rename(tabID, to: name) }
       if sandboxed { $0.sandboxed.insert(key.pane) }
     }

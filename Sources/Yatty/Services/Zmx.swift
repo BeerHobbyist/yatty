@@ -54,7 +54,7 @@ enum Zmx {
 
   /// Yatty's live sessions, or nil when zmx couldn't be asked.
   static func sessions() async -> Set<String>? {
-    let result = await Run.run(executable, ["list", "--short"], env: environment)
+    let result = await Run.run(executable, ["list", "--short"], env: environment, timeout: 10)
     guard result.ok else { return nil }
     return Set(result.stdout.split(separator: "\n").compactMap { $0.split(separator: " ").first.map(String.init) })
   }

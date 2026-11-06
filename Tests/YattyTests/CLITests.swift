@@ -252,3 +252,76 @@ private let inside = ["YATTY_WORKTREE": "/w", "YATTY_PANE": "yatty-abc-1f2e3d"]
   #expect(viaSandbox.output.hasPrefix("sandbox:"))
   #expect((try FileManager.default.attributesOfItem(atPath: dir + "/app.sock")[.posixPermissions] as? Int) == 0o600)
 }
+
+// MARK: Verifier findings
+
+@Test func negativeLineCountsCantCrash() {
+  #expect(CLIRules.lastLines("a\nb", count: -1) == "")
+  #expect(CLIRules.lastLines("a\nb", count: 0) == "")
+}
+
+/// `tab new -- WORDS` is typed into the user's login shell: each word must
+/// come out as itself in every shell Yatty may find there.
+@Test func typedWordsMeanThemselvesInEveryShell() throws {
+  let words = [#"a\b"#, #"tail\"#, "it's", "$HOME", "*", "", "x\ny", #"\'"#, "ünï 🙂"]
+  let line = try #require(CLIRules.commandLine(["printf", "[%s]"] + words))
+  let expected = words.map { "[\($0)]" }.joined()
+  let shells = ["/bin/sh", "/bin/bash", "/bin/zsh", "/opt/homebrew/bin/fish", "/usr/local/bin/fish"]
+    .filter { FileManager.default.isExecutableFile(atPath: $0) }
+  #expect(shells.count >= 3)
+  for shell in shells {
+    let result = Run.runSync(shell, ["-c", line])
+    #expect(result.stdout == expected, "\(shell): \(result.stdout) \(result.stderr)")
+  }
+}
+
+@Test func tabNamesArentBlankOrNumbers() throws {
+  #expect(CLIRules.badName("  ") != nil)
+  #expect(CLIRules.badName("3") != nil)
+  #expect(CLIRules.badName("dev") == nil)
+  #expect(CLIRules.badName("v2") == nil)
+  #expect(throws: CLIArgumentError.self) { try CLIArguments.parse(["tab", "new", "--name", "  "], env: inside) }
+}
+
+@Test func cliTabsGoLastSoTheirNumbersHold() {
+  var layout = WorktreeLayout.initial
+  layout.addTab(pane: "a", id: "ta", select: false, atEnd: true)
+  layout.addTab(pane: "b", id: "tb", select: false, atEnd: true)
+  #expect(layout.tabs.map(\.id) == ["t0", "ta", "tb"])
+}
+
+@Test func statusNeedsNoWorktree() throws {
+  #expect(try CLIArguments.parse(["status"], env: [:]).op == .status)
+}
+
+/// Idle clients filling one socket get a quick "busy" there and never slow
+/// the other one.
+@Test func idleFloodStaysOnItsSocket() async throws {
+  let dir = "/private/tmp/yatty-test-\(getuid())/flood"
+  let handler: CLIServer.Handler = { _, sandboxed in CLIResponse(ok: true, output: sandboxed ? "sandbox" : "app") }
+  let app = try #require(CLIServer(path: dir + "/app.sock", sandboxed: false, handler: handler))
+  let sandbox = try #require(CLIServer(path: dir + "/sandbox.sock", sandboxed: true, handler: handler))
+  defer {
+    app.stop()
+    sandbox.stop()
+  }
+  var idle: [Int32] = []
+  for _ in 0..<CLIServer.maxConnections {
+    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    var address = try #require(CLIServer.address(dir + "/sandbox.sock"))
+    let connected = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+    }
+    #expect(connected == 0)
+    idle.append(fd)
+  }
+  defer { idle.forEach { close($0) } }
+  try await Task.sleep(for: .milliseconds(200))
+
+  let started = Date()
+  let busy = try await Task.detached { try CLIClient.send(CLIRequest(op: .status), to: dir + "/sandbox.sock") }.value
+  #expect(busy.error == "Yatty is busy: try again")
+  let other = try await Task.detached { try CLIClient.send(CLIRequest(op: .status), to: dir + "/app.sock") }.value
+  #expect(other.output == "app")
+  #expect(Date().timeIntervalSince(started) < 1)
+}

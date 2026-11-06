@@ -11,6 +11,14 @@ final class CLIServer: @unchecked Sendable {
 
   /// Longest request read: a `tab send` of a long prompt fits many times over.
   static let maxRequest = 1 << 20
+  /// Connections served at once, per socket: a flood of idle or non-reading
+  /// clients holds no more threads than this, and never slows the other socket.
+  static let maxConnections = 8
+  /// How long a client has to send its request, and to take its answer.
+  static let ioDeadline = 5
+  /// Reads and writes block; they get threads of their own, never Swift
+  /// concurrency's few.
+  private static let io = DispatchQueue(label: "yatty.cli.io", qos: .userInitiated, attributes: .concurrent)
 
   let path: String
   private let fd: Int32
@@ -45,12 +53,18 @@ final class CLIServer: @unchecked Sendable {
     self.path = path
     self.fd = fd
     source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "yatty.cli.accept"))
+    let active = ConnectionCount()
     source.setEventHandler {
       while true {
         let connection = accept(fd, nil, nil)
         guard connection >= 0 else { return }
-        DispatchQueue.global(qos: .userInitiated).async {
-          CLIServer.serve(connection, sandboxed: sandboxed, handler: handler)
+        guard active.enter(limit: CLIServer.maxConnections) else {
+          // Still non-blocking, like the listener: a short answer, never a wait.
+          CLIServer.reply(.failure("Yatty is busy: try again"), to: connection)
+          continue
+        }
+        CLIServer.io.async {
+          CLIServer.serve(connection, sandboxed: sandboxed, handler: handler) { active.leave() }
         }
       }
     }
@@ -68,30 +82,42 @@ final class CLIServer: @unchecked Sendable {
 
   // MARK: Connections
 
-  private static func serve(_ connection: Int32, sandboxed: Bool, handler: @escaping Handler) {
+  /// Reads the request, answers it, closes the connection, then `done`.
+  private static func serve(
+    _ connection: Int32, sandboxed: Bool, handler: @escaping Handler, done: @escaping @Sendable () -> Void
+  ) {
     _ = fcntl(connection, F_SETFL, fcntl(connection, F_GETFL) & ~O_NONBLOCK)
-    // A client that connects and says nothing doesn't hold a thread for long.
-    var timeout = timeval(tv_sec: 5, tv_usec: 0)
-    setsockopt(connection, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    // A client that doesn't read its answer can't hold the thread writing it.
+    var timeout = timeval(tv_sec: ioDeadline, tv_usec: 0)
+    setsockopt(connection, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 
-    guard let line = readLine(connection) else {
+    guard let line = readLine(connection),
+      let request = try? JSONDecoder().decode(CLIRequest.self, from: line)
+    else {
       reply(.failure("bad request"), to: connection)
-      return
-    }
-    guard let request = try? JSONDecoder().decode(CLIRequest.self, from: line) else {
-      reply(.failure("bad request"), to: connection)
+      done()
       return
     }
     Task {
       let response = await handler(request, sandboxed)
-      reply(response, to: connection)
+      io.async {
+        reply(response, to: connection)
+        done()
+      }
     }
   }
 
+  /// The request line, within `ioDeadline` in all: a client sending a byte
+  /// at a time doesn't get a fresh timeout per byte.
   private static func readLine(_ connection: Int32) -> Data? {
+    let deadline = Date().addingTimeInterval(TimeInterval(ioDeadline))
     var data = Data()
     var buffer = [UInt8](repeating: 0, count: 65536)
     while data.count <= maxRequest {
+      let left = deadline.timeIntervalSinceNow
+      guard left > 0 else { return nil }
+      var timeout = timeval(tv_sec: Int(left), tv_usec: Int32((left - left.rounded(.down)) * 1_000_000))
+      setsockopt(connection, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
       let count = read(connection, &buffer, buffer.count)
       guard count > 0 else { return nil }
       if let end = buffer[0..<count].firstIndex(of: UInt8(ascii: "\n")) {
@@ -114,6 +140,25 @@ final class CLIServer: @unchecked Sendable {
         guard written > 0 else { return }
         offset += written
       }
+    }
+  }
+
+  /// Connections being served, counted across the accept queue and the
+  /// threads serving them.
+  private final class ConnectionCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func enter(limit: Int) -> Bool {
+      lock.withLock {
+        guard count < limit else { return false }
+        count += 1
+        return true
+      }
+    }
+
+    func leave() {
+      lock.withLock { count -= 1 }
     }
   }
 

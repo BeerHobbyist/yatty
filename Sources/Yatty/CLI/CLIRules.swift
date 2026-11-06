@@ -56,6 +56,15 @@ enum CLIRules {
     return "a tab named \"\(name)\" is already open (\(clash + 1)); use it, or close it first"
   }
 
+  /// Why `name` can't name a tab: blank, or a number, which TAB would read
+  /// as a position.
+  static func badName(_ name: String) -> String? {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty { return "a tab name can't be blank" }
+    if trimmed.allSatisfy(\.isNumber) { return "a tab name can't be a number: numbers name tabs by position" }
+    return nil
+  }
+
   static func noTab(_ ref: String, titles: [String]) -> String {
     "no tab \"\(ref)\"; tabs: " + titles.enumerated().map { "\($0.offset + 1):\($0.element)" }.joined(separator: ", ")
   }
@@ -66,8 +75,30 @@ enum CLIRules {
     switch words.count {
     case 0: nil
     case 1: words[0]
-    default: words.map(shellQuote).joined(separator: " ")
+    default: words.map(portableQuote).joined(separator: " ")
     }
+  }
+
+  /// A word quoted to mean itself in sh, bash, zsh and fish alike: it's typed
+  /// into the user's login shell, whichever that is. Inside single quotes
+  /// fish reads `\\` and `\'` as escapes and sh doesn't, so backslashes and
+  /// quotes go outside them, escaped, where both read them the same.
+  static func portableQuote(_ word: String) -> String {
+    if word.isEmpty { return "''" }
+    var out = ""
+    var quoted = false
+    for character in word {
+      if character == "'" || character == "\\" {
+        if quoted { out += "'" }
+        quoted = false
+        out += "\\" + String(character)
+      } else {
+        if !quoted { out += "'" }
+        quoted = true
+        out.append(character)
+      }
+    }
+    return quoted ? out + "'" : out
   }
 
   /// The last `count` lines of a terminal's history, without the blank
@@ -76,7 +107,7 @@ enum CLIRules {
     // "\r\n" is one Character to Swift, so it's split on as such.
     var lines = history.split(omittingEmptySubsequences: false) { $0 == "\n" || $0 == "\r\n" }
     while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
-    return lines.suffix(count).joined(separator: "\n")
+    return lines.suffix(max(count, 0)).joined(separator: "\n")
   }
 
   /// A key named the way tmux names it, as the bytes a terminal sends.

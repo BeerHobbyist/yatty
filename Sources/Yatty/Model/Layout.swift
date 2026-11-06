@@ -175,10 +175,10 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
     tabs.first { $0.root.panes.contains(pane) }
   }
 
-  /// A new tab after the selected one, selected unless told not to.
-  mutating func addTab(pane: String, id: String, select: Bool = true) {
+  /// A new tab after the selected one (or last), selected unless told not to.
+  mutating func addTab(pane: String, id: String, select: Bool = true, atEnd: Bool = false) {
     let tab = TerminalTab(id: id, root: .pane(pane), focusedPane: pane)
-    if let index = tabs.firstIndex(where: { $0.id == selectedTab }) {
+    if !atEnd, let index = tabs.firstIndex(where: { $0.id == selectedTab }) {
       tabs.insert(tab, at: index + 1)
     } else {
       tabs.append(tab)

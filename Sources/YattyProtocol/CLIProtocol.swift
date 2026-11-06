@@ -160,7 +160,8 @@ public enum CLIArguments {
     }
     request.worktree = worktree
     request.pane = env["YATTY_PANE"].flatMap { $0.isEmpty ? nil : $0 }
-    guard request.worktree != nil else {
+    // Every worktree's: it needs none of its own.
+    guard request.worktree != nil || request.op == .status else {
       throw CLIArgumentError.usage("not in a Yatty terminal: pass --worktree PATH")
     }
     return request
@@ -182,7 +183,9 @@ public enum CLIArguments {
         case "--select": request.select = true
         case "--json": request.json = true
         case "--name", "--cwd":
-          guard let value = words.first, !value.isEmpty else { throw CLIArgumentError.usage("\(word) needs a value") }
+          guard let value = words.first, !value.trimmingCharacters(in: .whitespaces).isEmpty else {
+            throw CLIArgumentError.usage("\(word) needs a value")
+          }
           if word == "--name" { request.name = value } else { request.cwd = value }
           words = words.dropFirst()
         default:
