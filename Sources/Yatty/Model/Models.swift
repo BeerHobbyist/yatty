@@ -65,8 +65,10 @@ struct YattyConfig: Codable {
   var agentCommand: String = "caffeinate -is claude"
   /// Where repositories picked from GitHub are cloned; `~` is the home folder.
   var cloneDirectory: String = "~/yatty"
+  /// System notifications when an agent needs you or finishes elsewhere.
+  var notifications: Bool = true
 
-  enum CodingKeys: String, CodingKey { case agentCommand, cloneDirectory }
+  enum CodingKeys: String, CodingKey { case agentCommand, cloneDirectory, notifications }
 
   init() {}
 
@@ -74,6 +76,7 @@ struct YattyConfig: Codable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     agentCommand = try container.decodeIfPresent(String.self, forKey: .agentCommand) ?? agentCommand
     cloneDirectory = try container.decodeIfPresent(String.self, forKey: .cloneDirectory) ?? cloneDirectory
+    notifications = try container.decodeIfPresent(Bool.self, forKey: .notifications) ?? notifications
   }
 
   var cloneRoot: URL {

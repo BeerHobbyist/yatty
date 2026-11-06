@@ -116,3 +116,23 @@ private func hookCommands(_ settings: [String: Any]) -> [String] {
   #expect(hookCommands(removed) == ["say done"])
   #expect(ClaudeSettings.merging(ClaudeSettings.merging([:], install: true), install: false).isEmpty)
 }
+
+@Test func notifyOnlyForNewReportsOffScreen() {
+  let launch = 1000
+  #expect(AgentMonitor.shouldNotify(old: .working, new: .needsAction, since: 1001, launchedAt: launch, viewing: false))
+  #expect(AgentMonitor.shouldNotify(old: .working, new: .done, since: 1001, launchedAt: launch, viewing: false))
+  // Old news found at launch, the pane on screen, no change, or not worth a ping.
+  #expect(!AgentMonitor.shouldNotify(old: nil, new: .done, since: 999, launchedAt: launch, viewing: false))
+  #expect(!AgentMonitor.shouldNotify(old: .working, new: .needsAction, since: 1001, launchedAt: launch, viewing: true))
+  #expect(!AgentMonitor.shouldNotify(old: .needsAction, new: .needsAction, since: 1001, launchedAt: launch, viewing: false))
+  #expect(!AgentMonitor.shouldNotify(old: .idle, new: .working, since: 1001, launchedAt: launch, viewing: false))
+}
+
+@Test func jumpOrderWrapsAndPrefersNeedsAction() {
+  let order = ["a", "b", "c", "d"]
+  let states: [String: AgentState] = ["a": .needsAction, "b": .done, "d": .needsAction]
+  #expect(AgentMonitor.nextTarget(order: order, states: states, after: "a") == "d")
+  #expect(AgentMonitor.nextTarget(order: order, states: states, after: "d") == "a")
+  #expect(AgentMonitor.nextTarget(order: order, states: ["b": .done, "c": .working], after: "c") == "b")
+  #expect(AgentMonitor.nextTarget(order: order, states: ["c": .working], after: nil) == nil)
+}

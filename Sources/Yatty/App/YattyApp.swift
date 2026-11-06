@@ -35,6 +35,16 @@ struct YattyApp: App {
           .disabled(store.selectedWorktree.map { $0.isMain } ?? true)
       }
       TerminalCommands(store: store)
+      CommandMenu("Agents") {
+        Button("Go to Next Agent") { store.jumpToNextAgent() }
+          .keyboardShortcut("j", modifiers: [.command, .shift])
+        Divider()
+        Toggle(
+          "Track Every Claude",
+          isOn: Binding(
+            get: { store.trackingEveryClaude },
+            set: { on in if on { store.confirmingTracking = true } else { store.setTracking(false) } }))
+      }
     }
   }
 }

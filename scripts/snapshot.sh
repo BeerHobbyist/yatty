@@ -2,7 +2,7 @@
 # Renders Yatty with sample data to build/snapshots/<scene>.png, in a
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
-#   new-worktree-branch, new-worktree-existing, new-worktree-pr
+#   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -78,6 +78,17 @@ EOF
  {"number":37,"title":"Translate the settings screen into Polish, with a title long enough to need cutting","headRefName":"main","isCrossRepository":true,"author":{"login":"contributor"}}]
 EOF
     export YATTY_SNAPSHOT_SHEET="$scene" YATTY_PR_FIXTURE="$sandbox/prs.json"
+    ;;
+  agents)
+    cat > "$state" <<EOF
+{ "repos": [{ "name": "sample-app", "path": "$repo" }], "selectedWorktree": "$login" }
+EOF
+    session() { printf 'yatty-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -c1-10)"; }
+    mkdir -p "$sandbox/config/yatty/agents"
+    now="$(date +%s)"
+    echo "needs-action $now" > "$sandbox/config/yatty/agents/$(session "$login")"
+    echo "working $now" > "$sandbox/config/yatty/agents/$(session "$repo/.worktrees/crash-on-start")"
+    echo "done $now" > "$sandbox/config/yatty/agents/$(session "$repo")"
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

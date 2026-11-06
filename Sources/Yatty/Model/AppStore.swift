@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import UserNotifications
 
 struct PendingClose: Identifiable {
   let repo: Repo
@@ -50,6 +51,11 @@ final class AppStore {
 
   let config = ConfigFiles.loadConfig()
   let catalog = RepoCatalog()
+  let agents = AgentMonitor()
+  @ObservationIgnored private let notificationDelegate = NotificationDelegate()
+  /// "Track every claude": Yatty's hooks are in Claude's own settings.
+  var trackingEveryClaude = ClaudeSettings.isInstalled()
+  var confirmingTracking = false
   @ObservationIgnored var terminals: [PaneKey: TerminalView] = [:]
   @ObservationIgnored var starting: Set<PaneKey> = []
   /// Panes opened with "New Agent": their new session gets the agent command.
@@ -81,6 +87,9 @@ final class AppStore {
         message: "It was moved to \(aside.path). Add your repositories again; their terminals are still running.")
     }
     AgentHooks.install()
+    agents.start(store: self)
+    notificationDelegate.store = self
+    if !Snapshot.isActive { UNUserNotificationCenter.current().delegate = notificationDelegate }
     Task { await refreshAll() }
     if Snapshot.sheet == "add-repository" { addingRepository = true }
     if Snapshot.sheet?.hasPrefix("new-worktree") == true {
@@ -304,6 +313,39 @@ final class AppStore {
       alert = AppAlert(title: "Couldn't close \(worktree.name)", message: error.localizedDescription)
     }
     await refresh(pending.repo)
+  }
+
+  // MARK: Agents
+
+  /// Shows the pane a notification is about: its worktree, tab, keyboard.
+  func reveal(_ key: PaneKey) {
+    guard worktree(withID: key.worktree) != nil else { return }
+    selection = key.worktree
+    focusPane(key)
+  }
+
+  /// The next worktree (in sidebar order, after the selected one) whose agent
+  /// needs you, else is done; its pane gets the keyboard.
+  func jumpToNextAgent() {
+    let order = repos.flatMap { worktrees[$0.id] ?? [] }
+    var states: [String: AgentState] = [:]
+    for worktree in order { states[worktree.id] = agents.state(of: worktree) }
+    guard let target = AgentMonitor.nextTarget(order: order.map(\.id), states: states, after: selection),
+      let worktree = worktree(withID: target), let state = states[target],
+      let pane = agents.pane(of: worktree, in: state)
+    else { return }
+    reveal(pane)
+  }
+
+  /// Turning tracking on asks first (`confirmingTracking`); off doesn't.
+  func setTracking(_ on: Bool) {
+    do {
+      try ClaudeSettings.setInstalled(on)
+      trackingEveryClaude = on
+    } catch {
+      alert = AppAlert(title: "Couldn't change Claude's settings", message: error.localizedDescription)
+      trackingEveryClaude = ClaudeSettings.isInstalled()
+    }
   }
 
   func saveState() {

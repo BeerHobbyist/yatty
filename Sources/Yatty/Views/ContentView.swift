@@ -67,6 +67,16 @@ struct ContentView: View {
       labelDraft = worktree.map { store.labels[$0.id] ?? "" } ?? ""
     }
     .confirmationDialog(
+      "Track every claude?", isPresented: $store.confirmingTracking
+    ) {
+      Button("Track Every Claude") { store.setTracking(true) }
+    } message: {
+      Text(
+        "Adds Yatty's status hooks to \(ClaudeSettings.url.path), so a claude you start by hand in a Yatty "
+          + "terminal reports too. They do nothing outside Yatty, leave your other settings alone, and come "
+          + "out again when you turn this off.")
+    }
+    .confirmationDialog(
       "Remove \(store.pendingRemoval?.name ?? "")?",
       isPresented: Binding(get: { store.pendingRemoval != nil }, set: { if !$0 { store.pendingRemoval = nil } }),
       presenting: store.pendingRemoval
@@ -124,6 +134,7 @@ struct Sidebar: View {
       }
     }
     .modifier(SidebarListStyle())
+    .safeAreaInset(edge: .bottom) { AgentCounts() }
     .onKeyPress(.return) {
       store.focusSelectedTerminal()
       return .handled
@@ -147,6 +158,42 @@ struct Sidebar: View {
   }
 }
 
+/// How many agents need you, work, or are done; a click goes to the next one.
+struct AgentCounts: View {
+  @Environment(AppStore.self) private var store
+
+  var body: some View {
+    let needs = store.agents.count(.needsAction)
+    let working = store.agents.count(.working)
+    let done = store.agents.count(.done)
+    if needs + working + done > 0 {
+      HStack(spacing: 12) {
+        if needs > 0 { count(needs, .needsAction) }
+        if working > 0 { count(working, .working) }
+        if done > 0 { count(done, .done) }
+        Spacer()
+      }
+      .font(.callout)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 8)
+      .background(.bar)
+    }
+  }
+
+  private func count(_ n: Int, _ state: AgentState) -> some View {
+    Button {
+      store.jumpToNextAgent()
+    } label: {
+      HStack(spacing: 4) {
+        AgentGlyph(state: state)
+        Text("\(n)").monospacedDigit()
+      }
+    }
+    .buttonStyle(.borderless)
+    .help("Go to the next agent that needs you (⌘⇧J)")
+  }
+}
+
 struct WorktreeRow: View {
   let worktree: Worktree
   @Environment(AppStore.self) private var store
@@ -160,6 +207,8 @@ struct WorktreeRow: View {
         if !worktree.exists {
           Text("missing").font(.caption).foregroundStyle(.secondary)
         }
+        Spacer(minLength: 4)
+        AgentGlyph(state: store.agents.state(of: worktree))
       }
     } icon: {
       Image(systemName: worktree.isMain ? "house" : "arrow.triangle.branch")
