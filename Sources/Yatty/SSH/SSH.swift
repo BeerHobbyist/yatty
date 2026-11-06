@@ -124,15 +124,15 @@ enum SSH {
 
   // MARK: Logging in
 
-  /// The `SSH_ASKPASS` program: answers ssh's password prompt (`…'s
-  /// password: `, `Password:`) or key passphrase prompt (`Enter passphrase
-  /// for …`) with the secret in its environment, and refuses anything else:
-  /// a host-key question or a one-time code mustn't get the password, even
-  /// when a host or key is named "password". It holds no secret itself.
+  /// The `SSH_ASKPASS` program: answers only prompts shaped like ssh's
+  /// password prompt (`…'s password: `, `…Password:`) or key passphrase
+  /// prompt (`Enter passphrase for …`) with the secret in its environment.
+  /// Anything else is refused: a host-key question ends in `(yes/no)? `, a
+  /// one-time code in `code:` or `for me: `. By shape, never by words in it,
+  /// which a host or key name could hold. It holds no secret itself.
   static let askpassScript = """
     #!/bin/sh
     case "$1" in
-      *"(yes/no"*|*[Ff]ingerprint*|*[Oo]ne-[Tt]ime*|*OTP*|*[Cc]ode*|*[Tt]oken*) exit 1 ;;
       "Enter passphrase for "*|*"'s password: "|*[Pp]assword:|*[Pp]assword:" ") printf '%s\\n' "$YATTY_SSH_SECRET" ;;
       *) exit 1 ;;
     esac

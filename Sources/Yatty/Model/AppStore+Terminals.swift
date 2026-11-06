@@ -156,6 +156,9 @@ extension AppStore {
       return
     }
     let session = Zmx.sessionName(for: worktree.sessionKey, pane: key.pane)
+    // A session waiting to be ended is this pane's again (a directory added
+    // back): it lives on.
+    forgetCleanup(of: session, on: host)
     let command = SSH.attachCommand(
       host: host, directory: worktree.path, session: session, program: agent ? SSH.agentProgram : [])
     let launch = TerminalLaunch(

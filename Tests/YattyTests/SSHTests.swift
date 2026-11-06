@@ -120,7 +120,8 @@ private struct FakeHosts {
   let env = ["YATTY_SSH_SECRET": "s3cret pass"]
   for prompt in [
     "me@box's password: ", "Enter passphrase for key '/Users/me/.ssh/id_ed25519': ", "Password:", "(me@box) Password: ",
-    "Enter passphrase for key '/x/assword_key': ",
+    "Enter passphrase for key '/x/assword_key': ", "me@decode.example's password: ",
+    "Enter passphrase for key '/x/id_vscode': ", "me@token-host's password: ",
   ] {
     let result = Run.runSync(helper, [prompt], env: env)
     #expect(result.ok && result.stdout == "s3cret pass\n", "\(prompt)")

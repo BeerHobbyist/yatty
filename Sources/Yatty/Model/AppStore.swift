@@ -375,6 +375,15 @@ final class AppStore {
     }
   }
 
+  func forgetCleanup(of session: String, on host: SSHHost) {
+    guard remoteCleanup.contains(where: { $0.host == host.host && $0.sessions.contains(session) }) else { return }
+    for index in remoteCleanup.indices where remoteCleanup[index].host == host.host {
+      remoteCleanup[index].sessions.removeAll { $0 == session }
+    }
+    remoteCleanup.removeAll { $0.sessions.isEmpty }
+    saveState()
+  }
+
   /// Sessions `host` couldn't be asked to end now, for `retryRemoteCleanup`.
   func remember(_ sessions: [String], toEndOn host: SSHHost) {
     if let index = remoteCleanup.firstIndex(where: { $0.host == host.host && $0.zmx == host.zmx }) {
