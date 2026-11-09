@@ -42,6 +42,8 @@ struct YattyApp: App {
       CommandGroup(after: .sidebar) {
         Button("Command Palette…") { store.showingPalette.toggle() }
           .keyboardShortcut(Shortcuts.palette)
+        Button("Filter Worktrees") { store.focusingFilter = true }
+          .keyboardShortcut(Shortcuts.filterWorktrees)
         Divider()
         Button("Show Pull Request") { store.showingPullRequest.toggle() }
           .keyboardShortcut(Shortcuts.showPullRequest)

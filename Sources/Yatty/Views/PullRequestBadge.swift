@@ -9,10 +9,13 @@ struct PullRequestBadge: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 2) {
-        Octicon(icon, size: 11)
-        Text("#\(pullRequest.number)").font(.caption.monospacedDigit())
+        Octicon(icon, size: 10)
+        Text("#\(pullRequest.number)").font(.caption.weight(.medium).monospacedDigit())
       }
       .foregroundStyle(tint)
+      .padding(.horizontal, 5)
+      .padding(.vertical, 1)
+      .background(Capsule().fill(tint.opacity(0.16)))
     }
     .buttonStyle(.borderless)
     .fixedSize()

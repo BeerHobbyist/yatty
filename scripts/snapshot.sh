@@ -3,7 +3,8 @@
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
 #   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff,
-#   ssh, add-host, disconnected, folded, review-comments, palette, help, settings
+#   ssh, add-host, disconnected, folded, review-comments, sidebar-filter, sidebar-hover,
+#   sidebar-rename, palette, help, settings
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -83,7 +84,7 @@ EOF
 EOF
     export YATTY_SNAPSHOT_SHEET="$scene" YATTY_PR_FIXTURE="$sandbox/prs.json"
     ;;
-  agents)
+  agents|sidebar-filter|sidebar-hover|sidebar-rename)
     cat > "$state" <<EOF
 { "repos": [{ "name": "sample-app", "path": "$repo" }], "selectedWorktree": "$login" }
 EOF
@@ -93,6 +94,12 @@ EOF
     echo "needs-action $now" > "$sandbox/state/agents/$(session "$login")"
     echo "working $now" > "$sandbox/state/agents/$(session "$repo/.worktrees/crash-on-start")"
     echo "done $now" > "$sandbox/state/agents/$(session "$repo")"
+    touch "$login/new-file.swift"
+    case "$scene" in
+      sidebar-filter) export YATTY_SNAPSHOT_FILTER=crash ;;
+      sidebar-hover) export YATTY_SNAPSHOT_HOVER="$repo/.worktrees/crash-on-start" ;;
+      sidebar-rename) export YATTY_SNAPSHOT_SHEET=sidebar-rename ;;
+    esac
     ;;
   status|pr-panel|merge|review-comments)
     cat > "$state" <<EOF

@@ -13,6 +13,8 @@ struct WorktreeFacts {
   /// `host:~/path`, for a directory on another machine.
   var remotePath: String?
   var disconnected: Bool
+  /// The repository's main working copy, which is never closed.
+  var isMain = false
 }
 
 /// The sidebar's rules: a row's second line, the filter, the order of
@@ -20,13 +22,14 @@ struct WorktreeFacts {
 enum WorktreeSummary {
   /// The first fact that applies, in words: waiting on you, a pull request
   /// that wants attention, working, where a remote directory is, changes and
-  /// sync, the branch when it isn't the name shown, else "up to date".
+  /// sync, the branch when it isn't the name shown, else "up to date" (or
+  /// "checking…" while git hasn't been read).
   static func secondLine(_ facts: WorktreeFacts, now: Date) -> String {
     if facts.agent == .needsAction {
       return facts.waitingSince.map { "waiting " + age($0, now: now) } ?? "waiting"
     }
     if let pr = facts.pullRequest {
-      if pr.merged { return "merged · ready to close" }
+      if pr.merged { return facts.isMain ? "merged" : "merged · ready to close" }
       if pr.checks == .fail { return "PR #\(pr.number) · checks failing" }
       if pr.reviewDecision == "CHANGES_REQUESTED" { return "PR #\(pr.number) · changes requested" }
     }
@@ -34,7 +37,8 @@ enum WorktreeSummary {
     if let remote = facts.remotePath { return facts.disconnected ? "disconnected" : remote }
     if let status = facts.status, let sync = sync(status) { return sync }
     if let branch = facts.branch, branch != facts.label { return branch }
-    return "up to date"
+    // Git hasn't been read yet, or couldn't be: claim nothing.
+    return facts.status == nil ? "checking…" : "up to date"
   }
 
   /// `query` in the worktree's name, branch or project, ignoring case; an

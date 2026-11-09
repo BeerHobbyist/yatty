@@ -40,7 +40,17 @@ import Testing
   #expect(line { $0.label = "login"; $0.branch = "feature/login" } == "feature/login")
   #expect(line { $0.remotePath = "devbox:~/src/api"; $0.branch = nil; $0.label = "api" } == "devbox:~/src/api")
   #expect(line { $0.remotePath = "devbox:~/src/api"; $0.disconnected = true } == "disconnected")
-  #expect(line { _ in } == "up to date")
+  #expect(line { $0.status = GitStatus() } == "up to date")
+  // Not read yet (or unreadable): nothing is claimed.
+  #expect(line { _ in } == "checking…")
+  // The main working copy can't be closed: no "ready to close" there.
+  #expect(
+    line {
+      var p = pr
+      p.merged = true
+      $0.pullRequest = p
+      $0.isMain = true
+    } == "merged")
 }
 
 @Test func filterMatchesNameBranchOrProject() {
@@ -64,4 +74,19 @@ import Testing
   #expect(AppStore.moved(["/r1", "/r2"], "/r1", before: "/r1") == nil)
   #expect(AppStore.moved(["/r1", "/r2"], "/r1", before: "ssh:h1") == nil)
   #expect(AppStore.moved(["/r1", "/r2"], "/nope", before: "/r1") == nil)
+}
+
+@Test func sidebarSelectionMapsNeedsYouRows() {
+  #expect(SidebarSelection.tag("/r/a", inNeedsYou: true) == "needs-you:/r/a")
+  #expect(SidebarSelection.tag("/r/a", inNeedsYou: false) == "/r/a")
+  #expect(SidebarSelection.worktreeID(fromTag: "needs-you:/r/a") == "/r/a")
+  #expect(SidebarSelection.worktreeID(fromTag: "/r/a") == "/r/a")
+  #expect(SidebarSelection.isNeedsYou("needs-you:ssh:devbox:/x"))
+  #expect(!SidebarSelection.isNeedsYou("ssh:devbox:/x"))
+}
+
+@Test func renameRules() {
+  #expect(AppStore.cleanLabel("") == nil)
+  #expect(AppStore.cleanLabel("  \n") == nil)
+  #expect(AppStore.cleanLabel("  api ") == "api")
 }

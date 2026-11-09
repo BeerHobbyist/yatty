@@ -77,7 +77,18 @@ final class AppStore {
   @ObservationIgnored var pickedCommand: Command?
   var pendingHostRemoval: SSHHost?
   var pendingDirectoryRemoval: Worktree?
-  var renamingWorktree: Worktree?
+  /// Being renamed in place in the sidebar; its row has to be there to show it.
+  var renamingWorktree: Worktree? {
+    didSet {
+      guard let worktree = renamingWorktree else { return }
+      if let project = projectID(of: worktree.id) { foldedProjects.remove(project) }
+      if !sidebarFilter.isEmpty { sidebarFilter = "" }
+    }
+  }
+  /// The sidebar's filter; not saved.
+  var sidebarFilter = Snapshot.filter ?? ""
+  /// Asks the sidebar to put the keyboard in its filter (only a view can).
+  var focusingFilter = false
 
   /// `config.json`, as the Settings window last changed it.
   private(set) var config = ConfigFiles.loadConfig()
@@ -152,6 +163,12 @@ final class AppStore {
     if Snapshot.sheet == "palette" { showingPalette = true }
     if Snapshot.sheet == "help" { showingHelp = true }
     if Snapshot.sheet == "settings" { openingSettings = true }
+    if Snapshot.sheet == "sidebar-rename" {
+      Task {
+        await refreshAll()
+        renamingWorktree = selectedWorktree
+      }
+    }
     if Snapshot.sheet == "disconnected", let selection {
       disconnectedPanes.insert(PaneKey(worktree: selection, pane: "0"))
     }
@@ -528,9 +545,14 @@ final class AppStore {
 
   /// Only the sidebar's name changes; an empty name gives back the branch's.
   func renameWorktree(_ worktree: Worktree, to name: String) {
-    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    labels[worktree.id] = trimmed.isEmpty ? nil : trimmed
+    labels[worktree.id] = Self.cleanLabel(name)
     saveState()
+  }
+
+  /// A name as the sidebar keeps it: trimmed, and nil (the branch's) when empty.
+  nonisolated static func cleanLabel(_ name: String) -> String? {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 
   /// Deletes the worktree's directory (uncommitted changes too) and ends its
