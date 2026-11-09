@@ -97,3 +97,52 @@ import Testing
   let isHex = id.allSatisfy { $0.isHexDigit }
   #expect(isHex)
 }
+
+@Test func diffTabsHoldNoTerminal() throws {
+  var layout = WorktreeLayout.initial
+  layout.addDiffTab(pane: "d1", id: "td", target: .working)
+  #expect(layout.selectedTab == "td")
+  #expect(layout.tabs.last?.diff == DiffTab(target: .working))
+  #expect(layout.tabs.last?.name == "diff: Working changes")
+  // No terminal, no session: diff panes aren't terminal panes.
+  #expect(layout.allPanes == ["0"])
+  #expect(layout.diffTab(for: .working)?.id == "td")
+  #expect(layout.diffTab(for: .staged) == nil)
+  // Nothing splits a diff tab.
+  layout.split("d1", new: "x", axis: .horizontal, newFirst: false)
+  #expect(layout.tabs.last?.root == .pane("d1"))
+  // Closing its pane closes it.
+  layout.close("d1")
+  #expect(layout.tabs.map(\.id) == ["t0"])
+}
+
+@Test func layoutsWithDiffTabsSurviveRestarts() throws {
+  var layout = WorktreeLayout.initial
+  layout.addDiffTab(pane: "d1", id: "td", target: .base("origin/main"))
+  let decoded = try JSONDecoder().decode(WorktreeLayout.self, from: JSONEncoder().encode(layout))
+  #expect(decoded == layout)
+  // A layout saved before diff tabs existed still loads.
+  let old = #"{"tabs":[{"id":"t0","root":{"pane":{"_0":"0"}},"focusedPane":"0"}],"selectedTab":"t0"}"#
+  let legacy = try JSONDecoder().decode(WorktreeLayout.self, from: Data(old.utf8))
+  #expect(legacy.tabs.first?.diff == nil)
+}
+
+@Test func theLastTerminalTabStays() {
+  var layout = WorktreeLayout.initial
+  layout.addDiffTab(pane: "d1", id: "td", target: .working)
+  // Two tabs, but only one terminal: that one stays.
+  #expect(!layout.canClose("t0"))
+  #expect(layout.canClose("td"))
+  layout.addTab(pane: "1", id: "t1")
+  #expect(layout.canClose("t0"))
+  #expect(!layout.canClose("nope"))
+}
+
+@Test func aDiffTabFallsBackToItsDiffsTitle() {
+  var layout = WorktreeLayout.initial
+  layout.addDiffTab(pane: "d1", id: "td", target: .staged)
+  layout.rename("td", to: "  ")
+  #expect(layout.tabs.last?.name == nil)
+  #expect(layout.tabs.last?.defaultTitle == "diff: Staged")
+  #expect(layout.tabs.first?.defaultTitle == nil)
+}

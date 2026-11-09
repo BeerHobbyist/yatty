@@ -4,7 +4,7 @@
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
 #   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff,
 #   ssh, add-host, disconnected, folded, review-comments, sidebar-filter, sidebar-hover,
-#   sidebar-rename, pr-checks, pr-description, pr-ready, pr-merged, diff-window, palette, help, settings
+#   sidebar-rename, pr-checks, pr-description, pr-ready, pr-merged, diff-tab, palette, help, settings
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -200,14 +200,14 @@ EOF
     echo "needs-action $(date +%s)" > "$sandbox/state/agents/$(session "$login")"
     touch "$login/new-file.swift"
     ;;
-  diff-window)
-    # Yatty's own diff window over real changes: an edit and a new file.
+  diff-tab)
+    # Yatty's own diff tab over real changes: an edit and a new file.
     cat > "$state" <<EOF
 { "repos": [{ "name": "sample-app", "path": "$repo" }], "selectedWorktree": "$login", "diffViewer": "yatty" }
 EOF
     printf '# Sample\n\nLogin with magic links.\n\n- emails a one-time link\n' > "$login/README.md"
     printf 'import Foundation\n\n/// How long a link lasts.\nlet linkLifetime: TimeInterval = 15 * 60\n\nfunc expires(at issued: Date) -> Date {\n  issued.addingTimeInterval(linkLifetime)\n}\n' > "$login/MagicLink.swift"
-    export YATTY_SNAPSHOT_SHEET=diff-window YATTY_SNAPSHOT_DELAY="${YATTY_SNAPSHOT_DELAY:-6}"
+    export YATTY_SNAPSHOT_SHEET=diff-tab YATTY_SNAPSHOT_DELAY="${YATTY_SNAPSHOT_DELAY:-6}"
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

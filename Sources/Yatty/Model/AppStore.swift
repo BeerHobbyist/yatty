@@ -123,10 +123,19 @@ final class AppStore {
   var diffLayout = DiffLayout.split {
     didSet { if diffLayout != oldValue { saveState() } }
   }
-  /// Asks the window to open a diff window (only a view can).
-  var openingDiff: DiffRequest?
-  /// Per diff: how often it was asked for. Its window reads it again on each.
-  var diffReads: [DiffRequest: Int] = [:]
+  /// Per diff tab: how often its diff was asked for. It reads it again on each.
+  var diffReads: [String: Int] = [:]
+  /// Per diff tab: the diff last read, kept while other tabs are shown.
+  var diffTexts: [String: DiffText] = [:]
+  /// Per diff tab: its page, kept alive like a terminal while the tab exists.
+  @ObservationIgnored var diffPages: [String: DiffPage] = [:]
+
+  func diffPage(for tabID: String) -> DiffPage {
+    if let page = diffPages[tabID] { return page }
+    let page = DiffPage()
+    diffPages[tabID] = page
+    return page
+  }
   var diffingWorktree: Worktree?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
@@ -186,7 +195,7 @@ final class AppStore {
     if Snapshot.sheet == "palette" { showingPalette = true }
     if Snapshot.sheet == "help" { showingHelp = true }
     if Snapshot.sheet == "settings" { openingSettings = true }
-    if Snapshot.sheet == "diff-window" {
+    if Snapshot.sheet == "diff-tab" {
       Task {
         await refreshAll()
         if let worktree = selectedWorktree { openDiff(worktree, target: .working) }
@@ -626,12 +635,50 @@ final class AppStore {
 
   // MARK: Pull requests
 
-  /// The diff in Yatty's own window. Asked again while it's open, it reads
-  /// the diff again (see `diffReads`).
+  /// The diff in a tab of the worktree, Yatty's own viewer. Asked again
+  /// while that tab is open, it's selected and reads the diff again.
   func openDiff(_ worktree: Worktree, target: DiffTarget) {
-    let request = DiffRequest(worktreePath: worktree.path, worktreeName: label(for: worktree), target: target)
-    diffReads[request, default: 0] += 1
-    openingDiff = request
+    if let open = layout(for: worktree).diffTab(for: target) {
+      diffReads[open.id, default: 0] += 1
+      selectTab(open.id, in: worktree)
+    } else {
+      let pane = newPaneID()
+      updateLayout(worktree.id) { $0.addDiffTab(pane: pane, id: "t" + newPaneID(), target: target) }
+    }
+  }
+
+  /// Adds the comment to the diff tab, or changes it if it's there.
+  func saveDiffComment(_ comment: DiffComment, tab tabID: String, in worktree: Worktree) {
+    updateLayout(worktree.id) { layout in
+      layout.updateDiff(tabID) { diff in
+        if let index = diff.comments.firstIndex(where: { $0.id == comment.id }) {
+          diff.comments[index] = comment
+        } else {
+          diff.comments.append(comment)
+        }
+      }
+    }
+  }
+
+  /// Where the page found the comments' lines in the diff it drew; saved
+  /// only when that changed something.
+  func placeDiffComments(_ anchors: [DiffComment.Anchor], tab tabID: String, in worktree: Worktree) {
+    guard var diff = layout(for: worktree).tabs.first(where: { $0.id == tabID })?.diff, diff.place(anchors) else { return }
+    updateLayout(worktree.id) { $0.updateDiff(tabID) { _ = $0.place(anchors) } }
+  }
+
+  /// The diff has no lines any more: every comment on it is outdated.
+  func outdateDiffComments(tab tabID: String, in worktree: Worktree) {
+    let comments = layout(for: worktree).tabs.first(where: { $0.id == tabID })?.diff?.comments ?? []
+    placeDiffComments(comments.map { .init(id: $0.id, line: $0.line, outdated: true) }, tab: tabID, in: worktree)
+  }
+
+  func deleteDiffComment(_ id: String, tab tabID: String, in worktree: Worktree) {
+    updateLayout(worktree.id) { $0.updateDiff(tabID) { $0.comments.removeAll { $0.id == id } } }
+  }
+
+  func clearDiffComments(tab tabID: String, in worktree: Worktree) {
+    updateLayout(worktree.id) { $0.updateDiff(tabID) { $0.comments = [] } }
   }
 
   func setDiffViewer(_ viewer: DiffViewer) {

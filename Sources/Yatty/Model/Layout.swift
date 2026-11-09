@@ -141,6 +141,89 @@ struct TerminalTab: Codable, Identifiable, Equatable, Sendable {
   var focusedPane: String
   /// Set by the user; otherwise the tab is titled after its focused pane.
   var name: String?
+  /// A tab showing a diff (Yatty's own viewer) instead of terminals. Its one
+  /// pane is only a handle for focus and closing: it never has a session.
+  var diff: DiffTab?
+
+  /// The title when the user gave it none and no terminal names it.
+  var defaultTitle: String? { diff.map { "diff: \($0.target.title)" } }
+}
+
+/// What a diff tab shows, and the comments the user left on it.
+struct DiffTab: Codable, Equatable, Sendable {
+  var target: DiffTarget
+  var comments: [DiffComment] = []
+
+  init(target: DiffTarget, comments: [DiffComment] = []) {
+    self.target = target
+    self.comments = comments
+  }
+
+  // A tab saved before comments existed still loads.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    target = try container.decode(DiffTarget.self, forKey: .target)
+    comments = (try? container.decodeIfPresent([DiffComment].self, forKey: .comments)) ?? []
+  }
+}
+
+/// A comment on one line of a diff: the user's own review, for their agent.
+struct DiffComment: Codable, Equatable, Identifiable, Sendable {
+  enum Side: String, Codable, Sendable {
+    /// The line as it is now (added or unchanged).
+    case new
+    /// A removed line, numbered as it was.
+    case old
+  }
+
+  var id: String
+  var path: String
+  var line: Int
+  var side: Side
+  /// The line's text, so the prompt can quote it and the page can find the
+  /// line again once the diff has changed.
+  var code: String
+  var text: String
+  /// Its line is no longer in the diff (the page found it nowhere).
+  var outdated = false
+
+  /// Where the page found a comment's line in the diff it drew.
+  struct Anchor: Equatable, Sendable {
+    var id: String
+    var line: Int
+    var outdated: Bool
+  }
+}
+
+extension DiffComment {
+  // A comment saved before it could be outdated still loads.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    path = try container.decode(String.self, forKey: .path)
+    line = try container.decode(Int.self, forKey: .line)
+    side = try container.decode(Side.self, forKey: .side)
+    code = try container.decode(String.self, forKey: .code)
+    text = try container.decode(String.self, forKey: .text)
+    outdated = try container.decodeIfPresent(Bool.self, forKey: .outdated) ?? false
+  }
+}
+
+extension DiffTab {
+  /// Moves comments to where the page found their lines; true if any moved
+  /// or went in or out of date.
+  mutating func place(_ anchors: [DiffComment.Anchor]) -> Bool {
+    var changed = false
+    for anchor in anchors {
+      guard let index = comments.firstIndex(where: { $0.id == anchor.id }) else { continue }
+      if comments[index].line != anchor.line || comments[index].outdated != anchor.outdated {
+        comments[index].line = anchor.line
+        comments[index].outdated = anchor.outdated
+        changed = true
+      }
+    }
+    return changed
+  }
 }
 
 /// A worktree's tabs, stored per worktree path in state.json.
@@ -167,7 +250,34 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
   static let initial = WorktreeLayout(
     tabs: [TerminalTab(id: "t0", root: .pane("0"), focusedPane: "0")], selectedTab: "t0")
 
-  var allPanes: [String] { tabs.flatMap(\.root.panes) }
+  /// Every terminal pane; a diff tab's pane isn't one.
+  var allPanes: [String] { tabs.filter { $0.diff == nil }.flatMap(\.root.panes) }
+
+  /// A new tab showing `target`'s diff, selected.
+  mutating func addDiffTab(pane: String, id: String, target: DiffTarget) {
+    addTab(pane: pane, id: id)
+    guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+    tabs[index].diff = DiffTab(target: target)
+    tabs[index].name = "diff: \(target.title)"
+  }
+
+  mutating func updateDiff(_ tabID: String, _ change: (inout DiffTab) -> Void) {
+    guard let index = tabs.firstIndex(where: { $0.id == tabID }), var diff = tabs[index].diff else { return }
+    change(&diff)
+    tabs[index].diff = diff
+  }
+
+  /// Whether `tabID` may be closed from the CLI: not the last terminal tab,
+  /// which would leave the worktree with no terminal at all.
+  func canClose(_ tabID: String) -> Bool {
+    guard let tab = tabs.first(where: { $0.id == tabID }) else { return false }
+    return tab.diff != nil || tabs.contains { $0.id != tabID && $0.diff == nil }
+  }
+
+  /// The tab already showing `target`'s diff.
+  func diffTab(for target: DiffTarget) -> TerminalTab? {
+    tabs.first { $0.diff?.target == target }
+  }
 
   var selected: TerminalTab? { tabs.first { $0.id == selectedTab } }
 
@@ -188,7 +298,7 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
 
   /// Splits `pane`, focusing the new one.
   mutating func split(_ pane: String, new: String, axis: SplitAxis, newFirst: Bool) {
-    guard let index = tabs.firstIndex(where: { $0.root.panes.contains(pane) }) else { return }
+    guard let index = tabs.firstIndex(where: { $0.root.panes.contains(pane) }), tabs[index].diff == nil else { return }
     tabs[index].root = tabs[index].root.splitting(pane, with: new, axis: axis, newFirst: newFirst)
     tabs[index].focusedPane = new
   }

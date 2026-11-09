@@ -45,12 +45,14 @@ extension AppStore {
       // The CLI checks it too, but anything can write to the socket.
       if let lines = request.lines, lines < 1 { throw CLIError("--lines needs a positive number") }
       let (tab, number) = try cliTab(request.tab, in: worktree)
+      guard tab.diff == nil else { throw CLIError("tab \(number) shows a diff, not a terminal") }
       guard let history = await Zmx.history(Zmx.sessionName(for: worktree.path, pane: tab.focusedPane)) else {
         throw CLIError("tab \(number)'s terminal isn't running")
       }
       return CLIRules.lastLines(history, count: request.lines ?? 50)
     case .tabSend:
-      let (_, number) = try cliTab(request.tab, in: worktree)
+      let (tab, number) = try cliTab(request.tab, in: worktree)
+      guard tab.diff == nil else { throw CLIError("tab \(number) shows a diff, not a terminal") }
       let input = try CLIRules.input(request).get()
       guard !input.isEmpty, let pane = typedInto else { throw CLIError("nothing to send: give TEXT or --key") }
       // The pane that was checked, whatever the tab's focus is by now.
@@ -75,8 +77,8 @@ extension AppStore {
       return ""
     case .tabClose:
       let (tab, _) = try cliTab(request.tab, in: worktree)
-      // Closing the last would leave the worktree with no terminal at all.
-      guard layout(for: worktree).tabs.count > 1 else { throw CLIError("that's the only tab; it stays") }
+      // Closing the last terminal would leave the worktree with none at all.
+      guard layout(for: worktree).canClose(tab.id) else { throw CLIError("that's the only terminal tab; it stays") }
       closeTab(tab.id, in: worktree)
       return ""
     case .diff: return try await diff(request, in: worktree, sandboxed: sandboxed)
@@ -184,7 +186,7 @@ extension AppStore {
     guard let current = self.worktree(withID: worktree.id) else { throw CLIError("the worktree was closed") }
     if viewer == .yatty {
       openDiff(current, target: target)
-      return "diff (\(word)) opened in Yatty's diff window"
+      return "diff (\(word)) opened in a diff tab"
     }
     newTab(
       in: current, command: DiffViewers.command(viewer, args: target.args), name: "diff: \(target.title)",

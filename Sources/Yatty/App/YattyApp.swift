@@ -100,12 +100,6 @@ struct YattyApp: App {
             set: { on in if on { store.confirmingTracking = true } else { store.setTracking(false) } }))
       }
     }
-    WindowGroup("Diff", for: DiffRequest.self) { $request in
-      if let request {
-        DiffWindow(request: request).environment(store)
-      }
-    }
-    .defaultSize(width: 1180, height: 780)
     Settings {
       SettingsView().environment(store)
     }

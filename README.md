@@ -9,11 +9,15 @@ working or have finished to the top of the sidebar. Every pane is a real
 [Ghostty](https://ghostty.org) terminal (libghostty), kept alive by
 [zmx](https://github.com/neurosnap/zmx) when Yatty quits.
 
+![Yatty with a worktree's pull request open beside its terminal](docs/images/yatty.png)
+
 ## Features
 
 ### The sidebar
 
 Repositories come first, then SSH hosts. Under each, its worktrees.
+
+![The sidebar with Needs you, Working and Done sections](docs/images/sidebar.png)
 
 - **Projects.** A click on a project's header folds it away. Folded, it still
   shows the most urgent agent inside, an orange dot when any worktree has
@@ -107,7 +111,7 @@ Repositories come first, then SSH hosts. Under each, its worktrees.
   switching back to Yatty, or ⌘R, asks again.
 - Worktrees made outside Yatty (by hand, by an agent) appear when you switch
   back to it. One removed outside Yatty takes its terminals with it.
-- Git that Yatty runs to read a worktree (status, the diff window, the commit
+- Git that Yatty runs to read a worktree (status, the diff tab, the commit
   list) switches off what the repository's own config could make it run:
   hooks, fsmonitor, external diff and textconv programs, filters the repository
   defines, signature checks. An agent can write that config, and Yatty runs
@@ -118,6 +122,8 @@ Repositories come first, then SSH hosts. Under each, its worktrees.
 
 ⌥⌘P, the toolbar button or a click on a row's pill shows the selected
 worktree's pull request on the right of its terminals.
+
+![The pull request panel on its Checks tab](docs/images/pr-panel.png)
 
 - **The header**, which doesn't scroll: the state (Open, Draft, Merged,
   Closed), `#N` and the title (a click opens it on GitHub), the author,
@@ -164,6 +170,8 @@ and comments by anyone but the pull request's author, start picked; All and
 None change that. It asks GitHub again as it opens, and copies only once that
 answer is in.
 
+![The Review Comments dialog](docs/images/review-comments.png)
+
 **Copy Prompt** puts a prompt on the clipboard for you to paste into your
 agent. It says the comments come from the pull request's review on GitHub, not
 from a review of yours, and asks the agent to make each change or say why
@@ -195,10 +203,16 @@ Open Diff… (⌥⌘D, or New Diff… in the tab bar's **+** menu) shows:
 
 Its Viewer menu picks where, and remembers it:
 
-- **Yatty** (the default): Yatty's own diff window. Unified or side by side
+- **Yatty** (the default): a diff tab of Yatty's own, beside the terminals. Unified or side by side
   (remembered), highlighted, with a file list and files that fold. Working
   changes include new files. Refresh reads it again, and so does asking for
-  the same diff again. ⌘W closes it. A diff over 20 MB is left to a terminal
+  the same diff again (its tab comes to the front). ⌘W closes it.
+  **Comments:** click a line number to leave a comment on that line (⌘↩
+  saves, Esc cancels; Edit and Delete under each). They stay with the tab,
+  and **Copy Prompt** puts them on the clipboard for your agent, quoting each
+  line and saying it's your own review, not GitHub's. When the diff changes, a
+  comment follows its line's text; one whose line is gone is listed above the
+  diff as outdated (the prompt says so). A diff over 20 MB is left to a terminal
   viewer.
 - **A terminal viewer**, when it's on your login shell's `PATH`: hunk,
   diffnav (with delta), delta, difftastic, lumen, nvim diffview (only when you
@@ -213,6 +227,8 @@ reach, a `~/.ssh/config` alias included (they're offered in a menu). Its
 terminals, tabs and splits run there, each in a zmx session on that host, so
 they outlive a dropped connection and Yatty quitting. zmx must be installed on
 the host; Yatty checks, and checks the directory exists, before adding it.
+
+![An SSH host's directories in the sidebar](docs/images/ssh-host.png)
 
 - Key logins just work. A host that asks for a password, or a key's
   passphrase, gets a field for it: it logs in once, and everything after shares
@@ -257,7 +273,7 @@ request on it to these rules:
 - `yatty tab new` starts its tab in the sandbox: your sandbox command, then the
   shell. Its `--cwd` is entered inside the sandbox, so it never widens it.
 - `yatty diff` opens in a terminal viewer's tab, in the sandbox. Never in
-  Yatty's diff window, whose git runs in the app; if that's your viewer, the
+  a Yatty diff tab, whose git runs in the app; if that's your viewer, the
   first terminal viewer installed is used.
 - `yatty tab send` types only into tabs started in the sandbox: never into
   your tabs, nor the panes your agents run in.
@@ -267,7 +283,7 @@ request on it to these rules:
 
 What isn't sandboxed:
 
-- Yatty, and what it runs itself: zmx, git, `gh`, the diff window, your own
+- Yatty, and what it runs itself: zmx, git, `gh`, the diff tab, your own
   tabs (New Shell, New Agent) and agents whose command doesn't start them in
   fence.
 - From the sandbox the CLI can still list, read, select, rename and close
@@ -299,7 +315,7 @@ make run    # build it and open it
 
 `make deps` does nothing when `Vendor/` is up to date; `FORCE=1
 scripts/build-ghostty.sh` rebuilds GhosttyKit anyway. The bundle carries zmx,
-the `yatty` CLI and its skill, Ghostty's resources and the diff window's page,
+the `yatty` CLI and its skill, Ghostty's resources and the diff tab's page,
 and is signed ad hoc.
 
 ### Rebuilding while Yatty is open
@@ -329,6 +345,9 @@ and the new Yatty attaches to them as it opens.
    Yatty adds `.worktrees/` to the repository's `.git/info/exclude`. Its first
    terminal starts your agent. A branch that already has a worktree gets that
    one selected instead.
+
+   ![New Worktree, from a pull request](docs/images/new-worktree.png)
+
 3. **⌘T** opens a tab, **⌥⌘T** one with another agent, **⌘D** / **⇧⌘D** split
    it, **⌘W** closes a pane.
 4. When an agent needs you, its worktree moves to **Needs you**; **⇧⌘J** goes
@@ -368,7 +387,7 @@ and the new Yatty attaches to them as it opens.
 | ⌃⌘= | Equalize splits |
 | ⌘] / ⌘[ | Next / previous pane |
 | ⇧⌘] / ⇧⌘[ | Next / previous tab |
-| ⌘W | Close pane (in a diff window: close it) |
+| ⌘W | Close pane (in a diff tab: close the tab) |
 | ⌥⌘W | Close tab |
 
 **In a terminal** (Ghostty's defaults)
@@ -387,6 +406,8 @@ Terminal keys are Ghostty's: rebinding one in Ghostty's config works in Yatty
 too, and Ghostty's own command palette key opens Yatty's palette. Actions
 without a key (rename, close worktree, merge, review comments, track every
 claude, move project) are in the menus and the command palette.
+
+![The command palette](docs/images/command-palette.png)
 
 ## Settings
 
@@ -446,7 +467,7 @@ yatty <command> [--worktree PATH]
 | `tab select TAB` | Shows TAB. |
 | `tab rename TAB NAME` | Names TAB. |
 | `tab close TAB` | Closes TAB. The last tab stays. |
-| `diff [working\|staged\|base\|REF]` | Shows you a diff (default `working`) in your diff viewer: Yatty's diff window, or a terminal viewer's tab. |
+| `diff [working\|staged\|base\|REF]` | Shows you a diff (default `working`) in your diff viewer: a Yatty diff tab, or a terminal viewer's tab. |
 | `notify MESSAGE... [--title T]` | A notification for you. Clicking it opens the pane that sent it. |
 | `status [--json]` | Every worktree of every repository, and its agent's state. |
 | `skill install\|uninstall\|show` | The Claude Code skill that teaches agents this CLI. |
@@ -544,7 +565,7 @@ scripts/snapshot.sh SCENE # build/snapshots/SCENE.png from sample data
   - the real sidebar list style, split view and inspector: the window is laid
     out as a plain row instead, and Settings as a plain form;
   - sheets in place: they're stacked below the window in the image;
-  - the diff window's page, which is saved beside it as `SCENE-web.png`;
+  - the diff tab's page, which is saved beside it as `SCENE-web.png`;
   - animations and avatars: symbols stand still, and people show as initials.
 
   It needs the window server; under a sandbox that blocks it, it finds no
@@ -566,7 +587,7 @@ scripts/snapshot.sh SCENE # build/snapshots/SCENE.png from sample data
   `scripts/fetch-zmx.sh` downloads and checks against its SHA-256, bundled as
   `Contents/MacOS/zmx`.
 - [diff2html](https://github.com/rtfpessoa/diff2html) 3.4.56 (MIT) and
-  highlight.js 11.12.0 styles (BSD-3-Clause), for the diff window, in
+  highlight.js 11.12.0 styles (BSD-3-Clause), for the diff tab, in
   `Resources/diff/`; their licences are in `Resources/diff/THIRD-PARTY.md`.
 - [Octicons](https://github.com/primer/octicons) 19.15.0 (MIT), GitHub's icons
   for pull requests, branches and checks, in

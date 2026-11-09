@@ -16,8 +16,10 @@ zmx:
 build: deps
 	swift build -c $(CONFIG) --scratch-path .build/swift --disable-sandbox
 
+# The diff tab's page runs in jsdom: needs node and npm.
 test: deps
 	swift test --scratch-path .build/swift --disable-sandbox
+	scripts/diff-page-test.sh
 
 app: build
 	scripts/bundle-app.sh $(CONFIG)

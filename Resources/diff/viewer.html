@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="github.min.css" media="(prefers-color-scheme: light)">
 <link rel="stylesheet" href="github-dark.min.css" media="(prefers-color-scheme: dark)">
 <style>
-  /* Yatty's diff window: diff2html, dressed to sit in a Mac window. */
+  /* Yatty's diff tab: diff2html, dressed to sit in a Mac app. */
   :root { color-scheme: light dark; }
   body { margin: 0; background: Canvas; color: CanvasText; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; }
   #diff { padding: 12px 14px 40px; }
@@ -19,18 +19,69 @@
   .d2h-file-wrapper { border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
   .d2h-file-header { position: sticky; top: 0; z-index: 2; }
   .d2h-file-list-wrapper { margin-bottom: 14px; }
+
+  /* Comments: a click on a line number opens a box under the line. */
+  .yatty-line { cursor: pointer; }
+  .yatty-line:hover { box-shadow: inset 3px 0 0 #0a84ff; }
+  .yatty-row > td { padding: 6px 12px 8px; background: Canvas; }
+  .yatty-box {
+    font: 13px -apple-system, BlinkMacSystemFont, sans-serif; white-space: normal;
+    border: 1px solid rgba(128, 128, 128, 0.35); border-radius: 8px; padding: 8px 10px;
+    background: color-mix(in srgb, Canvas 92%, #0a84ff);
+  }
+  .yatty-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .yatty-box textarea {
+    display: block; box-sizing: border-box; width: 100%; min-height: 64px; resize: vertical;
+    font: 13px -apple-system, BlinkMacSystemFont, sans-serif; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid rgba(128, 128, 128, 0.45); background: Field; color: FieldText;
+  }
+  .yatty-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; }
+  .yatty-actions .hint { margin-right: auto; color: GrayText; font-size: 11px; }
+  .yatty-box button {
+    font: 12px -apple-system, BlinkMacSystemFont, sans-serif; padding: 2px 10px; border-radius: 6px;
+    border: 1px solid rgba(128, 128, 128, 0.45); background: ButtonFace; color: ButtonText; cursor: pointer;
+  }
+  .yatty-box button.primary { background: #0a84ff; border-color: #0a84ff; color: white; }
+  .yatty-box button.link { border: none; background: none; color: #0a84ff; padding: 2px 4px; }
+
+  /* Comments whose lines left the diff: listed above it. */
+  #outdated { padding: 12px 14px 0; display: grid; gap: 8px; }
+  #outdated:empty { display: none; }
+  .yatty-outdated-title { color: GrayText; font-size: 12px; }
+  .yatty-where { font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: GrayText; margin-bottom: 4px; }
+  .yatty-code {
+    font: 12px ui-monospace, "SF Mono", Menlo, monospace; margin: 0 0 6px; padding: 4px 6px; border-radius: 4px;
+    white-space: pre-wrap; overflow-wrap: anywhere; background: rgba(128, 128, 128, 0.12);
+  }
 </style>
+<script src="diff2html.min.js"></script>
 <script src="diff2html-ui-slim.min.js"></script>
 </head>
 <body>
+<div id="outdated"></div>
 <div id="diff"></div>
 <script>
-  // Called by the app with the unified diff and "side-by-side" or "line-by-line".
-  // Keeps the scroll position, so refreshing doesn't throw the reader back up.
-  window.yattyRender = function (diff, layout) {
+  // The app's side: comments go to it, and it sends them back as they're kept.
+  const post = (message) => {
+    try { window.webkit.messageHandlers.yatty.postMessage(message); } catch (error) {}
+  };
+
+  // Each drawn file, in order: {path, codes: "side|line" -> the line's text,
+  // oldToNew: an unchanged line's old number -> its new one}.
+  let files = [];
+  let comments = [];     // [{id, path, line, side, code, text, outdated}]
+  let lines = new Map(); // "file|side|line" -> its line-number cell
+  let editor = null;     // the open comment box's row, if any
+  let hidden = null;     // the comment row hidden while its box is open
+
+  // Called by the app with the unified diff, "side-by-side" or "line-by-line",
+  // and the comments. Keeps the scroll position, so refreshing doesn't throw
+  // the reader back up.
+  window.yattyRender = function (diff, layout, commentList) {
     const y = window.scrollY;
-    const target = document.getElementById("diff");
-    const ui = new Diff2HtmlUI(target, diff, {
+    editor = null;
+    hidden = null;
+    const config = {
       outputFormat: layout,
       drawFileList: true,
       fileListToggle: true,
@@ -44,11 +95,287 @@
       stickyFileHeaders: true,
       diffMaxChanges: 5000,
       maxLineLengthHighlight: 2000,
-    });
-    ui.draw(); // highlights too
+    };
+    // One parse for both the drawing and the comments, so a comment's file is
+    // always the one it's drawn in. git writes a conflict as "diff --cc".
+    const parsed = Diff2Html.parse(diff.replace(/^diff --cc /gm, "diff --combined "), config);
+    files = parsed.map(describe);
+    new Diff2HtmlUI(document.getElementById("diff"), parsed, config).draw(); // highlights too
+    markLines();
+    window.yattySetComments(commentList || []);
     window.scrollTo(0, y);
     return document.querySelectorAll(".d2h-file-wrapper").length;
   };
+
+  // The comments as the app keeps them: each under its line, found again by
+  // its text when the diff has moved it; the rest listed as outdated. Tells
+  // the app where they went. A comment box being written stays open.
+  window.yattySetComments = function (list) {
+    comments = list || [];
+    for (const row of [...document.querySelectorAll("tr.yatty-comment")]) removeRow(row);
+    hidden = null;
+    const anchors = [];
+    const outdated = [];
+    for (const comment of comments) {
+      const found = find(comment);
+      const line = found ? found.line : comment.line;
+      if (line !== comment.line || !found !== !!comment.outdated) anchors.push({ id: comment.id, line, outdated: !found });
+      if (!found) { outdated.push(comment); continue; }
+      const row = insertAfter(found.cell.parentElement, commentBox(comment, found.cell));
+      row.classList.add("yatty-comment");
+      row.yattyComment = comment.id;
+      if (editor && editor.yattyEditing === comment.id) { setShown(row, false); hidden = row; }
+    }
+    showOutdated(outdated);
+    if (anchors.length) post({ type: "place", anchors });
+  };
+
+  function key(file, side, line) { return file + "|" + side + "|" + line; }
+
+  // A parsed file's path (git's quoting undone) and its lines' text.
+  function describe(file) {
+    const codes = new Map();
+    const oldToNew = new Map();
+    const prefix = file.isCombined ? 2 : 1;
+    for (const block of file.blocks) {
+      for (const line of block.lines) {
+        const code = line.content.slice(prefix).replace(/\s+$/, "");
+        if (line.type === "delete") {
+          codes.set("old|" + line.oldNumber, code);
+        } else {
+          codes.set("new|" + line.newNumber, code);
+          if (line.type === "context") oldToNew.set(line.oldNumber, line.newNumber);
+        }
+      }
+    }
+    const name = file.newName === "/dev/null" ? file.oldName : file.newName;
+    return { path: unquote(name), codes, oldToNew };
+  }
+
+  // diff2html keeps the tab git adds after a name with a space, and the
+  // escapes in a name git quoted (one with a backslash, quote or control
+  // character: never otherwise).
+  function unquote(name) {
+    name = name.replace(/\t$/, "");
+    const escapes = { a: "\x07", b: "\b", t: "\t", n: "\n", v: "\v", f: "\f", r: "\r" };
+    return name.replace(/\\([0-7]{3}|.)/g, (_, c) => c.length === 3 ? String.fromCharCode(parseInt(c, 8)) : (escapes[c] ?? c));
+  }
+
+  // Every line number becomes a way to comment on its line.
+  function markLines() {
+    lines = new Map();
+    document.querySelectorAll(".d2h-file-wrapper").forEach((wrapper, file) => {
+      if (!files[file]) return;
+      for (const cell of wrapper.querySelectorAll(".d2h-code-linenumber, .d2h-code-side-linenumber")) {
+        const where = lineOf(cell, files[file]);
+        if (!where) continue;
+        cell.yattyFile = file;
+        lines.set(key(file, where.side, where.line), cell);
+        cell.classList.add("yatty-line");
+        cell.title = "Comment on this line";
+        cell.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openEditor(cell, null);
+        });
+      }
+    });
+  }
+
+  // A line-number cell's side and number; null for a hunk's header row or
+  // the empty half of a side-by-side row.
+  function lineOf(cell, file) {
+    if (cell.classList.contains("d2h-code-side-linenumber")) {
+      if (cell.classList.contains("d2h-emptyplaceholder")) return null;
+      const number = parseInt(cell.textContent, 10);
+      if (!number) return null;
+      const half = cell.closest(".d2h-file-side-diff");
+      if (half && half.previousElementSibling) return { side: "new", line: number };
+      if (cell.classList.contains("d2h-del")) return { side: "old", line: number };
+      // An unchanged line on the left is the same line as on the right: its
+      // number now, so it's never taken for a removed one.
+      const now = file.oldToNew.get(number);
+      return now ? { side: "new", line: now } : null;
+    }
+    const now = parseInt(cell.querySelector(".line-num2")?.textContent ?? "", 10);
+    if (now) return { side: "new", line: now };
+    const before = parseInt(cell.querySelector(".line-num1")?.textContent ?? "", 10);
+    return before ? { side: "old", line: before } : null;
+  }
+
+  // Where a comment's line is now: where it was if its text is still there,
+  // else the nearest line on its side with that text; null if none has.
+  function find(comment) {
+    const file = files.findIndex((f) => f.path === comment.path);
+    if (file < 0) return null;
+    const at = (line) => lines.get(key(file, comment.side, line));
+    const codes = files[file].codes;
+    if (codes.get(comment.side + "|" + comment.line) === comment.code && at(comment.line)) {
+      return { line: comment.line, cell: at(comment.line) };
+    }
+    if (!comment.code) return null; // a blank line could be any blank line
+    let best = null;
+    for (const [where, code] of codes) {
+      const [side, number] = where.split("|");
+      const line = Number(number);
+      if (code !== comment.code || side !== comment.side || !at(line)) continue;
+      if (best === null || Math.abs(line - comment.line) < Math.abs(best - comment.line)) best = line;
+    }
+    return best === null ? null : { line: best, cell: at(best) };
+  }
+
+  // Comments whose lines are no longer in the diff, above it, each with
+  // where it was and what the line said.
+  function showOutdated(list) {
+    const container = document.getElementById("outdated");
+    container.replaceChildren();
+    if (!list.length) return;
+    const title = element("div", "yatty-outdated-title");
+    title.textContent = list.length === 1
+      ? "1 comment whose line is no longer in this diff"
+      : list.length + " comments whose lines are no longer in this diff";
+    container.append(title);
+    for (const comment of list) {
+      const box = element("div", "yatty-box");
+      const where = element("div", "yatty-where");
+      where.textContent = comment.path + ":" + comment.line + (comment.side === "old" ? " (removed)" : "");
+      box.append(where);
+      if (comment.code) {
+        const code = element("pre", "yatty-code");
+        code.textContent = comment.code;
+        box.append(code);
+      }
+      const text = element("div", "yatty-text");
+      text.textContent = comment.text;
+      const actions = element("div", "yatty-actions");
+      actions.append(button("Delete", "link", () => post({ type: "delete", id: comment.id })));
+      box.append(text, actions);
+      container.append(box);
+    }
+  }
+
+  function openEditor(cell, existing) {
+    closeEditor();
+    const file = files[cell.yattyFile];
+    const where = file && lineOf(cell, file);
+    if (!where) return;
+    const shown = existing ? [...document.querySelectorAll("tr.yatty-comment")].find((row) => row.yattyComment === existing.id) : null;
+
+    const box = element("div", "yatty-box");
+    const area = element("textarea");
+    area.placeholder = "A comment for your agent";
+    area.value = existing ? existing.text : "";
+    const actions = element("div", "yatty-actions");
+    const hint = element("span", "hint");
+    hint.textContent = "⌘↩ to save, esc to cancel";
+    const cancel = button("Cancel", "", closeEditor);
+    const save = button(existing ? "Save" : "Comment", "primary", () => {
+      const text = area.value.trim();
+      if (text) {
+        post({
+          type: "save", id: existing ? existing.id : "", path: file.path, line: where.line, side: where.side,
+          code: existing ? existing.code : (file.codes.get(where.side + "|" + where.line) ?? ""), text,
+        });
+      }
+      closeEditor();
+    });
+    area.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); save.click(); }
+      if (event.key === "Escape") { event.preventDefault(); cancel.click(); }
+    });
+    actions.append(hint, cancel, save);
+    box.append(area, actions);
+    editor = insertAfter(cell.parentElement, box);
+    editor.yattyEditing = existing ? existing.id : null;
+    if (shown) { setShown(shown, false); hidden = shown; }
+    area.focus();
+  }
+
+  // Closes the box, and shows the comment it was editing again: however it
+  // closed, the app sends the comments back only if they changed.
+  function closeEditor() {
+    if (editor) removeRow(editor);
+    editor = null;
+    if (hidden) setShown(hidden, true);
+    hidden = null;
+  }
+
+  function commentBox(comment, cell) {
+    const box = element("div", "yatty-box");
+    const text = element("div", "yatty-text");
+    text.textContent = comment.text;
+    const actions = element("div", "yatty-actions");
+    actions.append(
+      button("Edit", "link", () => openEditor(cell, comment)),
+      button("Delete", "link", () => post({ type: "delete", id: comment.id })),
+    );
+    box.append(text, actions);
+    return box;
+  }
+
+  // A row under `row` (after the comments already there). Side by side, the
+  // other half gets an empty row as tall, so the two halves stay in line.
+  function insertAfter(row, content) {
+    let anchor = row;
+    while (anchor.nextElementSibling && anchor.nextElementSibling.classList.contains("yatty-row")) {
+      anchor = anchor.nextElementSibling;
+    }
+    const twin = twinOf(anchor);
+    const added = rowWith(content);
+    anchor.after(added);
+    if (twin) {
+      const filler = element("div");
+      const spacer = rowWith(filler);
+      twin.after(spacer);
+      const sync = () => { filler.style.height = Math.max(0, added.getBoundingClientRect().height - 14) + "px"; };
+      sync();
+      new ResizeObserver(sync).observe(added);
+      added.yattySpacer = spacer;
+    }
+    return added;
+  }
+
+  function removeRow(row) {
+    if (row.yattySpacer) row.yattySpacer.remove();
+    row.remove();
+  }
+
+  // A row and its spacer, shown or hidden together.
+  function setShown(row, shown) {
+    for (const node of [row, row.yattySpacer]) if (node) node.style.display = shown ? "" : "none";
+  }
+
+  // The same row in the other half of a side-by-side file.
+  function twinOf(row) {
+    const half = row.closest(".d2h-file-side-diff");
+    if (!half) return null;
+    const other = half.previousElementSibling || half.nextElementSibling;
+    if (!other || !other.classList.contains("d2h-file-side-diff")) return null;
+    const index = Array.prototype.indexOf.call(row.parentElement.children, row);
+    return other.querySelector("tbody")?.children[index] ?? null;
+  }
+
+  function rowWith(content) {
+    const row = element("tr", "yatty-row");
+    const cell = element("td");
+    cell.colSpan = 2;
+    cell.append(content);
+    row.append(cell);
+    return row;
+  }
+
+  function element(tag, className) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    return node;
+  }
+
+  function button(title, className, action) {
+    const node = element("button", className);
+    node.type = "button";
+    node.textContent = title;
+    node.addEventListener("click", (event) => { event.stopPropagation(); action(); });
+    return node;
+  }
 </script>
 </body>
 </html>

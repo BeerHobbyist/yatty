@@ -130,17 +130,31 @@ import Testing
   #expect(!FileManager.default.fileExists(atPath: marker), "ran: \((try? String(contentsOfFile: marker, encoding: .utf8)) ?? "")")
 }
 
+@Test func diffPathsKeepGitsDefaultPrefixes() async throws {
+  // The page reads paths after a/ and b/, whatever the repository's config says.
+  let repo = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("yatty-prefix-\(UUID().uuidString)").path
+  defer { try? FileManager.default.removeItem(atPath: repo) }
+  func git(_ args: String...) async { _ = await Run.run("/usr/bin/env", ["git", "-C", repo] + args) }
+  _ = await Run.run("/usr/bin/env", ["git", "init", "-q", repo])
+  try "one\n".write(toFile: repo + "/a.txt", atomically: true, encoding: .utf8)
+  await git("add", ".")
+  await git("-c", "user.name=y", "-c", "user.email=y@y", "commit", "-qm", "init")
+  try "two\n".write(toFile: repo + "/a.txt", atomically: true, encoding: .utf8)
+  try "new\n".write(toFile: repo + "/new.txt", atomically: true, encoding: .utf8)
+  for (key, value) in [("diff.mnemonicPrefix", "true"), ("diff.noprefix", "true")] {
+    await git("config", key, value)
+    let diff = try await GitDiff.text(in: repo, target: .working)
+    #expect(diff.contains("--- a/a.txt\n+++ b/a.txt\n"), "\(key): \(diff)")
+    #expect(diff.contains("+++ b/new.txt\n"), "\(key): \(diff)")
+  }
+}
+
 @Test func yattyIsTheDefaultViewer() {
   #expect(DiffViewers.available(in: "/nonexistent").first == .yatty)
   #expect(DiffViewers.resolve(nil, available: [.yatty, .delta, .git]) == .yatty)
   #expect(DiffViewers.resolve(.delta, available: [.yatty, .delta, .git]) == .delta)
 }
 
-@Test func diffRequestsSurviveRestoration() throws {
-  let request = DiffRequest(worktreePath: "/r/.worktrees/login", worktreeName: "login", target: .base("origin/main"))
-  let decoded = try JSONDecoder().decode(DiffRequest.self, from: JSONEncoder().encode(request))
-  #expect(decoded == request)
-}
 
 @Test func aSandboxedAgentsDiffStaysInTheSandbox() {
   // The window runs git in the app; a sandboxed agent's diff runs in a
