@@ -263,3 +263,15 @@
 - Task 3 ✅ merge box rules, check timing, re-run, avatars (review: 1 major + 3 minor, fixed)
 - Task 4 ✅ PR panel header, merge box, tabs (review: 1 major + 5 minor, fixed)
 - Task 5 ✅ menus and palette for every new action, README, all scenes re-rendered
+- Final review: 0 critical; 2 important fixed (a rename lost on click-away, hidden markers still clickable)
+
+### Deferred minors
+
+- A folded project still draws its header folded while the filter shows its rows.
+- An unfold triggered by renaming isn't saved to state.json.
+- Failed detail refreshes don't disable the Merge button (the sheet re-checks; merges are pinned to the head).
+- The inspector builds its conversation list twice per render and makes ISO8601 formatters per check.
+- The checks sort force-unwraps `firstIndex(of:)`.
+- Re-run Failed Checks across several runs shows only the last error.
+- No tests for `AgentMonitor.waitingSince` or ties in `needsYouOrder`.
+- ⌥⌘F from a hidden sidebar may show it without focusing the filter (unverified).
