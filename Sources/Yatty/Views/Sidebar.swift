@@ -304,7 +304,11 @@ struct WorktreeRow: View {
               DispatchQueue.main.async { nameFocused = true }
             }
             .onChange(of: nameFocused) { _, focused in
-              if !focused, store.renamingWorktree?.id == worktree.id { store.renamingWorktree = nil }
+              // Clicking away keeps what was typed, as in Finder; only Esc
+              // cancels (and clears renamingWorktree before this runs).
+              guard !focused, store.renamingWorktree?.id == worktree.id else { return }
+              store.renameWorktree(worktree, to: draft)
+              store.renamingWorktree = nil
             }
         } else {
           Text(store.label(for: worktree))
@@ -323,7 +327,7 @@ struct WorktreeRow: View {
       Spacer(minLength: 4)
       // Both always laid out, one shown: hovering moves nothing.
       ZStack(alignment: .trailing) {
-        markers.opacity(hovering ? 0 : 1)
+        markers.opacity(hovering ? 0 : 1).allowsHitTesting(!hovering)
         actions.opacity(hovering ? 1 : 0).allowsHitTesting(hovering)
       }
     }
