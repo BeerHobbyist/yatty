@@ -180,9 +180,50 @@ struct DiffComment: Codable, Equatable, Identifiable, Sendable {
   var path: String
   var line: Int
   var side: Side
-  /// The line's text, so the prompt can quote it.
+  /// The line's text, so the prompt can quote it and the page can find the
+  /// line again once the diff has changed.
   var code: String
   var text: String
+  /// Its line is no longer in the diff (the page found it nowhere).
+  var outdated = false
+
+  /// Where the page found a comment's line in the diff it drew.
+  struct Anchor: Equatable, Sendable {
+    var id: String
+    var line: Int
+    var outdated: Bool
+  }
+}
+
+extension DiffComment {
+  // A comment saved before it could be outdated still loads.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    path = try container.decode(String.self, forKey: .path)
+    line = try container.decode(Int.self, forKey: .line)
+    side = try container.decode(Side.self, forKey: .side)
+    code = try container.decode(String.self, forKey: .code)
+    text = try container.decode(String.self, forKey: .text)
+    outdated = try container.decodeIfPresent(Bool.self, forKey: .outdated) ?? false
+  }
+}
+
+extension DiffTab {
+  /// Moves comments to where the page found their lines; true if any moved
+  /// or went in or out of date.
+  mutating func place(_ anchors: [DiffComment.Anchor]) -> Bool {
+    var changed = false
+    for anchor in anchors {
+      guard let index = comments.firstIndex(where: { $0.id == anchor.id }) else { continue }
+      if comments[index].line != anchor.line || comments[index].outdated != anchor.outdated {
+        comments[index].line = anchor.line
+        comments[index].outdated = anchor.outdated
+        changed = true
+      }
+    }
+    return changed
+  }
 }
 
 /// A worktree's tabs, stored per worktree path in state.json.

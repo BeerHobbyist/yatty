@@ -660,6 +660,13 @@ final class AppStore {
     }
   }
 
+  /// Where the page found the comments' lines in the diff it drew; saved
+  /// only when that changed something.
+  func placeDiffComments(_ anchors: [DiffComment.Anchor], tab tabID: String, in worktree: Worktree) {
+    guard var diff = layout(for: worktree).tabs.first(where: { $0.id == tabID })?.diff, diff.place(anchors) else { return }
+    updateLayout(worktree.id) { $0.updateDiff(tabID) { _ = $0.place(anchors) } }
+  }
+
   func deleteDiffComment(_ id: String, tab tabID: String, in worktree: Worktree) {
     updateLayout(worktree.id) { $0.updateDiff(tabID) { $0.comments.removeAll { $0.id == id } } }
   }

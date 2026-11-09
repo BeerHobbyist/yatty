@@ -11,7 +11,12 @@ enum DiffLayout: String, Codable, CaseIterable, Sendable {
 /// the app reads it outside any sandbox while an agent may have written the
 /// repository's config.
 enum GitDiff {
-  static let flags = ["--no-ext-diff", "--no-textconv", "--no-color", "-M", "--submodule=short", "--ignore-submodules=dirty"]
+  /// a/ and b/ whatever diff.noprefix or diff.mnemonicPrefix say: the page
+  /// reads paths after them.
+  static let flags = [
+    "--no-ext-diff", "--no-textconv", "--no-color", "-M", "--submodule=short", "--ignore-submodules=dirty",
+    "--src-prefix=a/", "--dst-prefix=b/",
+  ]
   /// A new file bigger than this isn't shown (it would be read whole).
   static let largestNewFile = 2_000_000
 

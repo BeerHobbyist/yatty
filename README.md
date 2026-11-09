@@ -210,7 +210,9 @@ Its Viewer menu picks where, and remembers it:
   **Comments:** click a line number to leave a comment on that line (⌘↩
   saves, Esc cancels; Edit and Delete under each). They stay with the tab,
   and **Copy Prompt** puts them on the clipboard for your agent, quoting each
-  line and saying it's your own review, not GitHub's. A diff over 20 MB is left to a terminal
+  line and saying it's your own review, not GitHub's. When the diff changes, a
+  comment follows its line's text; one whose line is gone is listed above the
+  diff as outdated (the prompt says so). A diff over 20 MB is left to a terminal
   viewer.
 - **A terminal viewer**, when it's on your login shell's `PATH`: hunk,
   diffnav (with delta), delta, difftastic, lumen, nvim diffview (only when you

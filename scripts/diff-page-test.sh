@@ -4,6 +4,7 @@
 # Needs node and npm; jsdom is installed once into a cache outside the repo.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
+command -v node >/dev/null && command -v npm >/dev/null || { echo "diff-page-test: needs node and npm" >&2; exit 1; }
 cache="${YATTY_JSDOM_CACHE:-${TMPDIR:-/tmp}/yatty-jsdom}"
 if [ ! -d "$cache/node_modules/jsdom" ]; then
   mkdir -p "$cache"

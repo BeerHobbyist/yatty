@@ -82,12 +82,12 @@ struct DiffTabView: View {
           description: Text("\(diffTab.target.title) in \(store.label(for: worktree)): nothing differs."))
       } else {
         DiffWebView(
-          page: store.diffPage(for: tab.id), diff: diff, layout: store.diffLayout,
-          files: store.diffTexts[tab.id]?.files ?? [], comments: diffTab.comments
+          page: store.diffPage(for: tab.id), diff: diff, layout: store.diffLayout, comments: diffTab.comments
         ) { message in
           switch message {
           case .save(let comment): store.saveDiffComment(comment, tab: tab.id, in: worktree)
           case .delete(let id): store.deleteDiffComment(id, tab: tab.id, in: worktree)
+          case .place(let anchors): store.placeDiffComments(anchors, tab: tab.id, in: worktree)
           }
         }
       }
@@ -99,10 +99,12 @@ struct DiffTabView: View {
   /// The comments left on this diff, and the way to hand them to the agent.
   @ViewBuilder private var comments: some View {
     let count = diffTab.comments.count
+    let outdated = diffTab.comments.filter(\.outdated).count
     if count == 0 {
       Text("Click a line number to comment").font(.caption).foregroundStyle(.secondary)
     } else {
-      Text("\(count) comment\(count == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
+      Text("\(count) comment\(count == 1 ? "" : "s")" + (outdated > 0 ? ", \(outdated) outdated" : ""))
+        .font(.caption).foregroundStyle(.secondary)
       Button(copied ? "Copied" : "Copy Prompt") { copyPrompt() }
         .help("Your comments as a prompt for your agent: your own review, not GitHub's")
         .disabled(copied)
@@ -131,7 +133,7 @@ struct DiffTabView: View {
     do {
       let reads = store.diffReads[tab.id, default: 0]
       let text = try await GitDiff.text(in: worktree.path, target: diffTab.target)
-      store.diffTexts[tab.id] = DiffText(text: text, files: UnifiedDiff.files(text), reads: reads)
+      store.diffTexts[tab.id] = DiffText(text: text, reads: reads)
       error = nil
     } catch {
       self.error = error.localizedDescription
@@ -139,12 +141,9 @@ struct DiffTabView: View {
   }
 }
 
-/// diff2html in a web view, from the `diff/` folder the app bundles.
 /// A diff tab's last read diff.
 struct DiffText: Equatable {
   var text: String
-  /// Each file's path in the diff's order.
-  var files: [String]
   /// `AppStore.diffReads` when it was read.
   var reads: Int
 }
@@ -182,13 +181,13 @@ struct DiffWebView: NSViewRepresentable {
   enum Message {
     case save(DiffComment)
     case delete(String)
+    /// Where the page found the comments' lines in the diff it drew.
+    case place([DiffComment.Anchor])
   }
 
   let page: DiffPage
   let diff: String
   let layout: DiffLayout
-  /// Each file's path in the diff's order, for the page's comments.
-  let files: [String]
   let comments: [DiffComment]
   let onMessage: (Message) -> Void
 
@@ -202,7 +201,7 @@ struct DiffWebView: NSViewRepresentable {
       container.addSubview(page.view)
     }
     page.coordinator.onMessage = onMessage
-    page.coordinator.show(diff, layout: layout, files: files, comments: comments, in: page.view)
+    page.coordinator.show(diff, layout: layout, comments: comments, in: page.view)
   }
 
   @MainActor
@@ -210,12 +209,12 @@ struct DiffWebView: NSViewRepresentable {
   final class Bridge: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     var onMessage: (Message) -> Void = { _ in }
     private var loaded = false
-    private var wanted: (diff: String, layout: DiffLayout, files: [String], comments: [DiffComment])?
+    private var wanted: (diff: String, layout: DiffLayout, comments: [DiffComment])?
     private var shown: (diff: String, layout: DiffLayout)?
     private var shownComments: [DiffComment]?
 
-    func show(_ diff: String, layout: DiffLayout, files: [String], comments: [DiffComment], in view: WKWebView) {
-      wanted = (diff, layout, files, comments)
+    func show(_ diff: String, layout: DiffLayout, comments: [DiffComment], in view: WKWebView) {
+      wanted = (diff, layout, comments)
       render(in: view)
     }
 
@@ -233,11 +232,8 @@ struct DiffWebView: NSViewRepresentable {
       shown = (wanted.diff, wanted.layout)
       shownComments = wanted.comments
       view.callAsyncJavaScript(
-        "return yattyRender(diff, layout, files, comments)",
-        arguments: [
-          "diff": wanted.diff, "layout": wanted.layout.rawValue, "files": wanted.files,
-          "comments": wanted.comments.map(Self.page),
-        ],
+        "return yattyRender(diff, layout, comments)",
+        arguments: ["diff": wanted.diff, "layout": wanted.layout.rawValue, "comments": wanted.comments.map(Self.page)],
         in: nil, in: .page
       ) { result in
         MainActor.assumeIsolated {
@@ -259,11 +255,11 @@ struct DiffWebView: NSViewRepresentable {
     private static func page(_ comment: DiffComment) -> [String: Any] {
       [
         "id": comment.id, "path": comment.path, "line": comment.line, "side": comment.side.rawValue,
-        "code": comment.code, "text": comment.text,
+        "code": comment.code, "text": comment.text, "outdated": comment.outdated,
       ]
     }
 
-    /// The page saved or deleted a comment.
+    /// The page saved or deleted a comment, or found where comments' lines went.
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
       guard let body = message.body as? [String: Any], let type = body["type"] as? String else { return }
       switch type {
@@ -276,6 +272,14 @@ struct DiffWebView: NSViewRepresentable {
         onMessage(.save(DiffComment(id: id, path: path, line: line, side: side, code: body["code"] as? String ?? "", text: text)))
       case "delete":
         if let id = body["id"] as? String { onMessage(.delete(id)) }
+      case "place":
+        let anchors = (body["anchors"] as? [[String: Any]] ?? []).compactMap { anchor -> DiffComment.Anchor? in
+          guard let id = anchor["id"] as? String, let line = (anchor["line"] as? NSNumber)?.intValue,
+            let outdated = (anchor["outdated"] as? NSNumber)?.boolValue
+          else { return nil }
+          return DiffComment.Anchor(id: id, line: line, outdated: outdated)
+        }
+        if !anchors.isEmpty { onMessage(.place(anchors)) }
       default:
         break
       }
