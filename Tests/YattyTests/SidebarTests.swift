@@ -133,3 +133,15 @@ import Testing
   let active: [(state: AgentState, ids: [String])] = [(.needsAction, ["/b"]), (.done, ["/c"])]
   #expect(WorktreeSummary.sidebarOrder(["/a", "/b", "/c", "/d"], active: active) == ["/b", "/c", "/a", "/d"])
 }
+
+@Test func theSelectedWorktreeStaysInItsSection() {
+  let t = Date(timeIntervalSince1970: 1_000)
+  let held = HeldFloat(id: "s", state: .done, since: t.addingTimeInterval(-10))
+  // Seen and gone idle: still under Done, where it was, until deselected.
+  #expect(WorktreeSummary.activeSections([("d", .done, t)], held: held).map(\.ids) == [["s", "d"]])
+  // Its agent moved on (a prompt): it doesn't jump sections under the user.
+  let moved = WorktreeSummary.activeSections([("s", .needsAction, t), ("n", .needsAction, t)], held: held)
+  #expect(moved.map(\.state) == [.needsAction, .done])
+  #expect(moved.map(\.ids) == [["n"], ["s"]])
+  #expect(WorktreeSummary.activeSections([("d", .done, t)], held: nil).map(\.ids) == [["d"]])
+}

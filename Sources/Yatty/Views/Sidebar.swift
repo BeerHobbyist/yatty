@@ -13,7 +13,6 @@ struct Sidebar: View {
     let query = store.sidebarFilter
     let filtering = !query.trimmingCharacters(in: .whitespaces).isEmpty
     let all = store.repos.flatMap { store.worktrees[$0.id] ?? [] } + store.hosts.flatMap(\.worktrees)
-    let everyFloated = Set(store.floatedSections(of: all).flatMap(\.ids))
     let active = store.floatedSections(of: all.filter { matches($0, query: query, project: projectName(of: $0)) })
       .map { section in (state: section.state, worktrees: section.ids.compactMap { id in all.first { $0.id == id } }) }
     let floated = Set(active.flatMap { $0.worktrees.map(\.id) })
@@ -73,13 +72,6 @@ struct Sidebar: View {
       }
       // Rows float up and sink back, not jump.
       .animation(.easeOut(duration: 0.25), value: active.map { $0.worktrees.map(\.id) })
-      .onChange(of: everyFloated) { before, after in
-        // The selected row sinking into a folded project would vanish: open it.
-        guard let selected = store.selection, before.contains(selected), !after.contains(selected),
-          let project = store.projectID(of: selected), store.foldedProjects.contains(project)
-        else { return }
-        withAnimation(.easeOut(duration: 0.2)) { store.toggleFold(project) }
-      }
       .onChange(of: store.renamingWorktree?.id) { _, id in
         // Lazily built: a row scrolled away has no field to edit until shown.
         if let id { withAnimation { proxy.scrollTo(id) } }

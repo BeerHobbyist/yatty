@@ -17,6 +17,14 @@ struct WorktreeFacts {
   var isMain = false
 }
 
+/// The selected worktree's place among the floated ones, kept until the
+/// selection moves: its row doesn't move or sink under the user.
+struct HeldFloat: Equatable, Sendable {
+  var id: String
+  var state: AgentState
+  var since: Date
+}
+
 /// The sidebar's rules: a row's second line, the filter, which worktrees
 /// float to the top.
 enum WorktreeSummary {
@@ -52,10 +60,16 @@ enum WorktreeSummary {
   /// The worktrees whose agent wants attention or is busy, out of their
   /// projects and on top: needs you, then working, then done (until seen);
   /// in each, the longest in that state first. Idle ones stay put.
-  static func activeSections(_ agents: [(id: String, state: AgentState, since: Date)])
+  /// `held` stays in its section whatever its agent does now.
+  static func activeSections(_ agents: [(id: String, state: AgentState, since: Date)], held: HeldFloat? = nil)
     -> [(state: AgentState, ids: [String])]
   {
-    [AgentState.needsAction, .working, .done].compactMap { state in
+    var agents = agents
+    if let held {
+      agents.removeAll { $0.id == held.id }
+      agents.append((held.id, held.state, held.since))
+    }
+    return [AgentState.needsAction, .working, .done].compactMap { state in
       let ids = agents.enumerated().filter { $0.element.state == state }
         .sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }
         .map(\.element.id)
