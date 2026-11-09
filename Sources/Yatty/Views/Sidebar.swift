@@ -166,7 +166,7 @@ private struct FloatedSectionTitle: View {
         .padding(.vertical, 1)
         .background(Capsule().fill(state.tint.opacity(0.16)))
     }
-    .foregroundStyle(state.tint)
+    .foregroundStyle(state.textTint)
   }
 }
 

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// An agent's state as one symbol: needs you pulses, working spins, done is a
@@ -54,5 +55,28 @@ extension AgentState {
     case .done: .green
     case .idle: .secondary
     }
+  }
+
+  /// `tint` for text: the same in dark mode, a darker shade in light mode,
+  /// where system orange and green on white are too faint to read (~2:1).
+  var textTint: Color {
+    let light: NSColor =
+      switch self {
+      case .needsAction: NSColor(red: 0.60, green: 0.29, blue: 0.0, alpha: 1)
+      case .working: NSColor(red: 0.0, green: 0.38, blue: 0.80, alpha: 1)
+      case .done: NSColor(red: 0.11, green: 0.48, blue: 0.20, alpha: 1)
+      case .idle: .secondaryLabelColor
+      }
+    let dark: NSColor =
+      switch self {
+      case .needsAction: .systemOrange
+      case .working: .systemBlue
+      case .done: .systemGreen
+      case .idle: .secondaryLabelColor
+      }
+    return Color(
+      nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+      })
   }
 }
