@@ -103,3 +103,21 @@ private func details(
   #expect(MergeBox.button(clean, settings: MergeSettings(methods: [], autoMerge: false), lastMethod: nil)
     == .disabled("The repository allows no merge method"))
 }
+
+@Test func reviewReviewFixes() {
+  // gh writes Go's zero time for a check that hasn't finished.
+  var running = check("t", status: "IN_PROGRESS")
+  running.startedAt = "2026-11-06T08:00:00Z"
+  running.completedAt = "0001-01-01T00:00:00Z"
+  #expect(running.duration == nil)
+  var queued = check("t", status: "QUEUED")
+  queued.startedAt = "0001-01-01T00:00:00Z"
+  queued.completedAt = "0001-01-01T00:00:00Z"
+  #expect(queued.duration == nil)
+  // Asked again after requesting changes: listed once, as waiting.
+  let again = details(decision: "CHANGES_REQUESTED", reviews: [review("lead", "CHANGES_REQUESTED")], requests: ["lead"])
+  #expect(MergeBox.reviews(again).detail == "lead waiting")
+  // Only skipped checks: no "0 passed".
+  let skipped = details(checks: [check("a", conclusion: "SKIPPED"), check("b", conclusion: "NEUTRAL")])
+  #expect(MergeBox.checks(skipped) == MergeBoxLine(verdict: "All checks passed", detail: "2 skipped", tone: .good))
+}

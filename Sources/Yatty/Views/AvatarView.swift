@@ -30,7 +30,12 @@ struct AvatarView: View {
     .frame(width: size, height: size)
     .clipShape(Circle())
     .help(login)
-    .task(id: login) { image = await Avatars.shared.image(for: login) }
+    .task(id: login) {
+      // Reused for someone else: their picture if it's here, else their
+      // initial until it comes.
+      image = Avatars.shared.cached(login)
+      if image == nil { image = await Avatars.shared.image(for: login) }
+    }
   }
 
   private static let palette: [Color] = [.indigo, .orange, .teal, .pink, .purple, .green, .blue, .brown]
@@ -48,6 +53,8 @@ final class Avatars {
   private var images: [String: NSImage] = [:]
   private var loading: [String: Task<NSImage?, Never>] = [:]
   private var failed: Set<String> = []
+
+  func cached(_ login: String) -> NSImage? { images[login] }
 
   func image(for login: String) async -> NSImage? {
     if let image = images[login] { return image }

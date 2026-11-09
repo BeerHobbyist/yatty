@@ -31,9 +31,12 @@ enum MergeBox {
         }
       }
     // Who said what the verdict says first, by name alone; then the others
-    // with what they said; then who hasn't yet.
-    let agreeing = latest.filter { $0.state == verdict.state }.map { $0.author?.login ?? "ghost" }
-    let others = latest.filter { $0.state != verdict.state }.map { "\($0.author?.login ?? "ghost") \(said($0.state))" }
+    // with what they said; then who hasn't yet. Someone asked again is only
+    // waiting.
+    let asked = Set(d.reviewRequests.compactMap(\.login))
+    let reviewed = latest.filter { !asked.contains($0.author?.login ?? "") }
+    let agreeing = reviewed.filter { $0.state == verdict.state }.map { $0.author?.login ?? "ghost" }
+    let others = reviewed.filter { $0.state != verdict.state }.map { "\($0.author?.login ?? "ghost") \(said($0.state))" }
     let waiting = d.reviewRequests.map { "\($0.displayName) waiting" }
     return MergeBoxLine(verdict: verdict.text, detail: (agreeing + others + waiting).joined(separator: " · "), tone: verdict.tone)
   }
@@ -50,7 +53,7 @@ enum MergeBox {
       else { ("All checks passed", .good) }
     var detail: [String]
     if failing.isEmpty && running.isEmpty {
-      detail = ["\(passed.count) passed"] + (skipped.isEmpty ? [] : ["\(skipped.count) skipped"])
+      detail = (passed.isEmpty ? [] : ["\(passed.count) passed"]) + (skipped.isEmpty ? [] : ["\(skipped.count) skipped"])
     } else if checks.count <= 3 {
       detail = failing + running.map { "\($0) running" } + passed.map { "\($0) passed" } + skipped.map { "\($0) skipped" }
     } else {
@@ -113,10 +116,12 @@ extension PullRequests {
 }
 
 extension RawCheck {
-  /// How long it ran, once it finished.
+  /// How long it ran, once it finished. gh writes Go's zero time (year 1)
+  /// for a time GitHub doesn't have yet.
   var duration: TimeInterval? {
-    guard let startedAt, let completedAt,
-      let start = ISO8601DateFormatter().date(from: startedAt), let end = ISO8601DateFormatter().date(from: completedAt)
+    guard status?.uppercased() == "COMPLETED", let startedAt, let completedAt,
+      let start = ISO8601DateFormatter().date(from: startedAt), let end = ISO8601DateFormatter().date(from: completedAt),
+      start.timeIntervalSince1970 > 0, end.timeIntervalSince1970 > 0
     else { return nil }
     return max(0, end.timeIntervalSince(start))
   }
