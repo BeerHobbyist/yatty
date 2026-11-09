@@ -72,14 +72,20 @@ struct DiffTabView: View {
         "Couldn't Read the Diff", systemImage: "exclamationmark.triangle", description: Text(error))
     } else if let diff = store.diffTexts[tab.id]?.text {
       if diff.utf8.count > Self.largest {
-        ContentUnavailableView(
-          "Too Large to Show", systemImage: "doc.text.magnifyingglass",
-          description: Text(
-            "\(diff.utf8.count / 1_000_000) MB of changes. Open Diff… (⌥⌘D) can show it in a terminal viewer."))
+        VStack(spacing: 0) {
+          ContentUnavailableView(
+            "Too Large to Show", systemImage: "doc.text.magnifyingglass",
+            description: Text(
+              "\(diff.utf8.count / 1_000_000) MB of changes. Open Diff… (⌥⌘D) can show it in a terminal viewer."))
+          unshownComments
+        }
       } else if diff.isEmpty {
-        ContentUnavailableView(
-          "No Changes", systemImage: "checkmark.circle",
-          description: Text("\(diffTab.target.title) in \(store.label(for: worktree)): nothing differs."))
+        VStack(spacing: 0) {
+          ContentUnavailableView(
+            "No Changes", systemImage: "checkmark.circle",
+            description: Text("\(diffTab.target.title) in \(store.label(for: worktree)): nothing differs."))
+          unshownComments
+        }
       } else {
         DiffWebView(
           page: store.diffPage(for: tab.id), diff: diff, layout: store.diffLayout, comments: diffTab.comments
@@ -93,6 +99,37 @@ struct DiffTabView: View {
       }
     } else {
       ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+
+  /// Comments with no drawn diff to sit in: where they were, and Delete.
+  @ViewBuilder private var unshownComments: some View {
+    if !diffTab.comments.isEmpty {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 8) {
+          ForEach(diffTab.comments) { comment in
+            VStack(alignment: .leading, spacing: 4) {
+              Text("\(comment.path):\(comment.line)" + (comment.side == .old ? " (removed)" : ""))
+                .font(.caption.monospaced()).foregroundStyle(.secondary)
+              if !comment.code.isEmpty {
+                Text(comment.code).font(.caption.monospaced()).lineLimit(3)
+              }
+              HStack(alignment: .firstTextBaseline) {
+                Text(comment.text).textSelection(.enabled)
+                Spacer()
+                Button("Delete") { store.deleteDiffComment(comment.id, tab: tab.id, in: worktree) }
+                  .buttonStyle(.link)
+              }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+          }
+        }
+        .padding()
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+      }
     }
   }
 
@@ -133,7 +170,11 @@ struct DiffTabView: View {
     do {
       let reads = store.diffReads[tab.id, default: 0]
       let text = try await GitDiff.text(in: worktree.path, target: diffTab.target)
+      // Closed while it was read: nothing to keep it for.
+      guard store.layout(for: worktree).tabs.contains(where: { $0.id == tab.id }) else { return }
       store.diffTexts[tab.id] = DiffText(text: text, reads: reads)
+      // No page is drawn to find the comments' lines, and there are none.
+      if text.isEmpty { store.outdateDiffComments(tab: tab.id, in: worktree) }
       error = nil
     } catch {
       self.error = error.localizedDescription

@@ -667,6 +667,12 @@ final class AppStore {
     updateLayout(worktree.id) { $0.updateDiff(tabID) { _ = $0.place(anchors) } }
   }
 
+  /// The diff has no lines any more: every comment on it is outdated.
+  func outdateDiffComments(tab tabID: String, in worktree: Worktree) {
+    let comments = layout(for: worktree).tabs.first(where: { $0.id == tabID })?.diff?.comments ?? []
+    placeDiffComments(comments.map { .init(id: $0.id, line: $0.line, outdated: true) }, tab: tabID, in: worktree)
+  }
+
   func deleteDiffComment(_ id: String, tab tabID: String, in worktree: Worktree) {
     updateLayout(worktree.id) { $0.updateDiff(tabID) { $0.comments.removeAll { $0.id == id } } }
   }

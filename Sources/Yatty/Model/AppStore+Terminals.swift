@@ -339,11 +339,16 @@ extension AppStore {
     if tab.diff == nil {
       Task { await endSessions(tab.root.panes, of: worktree) }
     } else {
-      diffReads[tab.id] = nil
-      diffTexts[tab.id] = nil
-      diffPages.removeValue(forKey: tab.id)?.close()
+      forgetDiff(tab.id)
     }
     if selection == worktree.id { focusSelectedTerminal() }
+  }
+
+  /// Lets go of a closed diff tab's page and last read diff.
+  func forgetDiff(_ tabID: String) {
+    diffReads[tabID] = nil
+    diffTexts[tabID] = nil
+    diffPages.removeValue(forKey: tabID)?.close()
   }
 
   func selectTab(_ tabID: String, in worktree: Worktree) {
@@ -387,6 +392,7 @@ extension AppStore {
     defer { retiring.remove(worktree.id) }
     let panes = Set(layout(for: worktree).allPanes).union(["0"])
     for pane in panes { dropTerminal(PaneKey(worktree: worktree.id, pane: pane)) }
+    for tab in layout(for: worktree).tabs where tab.diff != nil { forgetDiff(tab.id) }
     layouts[worktree.id] = nil
     labels[worktree.id] = nil
     saveState()
