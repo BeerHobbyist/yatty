@@ -121,3 +121,25 @@ extension RawCheck {
     return max(0, end.timeIntervalSince(start))
   }
 }
+
+/// What the merge box's button does now.
+enum MergeButton: Equatable, Sendable {
+  case merge(MergeMethod)
+  case autoMerge(MergeMethod)
+  /// Can't: why.
+  case disabled(String)
+}
+
+extension MergeBox {
+  /// Today's merge rules (`PullRequests.mergeOptions`), with the method used
+  /// last when the repository still allows it, else its first.
+  static func button(_ d: PullRequestDetails, settings: MergeSettings?, lastMethod: MergeMethod?) -> MergeButton {
+    guard let settings else { return .disabled("Loading merge options…") }
+    guard let method = lastMethod.flatMap({ settings.methods.contains($0) ? $0 : nil }) ?? settings.methods.first
+    else { return .disabled("The repository allows no merge method") }
+    let options = PullRequests.mergeOptions(d, settings: settings)
+    if options.now { return .merge(method) }
+    if options.auto { return .autoMerge(method) }
+    return .disabled(options.reason ?? "It can't be merged from here.")
+  }
+}

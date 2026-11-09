@@ -14,6 +14,14 @@ struct AddHostRequest: Identifiable {
   var host = ""
 }
 
+/// A merge to confirm: with a method picked (the PR panel's button), the
+/// sheet opens at its confirm step; without (menus, palette) it asks for one.
+struct MergeRequest: Identifiable {
+  var worktree: Worktree
+  var method: MergeMethod?
+  var id: String { worktree.id }
+}
+
 struct AppAlert: Identifiable {
   let id = UUID()
   let title: String
@@ -97,11 +105,13 @@ final class AppStore {
   let agents = AgentMonitor()
   let gitStatus = GitStatusMonitor()
   let pullRequests = PullRequestStore()
-  var showingPullRequest = Snapshot.sheet == "pr-panel"
-  var mergingWorktree: Worktree?
+  var showingPullRequest = Snapshot.sheet?.hasPrefix("pr-") == true
+  /// The merge sheet's subject; see `MergeRequest`.
+  var mergeRequest: MergeRequest?
+  /// Per worktree: the PR panel's tab. Not saved.
+  var prTabs: [String: PullRequestTab] = [:]
   /// The worktree whose pull request comments are being picked for the agent.
   var reviewingComments: Worktree?
-  var foldedSections: Set<String> = []
   var mergeMethod: MergeMethod?
   var diffViewer: DiffViewer?
   var diffingWorktree: Worktree?
@@ -136,7 +146,6 @@ final class AppStore {
       selection = stored.selectedWorktree
       layouts = stored.layouts
       labels = stored.labels
-      foldedSections = Set(stored.foldedSections)
       foldedProjects = Set(stored.foldedProjects)
       mergeMethod = stored.mergeMethod
       diffViewer = stored.diffViewer
@@ -185,7 +194,11 @@ final class AppStore {
         if let worktree = selectedWorktree, let repo = repo(of: worktree) {
           pullRequests.refreshDetails(for: worktree, in: repo)
           try? await Task.sleep(for: .milliseconds(500))
-          if Snapshot.sheet == "merge" { mergingWorktree = worktree } else { reviewingComments = worktree }
+          if Snapshot.sheet == "merge" {
+            mergeRequest = MergeRequest(worktree: worktree, method: nil)
+          } else {
+            reviewingComments = worktree
+          }
         }
       }
     }
@@ -576,11 +589,6 @@ final class AppStore {
     saveState()
   }
 
-  func toggleSection(_ name: String) {
-    if foldedSections.remove(name) == nil { foldedSections.insert(name) }
-    saveState()
-  }
-
   /// Badges, and the inspector's details, asked again now.
   func refreshPullRequests() {
     pullRequests.refreshAll(force: true)
@@ -642,7 +650,7 @@ final class AppStore {
     ConfigFiles.saveState(
       StoredState(
         repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
-        foldedSections: foldedSections.sorted(), foldedProjects: foldedProjects.sorted(), mergeMethod: mergeMethod,
+        foldedProjects: foldedProjects.sorted(), mergeMethod: mergeMethod,
         diffViewer: diffViewer, hosts: hosts, remoteCleanup: remoteCleanup))
   }
 }

@@ -18,6 +18,9 @@ enum Snapshot {
   /// `YATTY_SNAPSHOT_HOVER`: a worktree id whose sidebar row draws as hovered.
   static var hover: String? { value("YATTY_SNAPSHOT_HOVER") }
 
+  /// `YATTY_SNAPSHOT_PR_TAB`: the PR panel's tab (conversation, checks, description).
+  static var prTab: PullRequestTab? { value("YATTY_SNAPSHOT_PR_TAB").flatMap(PullRequestTab.init(rawValue:)) }
+
   /// `YATTY_SNAPSHOT_FILTER`: text already in the sidebar's filter.
   static var filter: String? { value("YATTY_SNAPSHOT_FILTER") }
 

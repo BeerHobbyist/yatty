@@ -198,6 +198,15 @@ enum MergeMethod: String, CaseIterable, Codable, Sendable {
     case .rebase: "Rebase and merge"
     }
   }
+
+  /// On the merge button.
+  var buttonTitle: String {
+    switch self {
+    case .merge: "Merge"
+    case .squash: "Squash and Merge"
+    case .rebase: "Rebase and Merge"
+    }
+  }
 }
 
 struct MergeSettings: Equatable, Sendable {

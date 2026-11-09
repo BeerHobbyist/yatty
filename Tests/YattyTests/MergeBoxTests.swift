@@ -12,14 +12,15 @@ private func review(_ login: String, _ state: String) -> PullRequestDetails.Revi
 }
 
 private func details(
-  state: String = "OPEN", mergeable: String = "MERGEABLE", decision: String = "",
+  state: String = "OPEN", mergeable: String = "MERGEABLE", status: String = "BLOCKED", draft: Bool = false,
+  decision: String = "",
   reviews: [PullRequestDetails.Review] = [], requests: [String] = [], checks: [RawCheck] = [],
   author: String? = "octo"
 ) -> PullRequestDetails {
   PullRequestDetails(
-    number: 42, title: "t", url: "u", state: state, isDraft: false, author: author.map { .init(login: $0) },
+    number: 42, title: "t", url: "u", state: state, isDraft: draft, author: author.map { .init(login: $0) },
     baseRefName: "main", headRefName: "feature/login", headRefOid: "h", additions: 1, deletions: 0, changedFiles: 1,
-    updatedAt: "", mergeable: mergeable, mergeStateStatus: "BLOCKED", reviewDecision: decision,
+    updatedAt: "", mergeable: mergeable, mergeStateStatus: status, reviewDecision: decision,
     latestReviews: reviews, reviewRequests: requests.map { .init(login: $0, name: nil) }, reviews: [], comments: [],
     labels: [], statusCheckRollup: checks, body: "")
 }
@@ -83,4 +84,22 @@ private func details(
   let run = PullRequests.actionsRun("https://github.com/me/app/actions/runs/123")
   #expect(run?.nameWithOwner == "me/app" && run?.runID == "123")
   #expect(PullRequests.actionsRun("https://ci.example.com/build/9") == nil)
+}
+
+@Test func mergeButtonStates() {
+  let both = MergeSettings(methods: [.squash, .merge], autoMerge: true)
+  let clean = details(status: "CLEAN")
+  #expect(MergeBox.button(clean, settings: nil, lastMethod: nil) == .disabled("Loading merge options…"))
+  // A remembered method the repository doesn't allow isn't used.
+  #expect(MergeBox.button(clean, settings: both, lastMethod: .rebase) == .merge(.squash))
+  #expect(MergeBox.button(clean, settings: both, lastMethod: .merge) == .merge(.merge))
+  #expect(MergeBox.button(details(decision: "REVIEW_REQUIRED"), settings: both, lastMethod: nil) == .autoMerge(.squash))
+  let noAuto = MergeSettings(methods: [.squash], autoMerge: false)
+  #expect(
+    MergeBox.button(details(decision: "REVIEW_REQUIRED"), settings: noAuto, lastMethod: nil)
+      == .disabled("Blocked: review required — and auto-merge is off for this repo"))
+  #expect(MergeBox.button(details(mergeable: "CONFLICTING"), settings: both, lastMethod: nil) == .disabled("Merge conflicts with main"))
+  #expect(MergeBox.button(details(draft: true), settings: both, lastMethod: nil) == .disabled("Draft — not ready for review"))
+  #expect(MergeBox.button(clean, settings: MergeSettings(methods: [], autoMerge: false), lastMethod: nil)
+    == .disabled("The repository allows no merge method"))
 }

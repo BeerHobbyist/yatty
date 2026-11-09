@@ -5,6 +5,8 @@ import SwiftUI
 /// head commit on screen. agentree's merge dialog.
 struct MergeSheet: View {
   let worktree: Worktree
+  /// Picked already (the PR panel's button): start at the confirm step.
+  var preset: MergeMethod?
   @Environment(AppStore.self) private var store
   @Environment(\.dismiss) private var dismiss
 
@@ -125,7 +127,12 @@ struct MergeSheet: View {
     do {
       let loaded = try await GitHub.mergeSettings(nameWithOwner)
       settings = loaded
-      method = methods(loaded).first ?? .squash
+      if let preset, loaded.methods.contains(preset) {
+        method = preset
+        step = .confirming
+      } else {
+        method = methods(loaded).first ?? .squash
+      }
     } catch {
       settingsError = error.localizedDescription
     }

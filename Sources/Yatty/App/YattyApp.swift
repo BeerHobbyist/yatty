@@ -51,7 +51,7 @@ struct YattyApp: App {
         Button("Refresh Pull Requests") { store.refreshPullRequests() }
           .keyboardShortcut(Shortcuts.refresh)
         Button("Merge Pull Request…") {
-          if let worktree = store.selectedWorktree { store.mergingWorktree = worktree }
+          if let worktree = store.selectedWorktree { store.mergeRequest = MergeRequest(worktree: worktree, method: nil) }
         }
         .disabled(!context.canMerge)
         Button("Review Comments…") {

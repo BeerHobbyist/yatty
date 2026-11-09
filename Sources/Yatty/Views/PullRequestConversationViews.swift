@@ -32,7 +32,7 @@ enum ReviewVerdict {
   }
 }
 
-/// One comment: who, when, and what, as markdown. A double-click opens it on GitHub.
+/// One comment: who and when over a bubble of markdown. Its time opens it on GitHub.
 struct PullRequestNoteView: View {
   let author: String
   /// The review's state, for a review's summary.
@@ -45,22 +45,31 @@ struct PullRequestNoteView: View {
   @Environment(\.openURL) private var openURL
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 3) {
+    VStack(alignment: .leading, spacing: 4) {
       HStack(spacing: 6) {
+        AvatarView(login: author)
         Text(author).fontWeight(.medium)
         if let review {
           Octicon(ReviewVerdict.icon(review), size: 12).foregroundStyle(ReviewVerdict.color(review))
             .help(ReviewVerdict.label(review))
         }
         Spacer()
-        Text(PullRequests.relativeTime(date)).font(.caption).foregroundStyle(.secondary)
+        if let link = url.flatMap(URL.init(string:)) {
+          Button(PullRequests.relativeTime(date)) { openURL(link) }
+            .buttonStyle(.link)
+            .font(.caption)
+            .help("Open on GitHub")
+        } else {
+          Text(PullRequests.relativeTime(date)).font(.caption).foregroundStyle(.secondary)
+        }
       }
       MarkdownText(text, maxHeight: maxHeight)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 9).fill(.quaternary.opacity(0.4)))
+        .padding(.leading, 24)
     }
-    .padding(.leading, 8)
-    .overlay(alignment: .leading) { Rectangle().fill(.quaternary).frame(width: 2) }
-    .contentShape(Rectangle())
-    .onTapGesture(count: 2) { if let url = url.flatMap(URL.init(string:)) { openURL(url) } }
   }
 }
 
@@ -93,9 +102,11 @@ struct ReviewThreadView: View {
         ForEach(Array(thread.comments.enumerated()), id: \.offset) { _, comment in
           PullRequestNoteView(author: comment.author, date: comment.createdAt, text: comment.body, url: comment.url)
         }
-        .padding(.leading, 14)
       }
     }
+    .padding(8)
+    .background(RoundedRectangle(cornerRadius: 9).strokeBorder(.quaternary))
+    .opacity(thread.isResolved && !open ? 0.7 : 1)
   }
 }
 

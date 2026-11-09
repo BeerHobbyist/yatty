@@ -4,7 +4,7 @@
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
 #   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff,
 #   ssh, add-host, disconnected, folded, review-comments, sidebar-filter, sidebar-hover,
-#   sidebar-rename, palette, help, settings
+#   sidebar-rename, pr-checks, pr-description, pr-ready, pr-merged, palette, help, settings
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -101,7 +101,7 @@ EOF
       sidebar-rename) export YATTY_SNAPSHOT_SHEET=sidebar-rename ;;
     esac
     ;;
-  status|pr-panel|merge|review-comments)
+  status|pr-panel|pr-checks|pr-description|pr-ready|pr-merged|merge|review-comments)
     cat > "$state" <<EOF
 { "repos": [{ "name": "sample-app", "path": "$repo", "nameWithOwner": "me/sample-app" }], "selectedWorktree": "$login" }
 EOF
@@ -123,11 +123,21 @@ EOF
  "reviews":[{"author":{"login":"lead"},"state":"CHANGES_REQUESTED","submittedAt":"2026-11-06T08:00:00Z","body":"The token expiry needs a test."}],
  "comments":[{"author":{"login":"octo"},"body":"Ready for another look — **expiry** is now configurable:\n\n- `LINK_TTL` sets it\n- [x] tests updated\n\n<!-- bot: hidden -->","createdAt":"2026-11-06T09:30:00Z","url":"https://github.com"}],
  "labels":[{"name":"feature","color":"0e8a16"},{"name":"needs-review","color":"fbca04"}],
- "statusCheckRollup":[{"name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://github.com"},
-                      {"name":"unit tests","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com"},
+ "statusCheckRollup":[{"name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://github.com",
+                       "startedAt":"2026-11-06T08:00:00Z","completedAt":"2026-11-06T08:01:12Z"},
+                      {"name":"unit tests","status":"COMPLETED","conclusion":"FAILURE",
+                       "detailsUrl":"https://github.com/me/sample-app/actions/runs/123/job/456",
+                       "startedAt":"2026-11-06T08:00:00Z","completedAt":"2026-11-06T08:03:40Z"},
                       {"name":"lint","status":"IN_PROGRESS","detailsUrl":"https://github.com"}],
  "body":"Adds **magic link** login.\n\n- emails a one-time link\n- links expire after 15 minutes"}
 EOF
+    case "$scene" in
+      pr-checks) export YATTY_SNAPSHOT_PR_TAB=checks ;;
+      pr-description) export YATTY_SNAPSHOT_PR_TAB=description ;;
+      pr-ready) sed -i '' -e 's/"mergeStateStatus":"BLOCKED"/"mergeStateStatus":"CLEAN"/' \
+                  -e 's/"reviewDecision":"REVIEW_REQUIRED"/"reviewDecision":"APPROVED"/' "$sandbox/details.json" ;;
+      pr-merged) sed -i '' -e 's/"state":"OPEN"/"state":"MERGED"/' "$sandbox/details.json" ;;
+    esac
     export YATTY_PR_DETAILS_FIXTURE="$sandbox/details.json"
     cat > "$sandbox/threads.json" <<'EOF'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[

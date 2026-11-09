@@ -123,7 +123,7 @@ extension AppStore {
     }
     add("pr.refresh", "Refresh Pull Requests", "Pull Request", Shortcuts.refresh) { self.refreshPullRequests() }
     add("pr.merge", "Merge Pull Request…", "Pull Request", when: context.canMerge) {
-      self.mergingWorktree = selected
+      if let selected { self.mergeRequest = MergeRequest(worktree: selected, method: nil) }
     }
     add("pr.reviewComments", "Review Comments…", "Pull Request", when: context.canReviewComments) {
       self.reviewingComments = selected

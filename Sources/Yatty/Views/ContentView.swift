@@ -73,8 +73,8 @@ struct ContentView: View {
     .sheet(item: $store.diffingWorktree) { worktree in
       DiffSheet(worktree: worktree)
     }
-    .sheet(item: $store.mergingWorktree) { worktree in
-      MergeSheet(worktree: worktree)
+    .sheet(item: $store.mergeRequest) { request in
+      MergeSheet(worktree: request.worktree, preset: request.method)
     }
     .sheet(item: $store.reviewingComments) { worktree in
       CommentReviewSheet(worktree: worktree)
