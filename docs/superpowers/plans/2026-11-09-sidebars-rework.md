@@ -255,3 +255,11 @@
 - [ ] **Step 2:** Render every snapshot scene once more and look at all of them side by side for leftovers of the old style (fold arrows in the inspector, text glyphs, the footer).
 - [ ] **Step 3:** One fresh reviewer over the whole branch; fix what holds up; one re-review.
 - [ ] **Step 4: Commit** `docs: sidebars rework done`.
+
+## Progress
+
+- Task 1 ✅ row facts, filter, needs-you rules (review: 2 minor, fixed)
+- Task 2 ✅ sidebar views (review: 1 major + 5 minor, fixed)
+- Task 3 ✅ merge box rules, check timing, re-run, avatars (review: 1 major + 3 minor, fixed)
+- Task 4 ✅ PR panel header, merge box, tabs (review: 1 major + 5 minor, fixed)
+- Task 5 ✅ menus and palette for every new action, README, all scenes re-rendered
