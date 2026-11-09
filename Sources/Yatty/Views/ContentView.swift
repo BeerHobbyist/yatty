@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
   @Environment(AppStore.self) private var store
   @Environment(\.openSettings) private var openSettings
+  @Environment(\.openWindow) private var openWindow
   @State private var columns = NavigationSplitViewVisibility.all
 
   var body: some View {
@@ -34,6 +35,11 @@ struct ContentView: View {
     .onChange(of: store.focusingFilter) { _, focusing in
       // Filtering needs the sidebar there.
       if focusing { columns = .all }
+    }
+    .onChange(of: store.openingDiff) { _, request in
+      guard let request else { return }
+      openWindow(value: request)
+      store.openingDiff = nil
     }
     .task(id: store.openingSettings) {
       guard store.openingSettings else { return }

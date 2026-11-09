@@ -100,6 +100,8 @@ struct StoredState: Codable {
   var labels: [String: String] = [:]
   /// Sidebar repositories and hosts the user folded, by id.
   var foldedProjects: [String] = []
+  /// The diff window's layout, as last chosen.
+  var diffLayout: DiffLayout?
   /// The merge method used last, offered first.
   var mergeMethod: MergeMethod?
   /// The diff viewer the user picked.
@@ -111,8 +113,9 @@ struct StoredState: Codable {
     repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
     labels: [String: String] = [:], foldedProjects: [String] = [],
     mergeMethod: MergeMethod? = nil, diffViewer: DiffViewer? = nil, hosts: [SSHHost] = [],
-    remoteCleanup: [RemoteCleanup] = []
+    remoteCleanup: [RemoteCleanup] = [], diffLayout: DiffLayout? = nil
   ) {
+    self.diffLayout = diffLayout
     self.hosts = hosts
     self.remoteCleanup = remoteCleanup
     self.diffViewer = diffViewer
@@ -132,6 +135,7 @@ struct StoredState: Codable {
     layouts = try container.decodeIfPresent([String: WorktreeLayout].self, forKey: .layouts) ?? [:]
     labels = try container.decodeIfPresent([String: String].self, forKey: .labels) ?? [:]
     foldedProjects = (try? container.decodeIfPresent([String].self, forKey: .foldedProjects)) ?? []
+    diffLayout = try? container.decodeIfPresent(DiffLayout.self, forKey: .diffLayout)
     mergeMethod = try? container.decodeIfPresent(MergeMethod.self, forKey: .mergeMethod)
     diffViewer = try? container.decodeIfPresent(DiffViewer.self, forKey: .diffViewer)
     hosts = try container.decodeIfPresent([SSHHost].self, forKey: .hosts) ?? []

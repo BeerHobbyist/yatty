@@ -1,7 +1,7 @@
 import Foundation
 
 /// What to diff, as `git diff` arguments.
-enum DiffTarget: Hashable, Sendable {
+enum DiffTarget: Hashable, Codable, Sendable {
   case working
   case staged
   /// Against the base branch (`origin/main`): what the branch adds.
@@ -35,10 +35,13 @@ enum DiffTarget: Hashable, Sendable {
 /// The diff viewers agentree offers, each turning `git diff` arguments into
 /// a shell command (agentree's src/services/diff.ts).
 enum DiffViewer: String, CaseIterable, Codable, Sendable {
+  /// Yatty's own diff window (`DiffWindow`); the rest run in a terminal tab.
+  case yatty
   case hunk, diffnav, delta, difftastic, lumen, diffview, git
 
   var label: String {
     switch self {
+    case .yatty: "Yatty"
     case .diffview: "nvim diffview"
     case .git: "git diff"
     default: rawValue
@@ -48,6 +51,7 @@ enum DiffViewer: String, CaseIterable, Codable, Sendable {
   /// Programs it needs on PATH.
   var needs: [String] {
     switch self {
+    case .yatty: []
     case .hunk: ["hunk"]
     case .diffnav: ["diffnav", "delta"]
     case .delta: ["delta"]
@@ -62,8 +66,11 @@ enum DiffViewer: String, CaseIterable, Codable, Sendable {
   /// plugin can't be detected).
   var auto: Bool { self != .diffview }
 
+  /// The terminal command; Yatty's own viewer has none (`DiffWindow`).
   func command(args: [String]) -> String {
     switch self {
+    case .yatty:
+      return Self.git(args)
     case .hunk:
       return (["hunk", "diff"] + args).map(shellQuote).joined(separator: " ")
     case .diffnav:

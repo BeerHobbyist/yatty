@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import Yatty
@@ -53,4 +54,28 @@ import Testing
   let commits = Git.parseCommits(log, emptyTree: "4b825dc")
   #expect(commits.map(\.parent) == ["4b825dc", "aaa"])
   #expect(commits.map(\.subject) == ["first", "second"])
+}
+
+@Test func guiDiffRunsGitWithoutRepoPrograms() {
+  // A sandboxed agent can write the repository's config: nothing in it may
+  // run when the app reads the diff.
+  let args = GitDiff.arguments(["--staged"])
+  #expect(args.prefix(4) == ["-c", "core.fsmonitor=false", "-c", "diff.external="])
+  #expect(args.contains("--no-ext-diff") && args.contains("--no-textconv") && args.contains("--no-color"))
+  #expect(args.last == "--staged")
+  let untracked = GitDiff.untrackedArguments("new file.swift")
+  #expect(untracked.suffix(3) == ["--", "/dev/null", "new file.swift"])
+  #expect(untracked.contains("--no-index") && untracked.contains("--no-ext-diff"))
+}
+
+@Test func yattyIsTheDefaultViewer() {
+  #expect(DiffViewers.available(in: "/nonexistent").first == .yatty)
+  #expect(DiffViewers.resolve(nil, available: [.yatty, .delta, .git]) == .yatty)
+  #expect(DiffViewers.resolve(.delta, available: [.yatty, .delta, .git]) == .delta)
+}
+
+@Test func diffRequestsSurviveRestoration() throws {
+  let request = DiffRequest(worktreePath: "/r/.worktrees/login", worktreeName: "login", target: .base("origin/main"))
+  let decoded = try JSONDecoder().decode(DiffRequest.self, from: JSONEncoder().encode(request))
+  #expect(decoded == request)
 }

@@ -180,6 +180,12 @@ extension AppStore {
     let viewer = DiffViewers.resolve(diffViewer, available: available)
     // It may have been closed meanwhile.
     guard let current = self.worktree(withID: worktree.id) else { throw CLIError("the worktree was closed") }
+    if viewer == .yatty {
+      // Read-only, with git kept from running the repository's programs
+      // (`GitDiff`): safe for a sandboxed agent to ask for too.
+      openDiff(current, target: target)
+      return "diff (\(word)) opened in Yatty's diff window"
+    }
     newTab(
       in: current, command: DiffViewers.command(viewer, args: target.args), name: "diff: \(target.title)",
       sandboxed: sandboxed)

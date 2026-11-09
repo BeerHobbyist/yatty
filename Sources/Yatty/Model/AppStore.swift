@@ -119,6 +119,12 @@ final class AppStore {
   var reviewingComments: Worktree?
   var mergeMethod: MergeMethod?
   var diffViewer: DiffViewer?
+  /// The diff window's layout; kept.
+  var diffLayout = DiffLayout.split {
+    didSet { if diffLayout != oldValue { saveState() } }
+  }
+  /// Asks the window to open a diff window (only a view can).
+  var openingDiff: DiffRequest?
   var diffingWorktree: Worktree?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
@@ -154,6 +160,7 @@ final class AppStore {
       foldedProjects = Set(stored.foldedProjects)
       mergeMethod = stored.mergeMethod
       diffViewer = stored.diffViewer
+      diffLayout = stored.diffLayout ?? .split
       hosts = stored.hosts
       remoteCleanup = stored.remoteCleanup
       reposKnown = true
@@ -177,6 +184,12 @@ final class AppStore {
     if Snapshot.sheet == "palette" { showingPalette = true }
     if Snapshot.sheet == "help" { showingHelp = true }
     if Snapshot.sheet == "settings" { openingSettings = true }
+    if Snapshot.sheet == "diff-window" {
+      Task {
+        await refreshAll()
+        if let worktree = selectedWorktree { openDiff(worktree, target: .working) }
+      }
+    }
     if Snapshot.sheet == "sidebar-rename" {
       Task {
         await refreshAll()
@@ -611,6 +624,11 @@ final class AppStore {
 
   // MARK: Pull requests
 
+  /// The diff in Yatty's own window.
+  func openDiff(_ worktree: Worktree, target: DiffTarget) {
+    openingDiff = DiffRequest(worktreePath: worktree.path, worktreeName: label(for: worktree), target: target)
+  }
+
   func setDiffViewer(_ viewer: DiffViewer) {
     diffViewer = viewer
     saveState()
@@ -723,6 +741,6 @@ final class AppStore {
       StoredState(
         repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
         foldedProjects: foldedProjects.sorted(), mergeMethod: mergeMethod,
-        diffViewer: diffViewer, hosts: hosts, remoteCleanup: remoteCleanup))
+        diffViewer: diffViewer, hosts: hosts, remoteCleanup: remoteCleanup, diffLayout: diffLayout))
   }
 }
