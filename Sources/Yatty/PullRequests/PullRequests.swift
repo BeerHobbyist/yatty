@@ -30,6 +30,99 @@ struct BranchPullRequest: Equatable, Sendable {
   var headOid: String
 }
 
+/// A conversation on the diff. GitHub folds resolved ones away.
+struct ReviewThread: Equatable, Sendable, Identifiable {
+  struct Comment: Equatable, Sendable {
+    var author: String
+    var body: String
+    var createdAt: String
+    var url: String?
+  }
+
+  var id: String
+  var path: String
+  var line: Int?
+  /// Where a comment on several lines starts.
+  var startLine: Int? = nil
+  /// On the removed side of the diff: its lines are the base branch's.
+  var onBase = false
+  var isResolved: Bool
+  var isOutdated: Bool
+  var comments: [Comment]
+
+  /// When it last moved: its newest comment.
+  var date: String { comments.map(\.createdAt).max() ?? "" }
+
+  /// `path:line`, or `path:start-end` for several lines.
+  var location: String {
+    guard let line else { return path }
+    if let startLine, startLine != line { return "\(path):\(startLine)-\(line)" }
+    return "\(path):\(line)"
+  }
+
+  static let query = """
+    query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100) {
+            nodes {
+              id isResolved isOutdated path line originalLine startLine originalStartLine diffSide startDiffSide
+              comments(first: 50) { nodes { author { login } body createdAt url } }
+            }
+          }
+        }
+      }
+    }
+    """
+
+  /// `query`'s answer; nil when it isn't one.
+  static func parse(_ data: Data) -> [ReviewThread]? {
+    struct Response: Decodable {
+      struct Node: Decodable {
+        struct Comments: Decodable { var nodes: [CommentNode] }
+        struct CommentNode: Decodable {
+          struct Author: Decodable { var login: String }
+          var author: Author?
+          var body: String
+          var createdAt: String
+          var url: String?
+        }
+        var id: String
+        var isResolved: Bool
+        var isOutdated: Bool
+        var path: String
+        var line: Int?
+        var originalLine: Int?
+        var startLine: Int?
+        var originalStartLine: Int?
+        var diffSide: String?
+        var startDiffSide: String?
+        var comments: Comments
+      }
+      struct Threads: Decodable { var nodes: [Node] }
+      struct PullRequest: Decodable { var reviewThreads: Threads }
+      struct Repository: Decodable { var pullRequest: PullRequest? }
+      struct Payload: Decodable { var repository: Repository? }
+      var data: Payload?
+    }
+    guard let nodes = (try? JSONDecoder().decode(Response.self, from: data))?.data?.repository?.pullRequest?
+      .reviewThreads.nodes
+    else { return nil }
+    return nodes.map { node in
+      ReviewThread(
+        id: node.id, path: node.path, line: node.line ?? node.originalLine,
+        // A range from removed lines into added ones mixes two files' numbers: its end alone.
+        startLine: node.startDiffSide.map { $0 != node.diffSide } == true
+          ? nil : node.line == nil ? node.originalStartLine : node.startLine,
+        onBase: node.diffSide == "LEFT",
+        isResolved: node.isResolved, isOutdated: node.isOutdated,
+        comments: node.comments.nodes.map {
+          Comment(author: $0.author?.login ?? "?", body: $0.body, createdAt: $0.createdAt, url: $0.url)
+        })
+    }
+  }
+}
+
 /// `gh pr view --json …` for the inspector.
 struct PullRequestDetails: Decodable, Equatable, Sendable {
   struct Person: Decodable, Equatable, Sendable { var login: String }

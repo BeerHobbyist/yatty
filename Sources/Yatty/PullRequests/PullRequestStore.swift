@@ -9,7 +9,7 @@ final class PullRequestStore {
   /// Per worktree: nil = no pull request; missing = not known yet.
   private(set) var badges: [String: BranchPullRequest?] = [:]
   private(set) var details: [String: PullRequestDetails] = [:]
-  private(set) var inlineComments: [String: [GitHub.InlineComment]] = [:]
+  private(set) var reviewThreads: [String: [ReviewThread]] = [:]
   private(set) var detailsRefreshed: [String: Date] = [:]
   private(set) var detailsFailed: Set<String> = []
   private(set) var refreshingDetails: Set<String> = []
@@ -97,9 +97,9 @@ final class PullRequestStore {
     Task {
       defer { refreshingDetails.remove(worktree.id) }
       do {
-        let (fresh, inline) = try await GitHub.pullRequestDetails(badge.number, in: nameWithOwner)
+        let (fresh, threads) = try await GitHub.pullRequestDetails(badge.number, in: nameWithOwner)
         details[worktree.id] = fresh
-        inlineComments[worktree.id] = inline
+        reviewThreads[worktree.id] = threads
         detailsRefreshed[worktree.id] = Date()
         detailsFailed.remove(worktree.id)
       } catch {

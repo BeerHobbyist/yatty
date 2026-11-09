@@ -130,7 +130,7 @@ private struct RemoteRepoRow: View {
         Text(repo.name).fontWeight(.medium).lineLimit(1).truncationMode(.middle)
           .layoutPriority(1)
         if repo.isPrivate {
-          Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.secondary)
+          Octicon(.lock, size: 10).foregroundStyle(.secondary)
         }
         Text(repo.nameWithOwner).font(.caption).foregroundStyle(.secondary)
           .lineLimit(1).truncationMode(.middle)

@@ -85,6 +85,8 @@ final class AppStore {
   let pullRequests = PullRequestStore()
   var showingPullRequest = Snapshot.sheet == "pr-panel"
   var mergingWorktree: Worktree?
+  /// The worktree whose pull request comments are being picked for the agent.
+  var reviewingComments: Worktree?
   var foldedSections: Set<String> = []
   var mergeMethod: MergeMethod?
   var diffViewer: DiffViewer?
@@ -156,14 +158,14 @@ final class AppStore {
         diffingWorktree = selectedWorktree
       }
     }
-    if Snapshot.sheet == "merge" {
+    if Snapshot.sheet == "merge" || Snapshot.sheet == "review-comments" {
       Task {
         await refreshAll()
         try? await Task.sleep(for: .seconds(1))
         if let worktree = selectedWorktree, let repo = repo(of: worktree) {
           pullRequests.refreshDetails(for: worktree, in: repo)
           try? await Task.sleep(for: .milliseconds(500))
-          mergingWorktree = worktree
+          if Snapshot.sheet == "merge" { mergingWorktree = worktree } else { reviewingComments = worktree }
         }
       }
     }

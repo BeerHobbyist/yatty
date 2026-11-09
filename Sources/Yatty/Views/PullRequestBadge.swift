@@ -1,26 +1,29 @@
 import SwiftUI
 
-/// A worktree's pull request: `#N` tinted by its checks, `draft` for one,
-/// `✓#N` once merged. A click shows it in the inspector.
+/// A worktree's pull request: GitHub's icon for its state and `#N`, tinted
+/// by its checks, purple once merged. A click shows it in the inspector.
 struct PullRequestBadge: View {
   let pullRequest: BranchPullRequest
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      Text(label)
-        .font(.caption.monospacedDigit())
-        .foregroundStyle(tint)
+      HStack(spacing: 2) {
+        Octicon(icon, size: 11)
+        Text("#\(pullRequest.number)").font(.caption.monospacedDigit())
+      }
+      .foregroundStyle(tint)
     }
     .buttonStyle(.borderless)
     .fixedSize()
     .layoutPriority(1)
-    .help(pullRequest.title.isEmpty ? "Pull request #\(pullRequest.number)" : pullRequest.title)
+    .help(
+      (pullRequest.merged ? "Merged: " : pullRequest.isDraft ? "Draft: " : "")
+        + (pullRequest.title.isEmpty ? "Pull request #\(pullRequest.number)" : pullRequest.title))
   }
 
-  private var label: String {
-    if pullRequest.merged { return "✓#\(pullRequest.number)" }
-    return "#\(pullRequest.number)" + (pullRequest.isDraft ? " draft" : "")
+  private var icon: Octicon.Name {
+    pullRequest.merged ? .gitMerge : pullRequest.isDraft ? .gitPullRequestDraft : .gitPullRequest
   }
 
   private var tint: Color {

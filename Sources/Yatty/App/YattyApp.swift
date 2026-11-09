@@ -52,6 +52,10 @@ struct YattyApp: App {
           if let worktree = store.selectedWorktree { store.mergingWorktree = worktree }
         }
         .disabled(!context.canMerge)
+        Button("Review Comments…") {
+          if let worktree = store.selectedWorktree { store.reviewingComments = worktree }
+        }
+        .disabled(!context.canReviewComments)
         Divider()
       }
       CommandMenu("Worktree") {

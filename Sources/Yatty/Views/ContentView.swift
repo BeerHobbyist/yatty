@@ -77,6 +77,9 @@ struct ContentView: View {
     .sheet(item: $store.mergingWorktree) { worktree in
       MergeSheet(worktree: worktree)
     }
+    .sheet(item: $store.reviewingComments) { worktree in
+      CommentReviewSheet(worktree: worktree)
+    }
     .sheet(item: $store.newWorktreeRepo) { repo in
       NewWorktreeSheet(repo: repo)
     }
@@ -150,7 +153,7 @@ struct Sidebar: View {
       ForEach(store.repos) { repo in
         let worktrees = store.worktrees[repo.id] ?? []
         ProjectHeader(
-          id: repo.id, name: repo.name, worktrees: worktrees, isFirst: repo.id == firstProject,
+          id: repo.id, name: repo.name, icon: .repo, worktrees: worktrees, isFirst: repo.id == firstProject,
           addHelp: "New worktree in \(repo.name)", add: { store.newWorktreeRepo = repo }
         ) {
           Button("New Worktree…") { store.newWorktreeRepo = repo }
@@ -177,7 +180,7 @@ struct Sidebar: View {
       }
       ForEach(store.hosts) { host in
         ProjectHeader(
-          id: host.id, name: host.host, systemImage: "server.rack", worktrees: host.worktrees,
+          id: host.id, name: host.host, icon: .server, worktrees: host.worktrees,
           isFirst: host.id == firstProject, addHelp: "Add a directory on \(host.host)",
           add: { store.addingHost = AddHostRequest(host: host.host) }
         ) {
@@ -235,7 +238,7 @@ struct Sidebar: View {
 struct ProjectHeader<Actions: View>: View {
   let id: String
   let name: String
-  var systemImage: String?
+  let icon: Octicon.Name
   let worktrees: [Worktree]
   let isFirst: Bool
   let addHelp: String
@@ -255,9 +258,7 @@ struct ProjectHeader<Actions: View>: View {
             .foregroundStyle(.tertiary)
             .rotationEffect(.degrees(folded ? 0 : 90))
             .frame(width: 10)
-          if let systemImage {
-            Image(systemName: systemImage).font(.caption).foregroundStyle(.secondary)
-          }
+          Octicon(icon, size: 11).foregroundStyle(.secondary)
           Text(name)
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -364,7 +365,7 @@ struct WorktreeRow: View {
         }
       }
     } icon: {
-      Image(systemName: worktree.isRemote ? "folder" : worktree.isMain ? "house" : "arrow.triangle.branch")
+      Octicon(worktree.isRemote ? .fileDirectory : worktree.isMain ? .home : .gitBranch, size: 14)
     }
     .help(worktree.branch ?? remotePath ?? worktree.path)
   }

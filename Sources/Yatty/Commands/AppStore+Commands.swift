@@ -34,6 +34,8 @@ struct CommandContext {
   var hasRepos: Bool
   /// The selected worktree's pull request is open (not merged).
   var openPullRequest: Bool
+  /// The selected worktree has a pull request, open or merged.
+  var hasPullRequest = false
 
   /// A worktree here, with git: diffs and pull requests apply.
   var isLocal: Bool { selected.map { !$0.isRemote } ?? false }
@@ -44,13 +46,15 @@ struct CommandContext {
   var canDiff: Bool { isLocal }
   var canShowPullRequest: Bool { isLocal }
   var canMerge: Bool { isLocal && openPullRequest }
+  var canReviewComments: Bool { isLocal && hasPullRequest }
 }
 
 extension AppStore {
   var commandContext: CommandContext {
     let badge = selectedWorktree.flatMap { pullRequests.badge(for: $0) }
     return CommandContext(
-      selected: selectedWorktree, hasRepos: !repos.isEmpty, openPullRequest: badge.map { !$0.merged } ?? false)
+      selected: selectedWorktree, hasRepos: !repos.isEmpty, openPullRequest: badge.map { !$0.merged } ?? false,
+      hasPullRequest: badge != nil)
   }
 
   /// Every command that applies now, in the palette's order.
@@ -118,6 +122,9 @@ extension AppStore {
     add("pr.refresh", "Refresh Pull Requests", "Pull Request", Shortcuts.refresh) { self.refreshPullRequests() }
     add("pr.merge", "Merge Pull Request…", "Pull Request", when: context.canMerge) {
       self.mergingWorktree = selected
+    }
+    add("pr.reviewComments", "Review Comments…", "Pull Request", when: context.canReviewComments) {
+      self.reviewingComments = selected
     }
 
     add("agent.next", "Go to Next Agent", "Agents", Shortcuts.nextAgent) { self.jumpToNextAgent() }

@@ -6,6 +6,8 @@ struct PullRequestInspector: View {
   let worktree: Worktree
   @Environment(AppStore.self) private var store
   @Environment(\.openURL) private var openURL
+  /// Threads shown or hidden against their default: resolved ones start hidden.
+  @State private var toggledThreads: Set<String> = []
 
   var body: some View {
     if let badge = store.pullRequests.badge(for: worktree), let repo = store.repo(of: worktree) {
@@ -18,7 +20,8 @@ struct PullRequestInspector: View {
             reviewsSection(details)
             checksSection(details)
             if !details.labels.isEmpty { labelsSection(details) }
-            if !details.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { descriptionSection(details) }
+            let description = MarkdownBlock.parse(details.body)
+            if !description.isEmpty { descriptionSection(description) }
             commentsSection(details)
           } else if store.pullRequests.detailsFailed.contains(worktree.id) {
             Text("Couldn't load the pull request.").foregroundStyle(.secondary)
@@ -38,9 +41,15 @@ struct PullRequestInspector: View {
         }
       }
     } else {
-      ContentUnavailableView(
-        "No Pull Request", systemImage: "arrow.triangle.pull",
-        description: Text("\(store.label(for: worktree)) has no open pull request."))
+      ContentUnavailableView {
+        Label {
+          Text("No Pull Request")
+        } icon: {
+          Octicon(.gitPullRequest, size: 40)
+        }
+      } description: {
+        Text("\(store.label(for: worktree)) has no open pull request.")
+      }
     }
   }
 
@@ -60,8 +69,13 @@ struct PullRequestInspector: View {
       .buttonStyle(.plain)
       .help("Open on GitHub")
       if let details {
-        Text("\(details.author?.login ?? "?") · \(details.baseRefName) ← \(details.headRefName)")
-          .font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+        HStack(spacing: 4) {
+          Octicon(.person, size: 12)
+          Text(details.author?.login ?? "?").lineLimit(1)
+          Octicon(.gitBranch, size: 12).padding(.leading, 6)
+          Text("\(details.baseRefName) ← \(details.headRefName)").lineLimit(1).truncationMode(.middle)
+        }
+        .font(.callout).foregroundStyle(.secondary)
         HStack(spacing: 8) {
           Text("+\(details.additions)").foregroundStyle(.green)
           Text("−\(details.deletions)").foregroundStyle(.red)
@@ -73,18 +87,22 @@ struct PullRequestInspector: View {
   }
 
   private func stateChip(_ details: PullRequestDetails?, badge: BranchPullRequest) -> some View {
-    let (label, color): (String, Color) =
-      if badge.merged || details?.state == "MERGED" { ("Merged", .purple) }
-      else if details?.state == "CLOSED" { ("Closed", .red) }
-      else if badge.isDraft || details?.isDraft == true { ("Draft", .secondary) }
-      else { ("Open", .green) }
-    return Text(label).font(.caption.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
-      .background(Capsule().fill(color.opacity(0.18))).foregroundStyle(color)
+    let (label, icon, color): (String, Octicon.Name, Color) =
+      if badge.merged || details?.state == "MERGED" { ("Merged", .gitMerge, .purple) }
+      else if details?.state == "CLOSED" { ("Closed", .gitPullRequestClosed, .red) }
+      else if badge.isDraft || details?.isDraft == true { ("Draft", .gitPullRequestDraft, .secondary) }
+      else { ("Open", .gitPullRequest, .green) }
+    return HStack(spacing: 3) {
+      Octicon(icon, size: 11)
+      Text(label)
+    }
+    .font(.caption.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
+    .background(Capsule().fill(color.opacity(0.18))).foregroundStyle(color)
   }
 
   private func mergeSection(_ details: PullRequestDetails) -> some View {
     let status = PullRequests.mergeStatus(details)
-    return section("Merge", summary: status.label) {
+    return section("Merge", icon: .gitMerge, summary: status.label) {
       HStack {
         Text(status.label).foregroundStyle(color(status.tone))
         Spacer()
@@ -98,18 +116,19 @@ struct PullRequestInspector: View {
   private func reviewsSection(_ details: PullRequestDetails) -> some View {
     let decision: String =
       switch details.reviewDecision {
-      case "APPROVED": "✓"
-      case "CHANGES_REQUESTED": "✗"
-      case "REVIEW_REQUIRED": "◌"
+      case "APPROVED": "approved"
+      case "CHANGES_REQUESTED": "changes requested"
+      case "REVIEW_REQUIRED": "review required"
       default: ""
       }
-    return section("Reviews", summary: decision) {
+    return section("Reviews", icon: .eye, summary: decision) {
       if details.latestReviews.isEmpty && details.reviewRequests.isEmpty {
         Text("No reviews yet.").foregroundStyle(.secondary)
       }
       ForEach(Array(details.latestReviews.enumerated()), id: \.offset) { _, review in
         HStack(spacing: 6) {
-          Text(verdict(review.state)).foregroundStyle(verdictColor(review.state))
+          Octicon(ReviewVerdict.icon(review.state)).foregroundStyle(ReviewVerdict.color(review.state))
+            .help(ReviewVerdict.label(review.state))
           Text(review.author?.login ?? "?")
           Spacer()
           Text(PullRequests.relativeTime(review.submittedAt ?? "")).foregroundStyle(.secondary).font(.caption)
@@ -117,7 +136,7 @@ struct PullRequestInspector: View {
       }
       ForEach(details.reviewRequests, id: \.displayName) { request in
         HStack(spacing: 6) {
-          Text("◌").foregroundStyle(.secondary)
+          Octicon(.dotFill).foregroundStyle(.orange)
           Text(request.displayName).foregroundStyle(.secondary)
           Text("requested").font(.caption).foregroundStyle(.secondary)
         }
@@ -133,14 +152,14 @@ struct PullRequestInspector: View {
       let n = checks.filter { $0.1 == state }.count
       return n == 0 ? nil : "\(n) \(state == .pass ? "passed" : state == .fail ? "failed" : state == .pending ? "running" : "skipped")"
     }
-    return section("Checks", summary: counts.joined(separator: ", ")) {
+    return section("Checks", icon: .checklist, summary: counts.joined(separator: ", ")) {
       if checks.isEmpty { Text("No checks.").foregroundStyle(.secondary) }
       ForEach(Array(sorted.enumerated()), id: \.offset) { _, entry in
         Button {
           if let link = entry.0.link { openURL(link) }
         } label: {
           HStack(spacing: 6) {
-            Image(systemName: checkSymbol(entry.1)).foregroundStyle(checkColor(entry.1))
+            Octicon(checkIcon(entry.1)).foregroundStyle(checkColor(entry.1))
             Text(entry.0.displayName).lineLimit(1).truncationMode(.middle)
             Spacer()
           }
@@ -152,7 +171,7 @@ struct PullRequestInspector: View {
   }
 
   private func labelsSection(_ details: PullRequestDetails) -> some View {
-    section("Labels", summary: details.labels.map(\.name).joined(separator: ", ")) {
+    section("Labels", icon: .tag, summary: details.labels.map(\.name).joined(separator: ", ")) {
       HStack {
         ForEach(details.labels, id: \.name) { label in
           Text(label.name).font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
@@ -162,49 +181,36 @@ struct PullRequestInspector: View {
     }
   }
 
-  private func descriptionSection(_ details: PullRequestDetails) -> some View {
-    section("Description", summary: "") {
-      Text(markdown(details.body)).textSelection(.enabled)
+  private func descriptionSection(_ blocks: [MarkdownBlock]) -> some View {
+    section("Description", icon: .book, summary: "") {
+      MarkdownText(blocks: blocks)
     }
-  }
-
-  private struct CommentItem {
-    var author: String
-    var body: String
-    var date: String
-    var location: String?
-    var url: String?
   }
 
   private func commentsSection(_ details: PullRequestDetails) -> some View {
-    var items = details.comments.map {
-      CommentItem(author: $0.author?.login ?? "?", body: $0.body, date: $0.createdAt, location: nil, url: $0.url)
-    }
-    items += details.reviews.filter { !($0.body ?? "").isEmpty }.map {
-      CommentItem(author: $0.author?.login ?? "?", body: $0.body ?? "", date: $0.submittedAt ?? "", location: verdict($0.state), url: nil)
-    }
-    items += (store.pullRequests.inlineComments[worktree.id] ?? []).map {
-      CommentItem(
-        author: $0.user?.login ?? "?", body: $0.body, date: $0.created_at,
-        location: "\($0.path):\($0.line ?? $0.original_line ?? 0)", url: $0.html_url)
-    }
-    items.sort { $0.date > $1.date }
-    return section("Comments", summary: items.isEmpty ? "" : "\(items.count)") {
+    let items = PullRequestConversation.all(details: details, threads: store.pullRequests.reviewThreads[worktree.id] ?? [])
+    let count = items.reduce(0) { $0 + $1.commentCount }
+    return section(
+      "Comments", icon: .comment, summary: count == 0 ? "" : "\(count)",
+      trailing: items.isEmpty
+        ? nil
+        : AnyView(
+          Button("Review…") { store.reviewingComments = worktree }
+            .buttonStyle(.borderless)
+            .font(.callout)
+            .help("Pick comments to hand to your agent"))
+    ) {
       if items.isEmpty { Text("No comments.").foregroundStyle(.secondary) }
-      ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-        VStack(alignment: .leading, spacing: 3) {
-          HStack(spacing: 6) {
-            Text(item.author).fontWeight(.medium)
-            if let location = item.location { Text(location).font(.caption.monospaced()).foregroundStyle(.secondary) }
-            Spacer()
-            Text(PullRequests.relativeTime(item.date)).font(.caption).foregroundStyle(.secondary)
+      ForEach(items) { item in
+        switch item {
+        case .note(let note):
+          PullRequestNoteView(author: note.author, review: note.review, date: note.date, text: note.body, url: note.url)
+        case .thread(let thread):
+          // Resolved threads start folded, as on GitHub.
+          ReviewThreadView(thread: thread, open: thread.isResolved == toggledThreads.contains(thread.id)) {
+            if toggledThreads.remove(thread.id) == nil { toggledThreads.insert(thread.id) }
           }
-          Text(markdown(item.body)).textSelection(.enabled).lineLimit(8)
         }
-        .padding(.leading, 8)
-        .overlay(alignment: .leading) { Rectangle().fill(.quaternary).frame(width: 2) }
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { if let url = item.url.flatMap(URL.init(string:)) { openURL(url) } }
       }
     }
   }
@@ -232,60 +238,41 @@ struct PullRequestInspector: View {
 
   /// A section whose title folds it; folded ones keep their summary.
   private func section<Content: View>(
-    _ title: String, summary: String, @ViewBuilder content: () -> Content
+    _ title: String, icon: Octicon.Name, summary: String, trailing: AnyView? = nil,
+    @ViewBuilder content: () -> Content
   ) -> some View {
     let folded = store.foldedSections.contains(title)
     return VStack(alignment: .leading, spacing: 6) {
-      Button {
-        store.toggleSection(title)
-      } label: {
-        HStack(spacing: 4) {
-          Image(systemName: folded ? "chevron.right" : "chevron.down").font(.caption2)
-          Text(title).font(.headline)
-          if folded || ["Reviews", "Checks", "Comments"].contains(title) {
-            Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+      HStack(spacing: 4) {
+        Button {
+          store.toggleSection(title)
+        } label: {
+          HStack(spacing: 4) {
+            Image(systemName: folded ? "chevron.right" : "chevron.down").font(.caption2)
+            Octicon(icon).foregroundStyle(.secondary).padding(.horizontal, 2)
+            Text(title).font(.headline)
+            if folded || ["Reviews", "Checks", "Comments"].contains(title) {
+              Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
           }
-          Spacer()
+          .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        if let trailing { trailing }
       }
-      .buttonStyle(.plain)
       if !folded {
         VStack(alignment: .leading, spacing: 6) { content() }.padding(.leading, 14)
       }
     }
   }
 
-  private func markdown(_ text: String) -> AttributedString {
-    (try? AttributedString(
-      markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-      ?? AttributedString(text)
-  }
-
-  private func verdict(_ state: String) -> String {
+  private func checkIcon(_ state: CheckState) -> Octicon.Name {
     switch state {
-    case "APPROVED": "✓"
-    case "CHANGES_REQUESTED": "✗"
-    case "COMMENTED": "●"
-    case "DISMISSED": "–"
-    default: "◌"
-    }
-  }
-
-  private func verdictColor(_ state: String) -> Color {
-    switch state {
-    case "APPROVED": .green
-    case "CHANGES_REQUESTED": .red
-    default: .secondary
-    }
-  }
-
-  private func checkSymbol(_ state: CheckState) -> String {
-    switch state {
-    case .pass: "checkmark.circle.fill"
-    case .fail: "xmark.circle.fill"
-    case .pending: "clock"
-    case .skipped: "minus.circle"
+    case .pass: .checkCircleFill
+    case .fail: .xCircleFill
+    case .pending: .dotFill
+    case .skipped: .skip
     }
   }
 
