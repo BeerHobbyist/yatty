@@ -1,56 +1,122 @@
 import SwiftUI
 
-/// The pull request of the worktree on screen: merge status, reviews,
-/// checks, labels, description and comments — agentree's PR panel.
+/// The PR panel's tabs, under its header and merge box.
+enum PullRequestTab: String, CaseIterable, Sendable {
+  case conversation, checks, description
+
+  var title: String {
+    switch self {
+    case .conversation: "Conversation"
+    case .checks: "Checks"
+    case .description: "Description"
+    }
+  }
+}
+
+/// The pull request of the worktree on screen. A header that stays put — the
+/// pull request, and a merge box as GitHub shows one: reviews, checks,
+/// conflicts, the merge button — over tabs for the conversation, the checks
+/// and the description.
 struct PullRequestInspector: View {
   let worktree: Worktree
   @Environment(AppStore.self) private var store
   @Environment(\.openURL) private var openURL
+  /// Threads shown or hidden against their default: resolved ones start hidden.
+  @State private var toggledThreads: Set<String> = []
 
   var body: some View {
     if let badge = store.pullRequests.badge(for: worktree), let repo = store.repo(of: worktree) {
       let details = store.pullRequests.details[worktree.id]
-      ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
+      VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 12) {
           header(badge, details)
           if let details {
-            mergeSection(details)
-            reviewsSection(details)
-            checksSection(details)
-            if !details.labels.isEmpty { labelsSection(details) }
-            if !details.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { descriptionSection(details) }
-            commentsSection(details)
-          } else if store.pullRequests.detailsFailed.contains(worktree.id) {
-            Text("Couldn't load the pull request.").foregroundStyle(.secondary)
-          } else {
-            ProgressView().controlSize(.small)
+            mergeBox(details, repo: repo)
+            tabPicker(details)
           }
         }
         .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Divider()
+        ScrollView {
+          VStack(alignment: .leading, spacing: 10) {
+            if let details {
+              switch tab {
+              case .conversation: conversation(details)
+              case .checks: checks(details, repo: repo)
+              case .description: description(details)
+              }
+            } else if store.pullRequests.detailsFailed.contains(worktree.id) {
+              Text("Couldn't load the pull request.").foregroundStyle(.secondary)
+            } else {
+              ProgressView().controlSize(.small)
+            }
+          }
+          .padding(14)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
       }
-      .safeAreaInset(edge: .bottom) { footer(badge) }
       .task(id: worktree.id) {
-        // Fresh while it's on screen: now, then every 30 seconds.
+        // Fresh while it's on screen: now, then every 30 seconds. Merge
+        // settings alongside, until there are some.
         while !Task.isCancelled {
-          if NSApp.isActive || Snapshot.isActive { store.pullRequests.refreshDetails(for: worktree, in: repo) }
+          if NSApp.isActive || Snapshot.isActive {
+            store.pullRequests.refreshDetails(for: worktree, in: repo)
+            store.pullRequests.ensureMergeSettings(for: repo)
+          }
           try? await Task.sleep(for: .seconds(30))
         }
       }
     } else {
-      ContentUnavailableView(
-        "No Pull Request", systemImage: "arrow.triangle.pull",
-        description: Text("\(store.label(for: worktree)) has no open pull request."))
+      ContentUnavailableView {
+        Label {
+          Text("No Pull Request")
+        } icon: {
+          Octicon(.gitPullRequest, size: 40)
+        }
+      } description: {
+        Text("\(store.label(for: worktree)) has no open pull request.")
+      }
     }
   }
 
-  // MARK: Sections
+  private var tab: PullRequestTab { store.prTabs[worktree.id] ?? Snapshot.prTab ?? .conversation }
+
+  private func show(_ tab: PullRequestTab) { store.prTabs[worktree.id] = tab }
+
+  // MARK: Header
 
   private func header(_ badge: BranchPullRequest, _ details: PullRequestDetails?) -> some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {
-        Text("#\(badge.number)").font(.headline.monospacedDigit())
         stateChip(details, badge: badge)
+        Text("#\(badge.number)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+        Spacer()
+        TimelineView(.periodic(from: .now, by: 30)) { _ in
+          Button {
+            store.refreshPullRequests()
+          } label: {
+            HStack(spacing: 3) {
+              if store.pullRequests.refreshingDetails.contains(worktree.id) {
+                ProgressView().controlSize(.mini)
+              } else {
+                Image(systemName: "arrow.clockwise")
+              }
+              Text(refreshedLabel)
+            }
+            .font(.caption)
+          }
+          .buttonStyle(.borderless)
+          .foregroundStyle(.secondary)
+          .help("Refresh (⌘R)")
+        }
+        Button {
+          if let url = URL(string: details?.url ?? badge.url) { openURL(url) }
+        } label: {
+          Image(systemName: "arrow.up.right.square")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help("Open on GitHub")
       }
       Button {
         if let url = URL(string: details?.url ?? badge.url) { openURL(url) }
@@ -60,8 +126,14 @@ struct PullRequestInspector: View {
       .buttonStyle(.plain)
       .help("Open on GitHub")
       if let details {
-        Text("\(details.author?.login ?? "?") · \(details.baseRefName) ← \(details.headRefName)")
-          .font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+        HStack(spacing: 5) {
+          AvatarView(login: details.author?.login)
+          Text(MergeBox.author(details)).lineLimit(1)
+          Octicon(.gitBranch, size: 12).padding(.leading, 4)
+          Text("\(details.baseRefName) ← \(details.headRefName)").lineLimit(1).truncationMode(.middle)
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
         HStack(spacing: 8) {
           Text("+\(details.additions)").foregroundStyle(.green)
           Text("−\(details.deletions)").foregroundStyle(.red)
@@ -72,220 +144,239 @@ struct PullRequestInspector: View {
     }
   }
 
+  private var refreshedLabel: String {
+    if store.pullRequests.detailsFailed.contains(worktree.id) { return "failed" }
+    guard let refreshed = store.pullRequests.detailsRefreshed[worktree.id] else { return "" }
+    return PullRequests.relativeTime(ISO8601DateFormatter().string(from: refreshed))
+  }
+
   private func stateChip(_ details: PullRequestDetails?, badge: BranchPullRequest) -> some View {
-    let (label, color): (String, Color) =
-      if badge.merged || details?.state == "MERGED" { ("Merged", .purple) }
-      else if details?.state == "CLOSED" { ("Closed", .red) }
-      else if badge.isDraft || details?.isDraft == true { ("Draft", .secondary) }
-      else { ("Open", .green) }
-    return Text(label).font(.caption.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
-      .background(Capsule().fill(color.opacity(0.18))).foregroundStyle(color)
+    let (label, icon, color): (String, Octicon.Name, Color) =
+      if badge.merged || details?.state == "MERGED" { ("Merged", .gitMerge, .purple) }
+      else if details?.state == "CLOSED" { ("Closed", .gitPullRequestClosed, .red) }
+      else if badge.isDraft || details?.isDraft == true { ("Draft", .gitPullRequestDraft, .secondary) }
+      else { ("Open", .gitPullRequest, .green) }
+    return HStack(spacing: 3) {
+      Octicon(icon, size: 11)
+      Text(label)
+    }
+    .font(.caption.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
+    .background(Capsule().fill(color.opacity(0.18))).foregroundStyle(color)
   }
 
-  private func mergeSection(_ details: PullRequestDetails) -> some View {
-    let status = PullRequests.mergeStatus(details)
-    return section("Merge", summary: status.label) {
-      HStack {
-        Text(status.label).foregroundStyle(color(status.tone))
-        Spacer()
-        if details.state == "OPEN" {
-          Button("Merge…") { store.mergingWorktree = worktree }
-        }
-      }
-    }
-  }
+  // MARK: Merge box
 
-  private func reviewsSection(_ details: PullRequestDetails) -> some View {
-    let decision: String =
-      switch details.reviewDecision {
-      case "APPROVED": "✓"
-      case "CHANGES_REQUESTED": "✗"
-      case "REVIEW_REQUIRED": "◌"
-      default: ""
-      }
-    return section("Reviews", summary: decision) {
-      if details.latestReviews.isEmpty && details.reviewRequests.isEmpty {
-        Text("No reviews yet.").foregroundStyle(.secondary)
-      }
-      ForEach(Array(details.latestReviews.enumerated()), id: \.offset) { _, review in
-        HStack(spacing: 6) {
-          Text(verdict(review.state)).foregroundStyle(verdictColor(review.state))
-          Text(review.author?.login ?? "?")
-          Spacer()
-          Text(PullRequests.relativeTime(review.submittedAt ?? "")).foregroundStyle(.secondary).font(.caption)
+  @ViewBuilder private func mergeBox(_ details: PullRequestDetails, repo: Repo) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      if let finished = MergeBox.finished(details) {
+        HStack {
+          line(finished)
+          if details.state == "MERGED", !worktree.isMain {
+            Button("Close Worktree…") { store.requestClose(worktree) }
+          }
         }
-      }
-      ForEach(details.reviewRequests, id: \.displayName) { request in
-        HStack(spacing: 6) {
-          Text("◌").foregroundStyle(.secondary)
-          Text(request.displayName).foregroundStyle(.secondary)
-          Text("requested").font(.caption).foregroundStyle(.secondary)
-        }
-      }
-    }
-  }
-
-  private func checksSection(_ details: PullRequestDetails) -> some View {
-    let checks = details.statusCheckRollup.map { ($0, PullRequests.checkState($0)) }
-    let order: [CheckState] = [.fail, .pending, .pass, .skipped]
-    let sorted = checks.sorted { order.firstIndex(of: $0.1)! < order.firstIndex(of: $1.1)! }
-    let counts = order.compactMap { state -> String? in
-      let n = checks.filter { $0.1 == state }.count
-      return n == 0 ? nil : "\(n) \(state == .pass ? "passed" : state == .fail ? "failed" : state == .pending ? "running" : "skipped")"
-    }
-    return section("Checks", summary: counts.joined(separator: ", ")) {
-      if checks.isEmpty { Text("No checks.").foregroundStyle(.secondary) }
-      ForEach(Array(sorted.enumerated()), id: \.offset) { _, entry in
+        .padding(.vertical, 8)
+      } else {
         Button {
-          if let link = entry.0.link { openURL(link) }
+          show(.conversation)
         } label: {
-          HStack(spacing: 6) {
-            Image(systemName: checkSymbol(entry.1)).foregroundStyle(checkColor(entry.1))
-            Text(entry.0.displayName).lineLimit(1).truncationMode(.middle)
-            Spacer()
+          HStack {
+            line(MergeBox.reviews(details))
+            reviewerAvatars(details)
           }
         }
         .buttonStyle(.plain)
-        .disabled(entry.0.link == nil)
+        .help("Show the conversation")
+        Divider()
+        Button {
+          show(.checks)
+        } label: {
+          line(MergeBox.checks(details))
+        }
+        .buttonStyle(.plain)
+        .help("Show the checks")
+        Divider()
+        line(MergeBox.conflicts(details))
+        Divider()
+        mergeButton(details, repo: repo).padding(.vertical, 8)
+      }
+    }
+    .padding(.horizontal, 10)
+    .background(RoundedRectangle(cornerRadius: 9).fill(.quaternary.opacity(0.35)))
+    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.quaternary))
+  }
+
+  private func line(_ line: MergeBoxLine) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 7) {
+      Circle().fill(color(line.tone)).frame(width: 7, height: 7)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(line.verdict).fontWeight(.semibold)
+        if !line.detail.isEmpty {
+          Text(line.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.vertical, 7)
+    .contentShape(Rectangle())
+  }
+
+  private func reviewerAvatars(_ details: PullRequestDetails) -> some View {
+    HStack(spacing: -4) {
+      ForEach(details.latestReviews.prefix(4).indices, id: \.self) { index in
+        AvatarView(login: details.latestReviews[index].author?.login, size: 18)
+          .overlay(Circle().strokeBorder(.background, lineWidth: 1))
       }
     }
   }
 
-  private func labelsSection(_ details: PullRequestDetails) -> some View {
-    section("Labels", summary: details.labels.map(\.name).joined(separator: ", ")) {
+  @ViewBuilder private func mergeButton(_ details: PullRequestDetails, repo: Repo) -> some View {
+    let settings = store.pullRequests.mergeSettings[repo.id]
+    let failed = store.pullRequests.mergeSettingsFailed.contains(repo.id)
+    switch MergeBox.button(details, settings: settings, lastMethod: store.mergeMethod, settingsFailed: failed) {
+    case .merge(let method):
+      splitButton(method: method, auto: false, settings: settings, caption: PullRequests.mergeStatus(details).label)
+    case .autoMerge(let method):
+      splitButton(method: method, auto: true, settings: settings, caption: "Merges once it's ready")
+    case .disabled(let reason):
+      HStack {
+        Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        Spacer()
+        Button("Merge") {}.disabled(true)
+      }
+    }
+  }
+
+  /// Merges (or turns on auto-merge) with `method`; its arrow picks another.
+  /// Either way the merge sheet asks to confirm first.
+  private func splitButton(method: MergeMethod, auto: Bool, settings: MergeSettings?, caption: String) -> some View {
+      HStack {
+        Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        Spacer()
+        Menu {
+          ForEach(settings?.methods ?? [], id: \.self) { other in
+            Button(other.title) { store.mergeRequest = MergeRequest(worktree: worktree, method: other) }
+          }
+        } label: {
+          Text(auto ? "Enable Auto-Merge" : method.buttonTitle)
+        } primaryAction: {
+          store.mergeRequest = MergeRequest(worktree: worktree, method: method)
+        }
+        .fixedSize()
+        .help(auto ? "GitHub merges it once reviews and required checks pass" : "Merge: \(method.title.lowercased())")
+      }
+  }
+
+  // MARK: Tabs
+
+  private func tabPicker(_ details: PullRequestDetails) -> some View {
+    let conversations = PullRequestConversation.all(details: details, threads: threads)
+    let failing = details.statusCheckRollup.filter { PullRequests.checkState($0) == .fail }.count
+    return Picker("", selection: Binding(get: { tab }, set: { show($0) })) {
+      Text(conversations.isEmpty ? "Conversation" : "Conversation \(conversations.reduce(0) { $0 + $1.commentCount })")
+        .tag(PullRequestTab.conversation)
+      // A native segmented control can't colour a dot; the merge box's
+      // checks line carries the red.
+      Text(failing > 0 ? "Checks ●" : "Checks").tag(PullRequestTab.checks)
+      Text("Description").tag(PullRequestTab.description)
+    }
+    .pickerStyle(.segmented)
+    .labelsHidden()
+  }
+
+  private var threads: [ReviewThread] { store.pullRequests.reviewThreads[worktree.id] ?? [] }
+
+  @ViewBuilder private func conversation(_ details: PullRequestDetails) -> some View {
+    let items = PullRequestConversation.all(details: details, threads: threads)
+    if items.isEmpty {
+      Text("No comments.").foregroundStyle(.secondary)
+    } else {
+      HStack {
+        let unresolved = threads.filter { !$0.isResolved }.count
+        let resolved = threads.count - unresolved
+        if !threads.isEmpty {
+          Text("\(unresolved) unresolved" + (resolved > 0 ? " · \(resolved) resolved" : ""))
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button("Review…") { store.reviewingComments = worktree }
+          .help("Pick comments to hand to your agent")
+      }
+      ForEach(items) { item in
+        switch item {
+        case .note(let note):
+          PullRequestNoteView(author: note.author, review: note.review, date: note.date, text: note.body, url: note.url)
+        case .thread(let thread):
+          ReviewThreadView(thread: thread, open: thread.isResolved == toggledThreads.contains(thread.id)) {
+            if toggledThreads.remove(thread.id) == nil { toggledThreads.insert(thread.id) }
+          }
+        }
+      }
+    }
+  }
+
+  @ViewBuilder private func checks(_ details: PullRequestDetails, repo: Repo) -> some View {
+    let order: [CheckState] = [.fail, .pending, .pass, .skipped]
+    let checks = details.statusCheckRollup.map { ($0, PullRequests.checkState($0)) }
+      .enumerated().sorted { (order.firstIndex(of: $0.element.1)!, $0.offset) < (order.firstIndex(of: $1.element.1)!, $1.offset) }
+      .map(\.element)
+    if checks.isEmpty { Text("No checks.").foregroundStyle(.secondary) }
+    ForEach(Array(checks.enumerated()), id: \.offset) { _, entry in
+      let (check, state) = entry
+      HStack(spacing: 7) {
+        Octicon(checkIcon(state)).foregroundStyle(checkColor(state))
+        Button {
+          if let link = check.link { openURL(link) }
+        } label: {
+          Text(check.displayName).lineLimit(1).truncationMode(.middle)
+        }
+        .buttonStyle(.plain)
+        .disabled(check.link == nil)
+        .help(check.link == nil ? "" : "Open its log on GitHub")
+        Spacer()
+        if let duration = check.duration {
+          Text(PullRequests.durationLabel(duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
+        if state == .fail, let link = check.detailsUrl, let run = PullRequests.actionsRun(link) {
+          Button {
+            store.rerun(run, in: worktree)
+          } label: {
+            Image(systemName: "arrow.clockwise")
+          }
+          .buttonStyle(.borderless)
+          .help("Re-run its failed jobs")
+        }
+      }
+      .padding(.vertical, 2)
+    }
+  }
+
+  @ViewBuilder private func description(_ details: PullRequestDetails) -> some View {
+    let blocks = MarkdownBlock.parse(details.body)
+    if blocks.isEmpty {
+      Text("No description.").foregroundStyle(.secondary)
+    } else {
+      MarkdownText(blocks: blocks)
+    }
+    if !details.labels.isEmpty {
       HStack {
         ForEach(details.labels, id: \.name) { label in
           Text(label.name).font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
             .background(Capsule().fill((Color(hex: label.color) ?? .secondary).opacity(0.3)))
         }
       }
+      .padding(.top, 6)
     }
-  }
-
-  private func descriptionSection(_ details: PullRequestDetails) -> some View {
-    section("Description", summary: "") {
-      Text(markdown(details.body)).textSelection(.enabled)
-    }
-  }
-
-  private struct CommentItem {
-    var author: String
-    var body: String
-    var date: String
-    var location: String?
-    var url: String?
-  }
-
-  private func commentsSection(_ details: PullRequestDetails) -> some View {
-    var items = details.comments.map {
-      CommentItem(author: $0.author?.login ?? "?", body: $0.body, date: $0.createdAt, location: nil, url: $0.url)
-    }
-    items += details.reviews.filter { !($0.body ?? "").isEmpty }.map {
-      CommentItem(author: $0.author?.login ?? "?", body: $0.body ?? "", date: $0.submittedAt ?? "", location: verdict($0.state), url: nil)
-    }
-    items += (store.pullRequests.inlineComments[worktree.id] ?? []).map {
-      CommentItem(
-        author: $0.user?.login ?? "?", body: $0.body, date: $0.created_at,
-        location: "\($0.path):\($0.line ?? $0.original_line ?? 0)", url: $0.html_url)
-    }
-    items.sort { $0.date > $1.date }
-    return section("Comments", summary: items.isEmpty ? "" : "\(items.count)") {
-      if items.isEmpty { Text("No comments.").foregroundStyle(.secondary) }
-      ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-        VStack(alignment: .leading, spacing: 3) {
-          HStack(spacing: 6) {
-            Text(item.author).fontWeight(.medium)
-            if let location = item.location { Text(location).font(.caption.monospaced()).foregroundStyle(.secondary) }
-            Spacer()
-            Text(PullRequests.relativeTime(item.date)).font(.caption).foregroundStyle(.secondary)
-          }
-          Text(markdown(item.body)).textSelection(.enabled).lineLimit(8)
-        }
-        .padding(.leading, 8)
-        .overlay(alignment: .leading) { Rectangle().fill(.quaternary).frame(width: 2) }
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { if let url = item.url.flatMap(URL.init(string:)) { openURL(url) } }
-      }
-    }
-  }
-
-  private func footer(_ badge: BranchPullRequest) -> some View {
-    let refreshed = store.pullRequests.detailsRefreshed[worktree.id]
-    let state =
-      store.pullRequests.refreshingDetails.contains(worktree.id) ? "↻ refreshing…"
-      : store.pullRequests.detailsFailed.contains(worktree.id) ? "↻ failed"
-      : refreshed.map { "↻ " + PullRequests.relativeTime(ISO8601DateFormatter().string(from: $0)) } ?? ""
-    return HStack {
-      Text(state).font(.caption).foregroundStyle(.secondary)
-      Spacer()
-      Button("Refresh") { store.refreshPullRequests() }.help("Refresh (⌘R)")
-      Button("Open") { if let url = URL(string: badge.url) { openURL(url) } }
-    }
-    .buttonStyle(.borderless)
-    .font(.callout)
-    .padding(.horizontal, 14)
-    .padding(.vertical, 8)
-    .background(.bar)
   }
 
   // MARK: Pieces
 
-  /// A section whose title folds it; folded ones keep their summary.
-  private func section<Content: View>(
-    _ title: String, summary: String, @ViewBuilder content: () -> Content
-  ) -> some View {
-    let folded = store.foldedSections.contains(title)
-    return VStack(alignment: .leading, spacing: 6) {
-      Button {
-        store.toggleSection(title)
-      } label: {
-        HStack(spacing: 4) {
-          Image(systemName: folded ? "chevron.right" : "chevron.down").font(.caption2)
-          Text(title).font(.headline)
-          if folded || ["Reviews", "Checks", "Comments"].contains(title) {
-            Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(1)
-          }
-          Spacer()
-        }
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      if !folded {
-        VStack(alignment: .leading, spacing: 6) { content() }.padding(.leading, 14)
-      }
-    }
-  }
-
-  private func markdown(_ text: String) -> AttributedString {
-    (try? AttributedString(
-      markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-      ?? AttributedString(text)
-  }
-
-  private func verdict(_ state: String) -> String {
+  private func checkIcon(_ state: CheckState) -> Octicon.Name {
     switch state {
-    case "APPROVED": "✓"
-    case "CHANGES_REQUESTED": "✗"
-    case "COMMENTED": "●"
-    case "DISMISSED": "–"
-    default: "◌"
-    }
-  }
-
-  private func verdictColor(_ state: String) -> Color {
-    switch state {
-    case "APPROVED": .green
-    case "CHANGES_REQUESTED": .red
-    default: .secondary
-    }
-  }
-
-  private func checkSymbol(_ state: CheckState) -> String {
-    switch state {
-    case .pass: "checkmark.circle.fill"
-    case .fail: "xmark.circle.fill"
-    case .pending: "clock"
-    case .skipped: "minus.circle"
+    case .pass: .checkCircleFill
+    case .fail: .xCircleFill
+    case .pending: .dotFill
+    case .skipped: .skip
     }
   }
 

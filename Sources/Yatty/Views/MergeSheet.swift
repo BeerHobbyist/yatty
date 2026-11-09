@@ -5,6 +5,8 @@ import SwiftUI
 /// head commit on screen. agentree's merge dialog.
 struct MergeSheet: View {
   let worktree: Worktree
+  /// Picked already (the PR panel's button): start at the confirm step.
+  var preset: MergeMethod?
   @Environment(AppStore.self) private var store
   @Environment(\.dismiss) private var dismiss
 
@@ -125,7 +127,15 @@ struct MergeSheet: View {
     do {
       let loaded = try await GitHub.mergeSettings(nameWithOwner)
       settings = loaded
-      method = methods(loaded).first ?? .squash
+      // Straight to confirming only when it can still be merged (or set to):
+      // otherwise the choosing step says why not.
+      let options = store.pullRequests.details[worktree.id].map { PullRequests.mergeOptions($0, settings: loaded) }
+      if let preset, loaded.methods.contains(preset), let options, options.now || options.auto {
+        method = preset
+        step = .confirming
+      } else {
+        method = methods(loaded).first ?? .squash
+      }
     } catch {
       settingsError = error.localizedDescription
     }

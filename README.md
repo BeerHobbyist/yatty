@@ -7,16 +7,20 @@ has tabs and splits, and every one of them is a real
 [zmx](https://github.com/neurosnap/zmx) when Yatty quits.
 
 - **Worktrees in one place.** Add a repository from GitHub (cloned for you) or
-  a folder; make worktrees on a new branch, an existing one, or an open pull
-  request; close them when done.
+  a folder (or drop one on the sidebar); make worktrees on a new branch, an
+  existing one, or an open pull request; filter them, rename them in place,
+  drag projects into order, close them when done.
 - **Terminals that stay.** Tabs and splits per worktree, with Ghostty's own
   keys. Quit and reopen: every pane comes back, attached to the same session.
-- **Agents at a glance.** Claude Code in a new worktree starts by itself; the
-  sidebar shows which agent needs you, works, or is done, and a notification
-  says so when you're elsewhere.
+- **Agents at a glance.** Claude Code in a new worktree starts by itself; every
+  agent waiting on you is listed on top of the sidebar, longest wait first,
+  each row says what's going on in words, and a notification tells you when
+  you're elsewhere.
 - **Git and pull requests.** Uncommitted changes, ahead/behind, a PR badge
-  coloured by CI, and a panel with checks, reviews and comments, merging
-  included.
+  coloured by CI, and a PR panel like GitHub's: a merge box (reviews, checks,
+  conflicts, the merge button) over tabs for the conversation, the checks
+  (re-run failed ones) and the description. Review… hands chosen comments to
+  your agent.
 - **Diffs your way.** Working changes, staged, against the base branch, a ref
   or a range of commits, in hunk, diffnav, delta, difftastic, lumen, nvim
   diffview or plain git.
@@ -68,6 +72,7 @@ make run                  # build and open it
 | ⇧⌘J | next agent that needs you | ⌥⌘D | open a diff |
 | ⌥⌘P | pull request panel | ⌃⌘= | equalize splits |
 | ⌘R | refresh pull requests | ⌘K | clear the screen |
+| ⌥⌘F | filter worktrees | | |
 
 Terminal keys are Ghostty's: rebinding them in Ghostty's config works in Yatty
 too.

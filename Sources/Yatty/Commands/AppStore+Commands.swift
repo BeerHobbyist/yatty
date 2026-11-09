@@ -25,6 +25,8 @@ enum Shortcuts {
   static let previousTab = KeyboardShortcut("[", modifiers: [.command, .shift])
   static let closePane = KeyboardShortcut("w")
   static let closeTab = KeyboardShortcut("w", modifiers: [.command, .option])
+  /// Not ⌘F: Ghostty searches the terminal with it.
+  static let filterWorktrees = KeyboardShortcut("f", modifiers: [.command, .option])
 }
 
 /// When a command applies. The menus and the palette ask the same rules, so
@@ -34,6 +36,10 @@ struct CommandContext {
   var hasRepos: Bool
   /// The selected worktree's pull request is open (not merged).
   var openPullRequest: Bool
+  /// The selected worktree has a pull request, open or merged.
+  var hasPullRequest = false
+  /// Its pull request has failed checks from GitHub Actions runs.
+  var hasFailedRuns = false
 
   /// A worktree here, with git: diffs and pull requests apply.
   var isLocal: Bool { selected.map { !$0.isRemote } ?? false }
@@ -44,13 +50,18 @@ struct CommandContext {
   var canDiff: Bool { isLocal }
   var canShowPullRequest: Bool { isLocal }
   var canMerge: Bool { isLocal && openPullRequest }
+  var canReviewComments: Bool { isLocal && hasPullRequest }
+  var canRerunChecks: Bool { isLocal && hasFailedRuns }
 }
 
 extension AppStore {
   var commandContext: CommandContext {
     let badge = selectedWorktree.flatMap { pullRequests.badge(for: $0) }
     return CommandContext(
-      selected: selectedWorktree, hasRepos: !repos.isEmpty, openPullRequest: badge.map { !$0.merged } ?? false)
+      selected: selectedWorktree, hasRepos: !repos.isEmpty, openPullRequest: badge.map { !$0.merged } ?? false,
+      hasPullRequest: badge != nil,
+      hasFailedRuns: selectedWorktree.flatMap { pullRequests.details[$0.id] }.map { !PullRequests.failedRuns($0).isEmpty }
+        ?? false)
   }
 
   /// Every command that applies now, in the palette's order.
@@ -77,6 +88,10 @@ extension AppStore {
     }
     if let selected {
       add("worktree.rename", "Rename…", "Worktree", detail: name) { self.renamingWorktree = selected }
+      add("worktree.finder", "Open in Finder", "Worktree", detail: name, when: !selected.isRemote) {
+        self.openInFinder(selected)
+      }
+      add("worktree.copyPath", "Copy Path", "Worktree", detail: name) { self.copyPath(selected) }
     }
 
     // Everything acts on what the palette showed: the worktree selected when
@@ -117,7 +132,23 @@ extension AppStore {
     }
     add("pr.refresh", "Refresh Pull Requests", "Pull Request", Shortcuts.refresh) { self.refreshPullRequests() }
     add("pr.merge", "Merge Pull Request…", "Pull Request", when: context.canMerge) {
-      self.mergingWorktree = selected
+      if let selected { self.mergeRequest = MergeRequest(worktree: selected, method: nil) }
+    }
+    add("pr.reviewComments", "Review Comments…", "Pull Request", when: context.canReviewComments) {
+      self.reviewingComments = selected
+    }
+    if let selected {
+      for tab in PullRequestTab.allCases {
+        add("pr.tab.\(tab.rawValue)", "Show \(tab.title)", "Pull Request", when: context.canReviewComments) {
+          self.showPullRequestTab(tab, for: selected)
+        }
+      }
+      add("pr.open", "Open Pull Request on GitHub", "Pull Request", when: context.canReviewComments) {
+        self.openPullRequest(selected)
+      }
+      add("pr.rerun", "Re-run Failed Checks", "Pull Request", when: context.canRerunChecks) {
+        self.rerunFailedChecks(in: selected)
+      }
     }
 
     add("agent.next", "Go to Next Agent", "Agents", Shortcuts.nextAgent) { self.jumpToNextAgent() }
@@ -127,8 +158,13 @@ extension AppStore {
       if self.trackingEveryClaude { self.setTracking(false) } else { self.confirmingTracking = true }
     }
 
+    add("project.filter", "Filter Worktrees", "Projects", Shortcuts.filterWorktrees) { self.focusingFilter = true }
     add("project.repo", "Add Repository…", "Projects", Shortcuts.addRepository) { self.addingRepository = true }
     add("project.host", "Add SSH Host…", "Projects", Shortcuts.addHost) { self.addingHost = AddHostRequest() }
+    if let selected, let project = projectID(of: selected.id) {
+      add("project.up", "Move Project Up", "Projects") { self.shiftProject(project, by: -1) }
+      add("project.down", "Move Project Down", "Projects") { self.shiftProject(project, by: 1) }
+    }
     if let selected, let repo = repo(of: selected) {
       add("project.removeRepo", "Remove Repository…", "Projects", detail: repo.name) { self.pendingRemoval = repo }
     }
@@ -156,6 +192,17 @@ extension AppStore {
     add("app.settings", "Settings…", "App", Shortcuts.settings) { self.openingSettings = true }
     add("app.help", "Keyboard Shortcuts", "App", Shortcuts.help) { self.showingHelp = true }
     return list
+  }
+
+  func openInFinder(_ worktree: Worktree) {
+    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: worktree.path)])
+  }
+
+  /// The path on the clipboard; `host:~/path` for a remote directory.
+  func copyPath(_ worktree: Worktree) {
+    let path = host(of: worktree).map { "\($0.host):" + SSH.displayPath(worktree.path, home: $0.home) } ?? worktree.path
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(path, forType: .string)
   }
 
   /// The palette closed: run what was picked (sheets it opens need it gone

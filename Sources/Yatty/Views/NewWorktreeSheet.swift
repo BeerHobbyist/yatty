@@ -130,7 +130,8 @@ struct NewWorktreeSheet: View {
         emptyNote("Every branch has a worktree already.")
       } else {
         List(options, selection: $pickedBranch) { option in
-          HStack {
+          HStack(spacing: 6) {
+            Octicon(.gitBranch, size: 12).foregroundStyle(.secondary)
             Text(option.id).lineLimit(1).truncationMode(.middle)
             if option.isRemote {
               Text("remote").font(.caption).foregroundStyle(.secondary)
@@ -169,10 +170,14 @@ struct NewWorktreeSheet: View {
       emptyNote(pullRequests.isEmpty ? "No open pull requests." : "Every open pull request has a worktree already.")
     } else {
       List(visiblePullRequests, selection: $pickedPullRequest) { pr in
-        VStack(alignment: .leading, spacing: 2) {
-          Text("#\(pr.number) \(pr.title)").lineLimit(1)
-          Text("\(pr.author.login) · \(pr.headRefName)\(pr.isCrossRepository ? " · fork" : "")")
-            .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+          Octicon(pr.isDraft == true ? .gitPullRequestDraft : .gitPullRequest, size: 12)
+            .foregroundStyle(pr.isDraft == true ? Color.secondary : .green)
+          VStack(alignment: .leading, spacing: 2) {
+            Text("#\(pr.number) \(pr.title)").lineLimit(1)
+            Text("\(pr.author.login) · \(pr.headRefName)\(pr.isCrossRepository ? " · fork" : "")")
+              .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+          }
         }
         .tag(pr.number)
         .simultaneousGesture(TapGesture(count: 2).onEnded { create() })

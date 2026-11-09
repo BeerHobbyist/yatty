@@ -43,6 +43,7 @@ struct OpenPullRequest: Identifiable, Hashable, Sendable, Decodable {
   let headRefName: String
   /// From a fork.
   let isCrossRepository: Bool
+  var isDraft: Bool? = nil
   let author: Author
 
   struct Author: Hashable, Sendable, Decodable {
@@ -74,7 +75,7 @@ enum GitHub {
     }
     let out = try await run([
       "pr", "list", "-R", nameWithOwner, "--state", "open", "--limit", "100",
-      "--json", "number,title,headRefName,isCrossRepository,author",
+      "--json", "number,title,headRefName,isCrossRepository,isDraft,author",
     ])
     return try JSONDecoder().decode([OpenPullRequest].self, from: out)
   }

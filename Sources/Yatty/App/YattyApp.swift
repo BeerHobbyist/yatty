@@ -42,6 +42,8 @@ struct YattyApp: App {
       CommandGroup(after: .sidebar) {
         Button("Command Palette…") { store.showingPalette.toggle() }
           .keyboardShortcut(Shortcuts.palette)
+        Button("Filter Worktrees") { store.focusingFilter = true }
+          .keyboardShortcut(Shortcuts.filterWorktrees)
         Divider()
         Button("Show Pull Request") { store.showingPullRequest.toggle() }
           .keyboardShortcut(Shortcuts.showPullRequest)
@@ -49,12 +51,38 @@ struct YattyApp: App {
         Button("Refresh Pull Requests") { store.refreshPullRequests() }
           .keyboardShortcut(Shortcuts.refresh)
         Button("Merge Pull Request…") {
-          if let worktree = store.selectedWorktree { store.mergingWorktree = worktree }
+          if let worktree = store.selectedWorktree { store.mergeRequest = MergeRequest(worktree: worktree, method: nil) }
         }
         .disabled(!context.canMerge)
+        Button("Review Comments…") {
+          if let worktree = store.selectedWorktree { store.reviewingComments = worktree }
+        }
+        .disabled(!context.canReviewComments)
+        Menu("Show in Pull Request Panel") {
+          ForEach(PullRequestTab.allCases, id: \.self) { tab in
+            Button(tab.title) { if let worktree = store.selectedWorktree { store.showPullRequestTab(tab, for: worktree) } }
+          }
+        }
+        .disabled(!context.canReviewComments)
+        Button("Open Pull Request on GitHub") { if let worktree = store.selectedWorktree { store.openPullRequest(worktree) } }
+          .disabled(!context.canReviewComments)
+        Button("Re-run Failed Checks") { if let worktree = store.selectedWorktree { store.rerunFailedChecks(in: worktree) } }
+          .disabled(!context.canRerunChecks)
         Divider()
       }
       CommandMenu("Worktree") {
+        Button("Rename…") { store.renamingWorktree = store.selectedWorktree }
+          .disabled(context.selected == nil)
+        Button("Open in Finder") { if let worktree = store.selectedWorktree { store.openInFinder(worktree) } }
+          .disabled(context.selected == nil || context.selected?.isRemote == true)
+        Button("Copy Path") { if let worktree = store.selectedWorktree { store.copyPath(worktree) } }
+          .disabled(context.selected == nil)
+        Divider()
+        Button("Move Project Up") { store.shiftSelectedProject(by: -1) }
+          .disabled(context.selected == nil)
+        Button("Move Project Down") { store.shiftSelectedProject(by: 1) }
+          .disabled(context.selected == nil)
+        Divider()
         Button(context.selected?.isRemote == true ? "Remove Directory…" : "Close Worktree…") {
           store.requestCloseSelected()
         }

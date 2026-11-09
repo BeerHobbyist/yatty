@@ -9,10 +9,15 @@ final class PullRequestStore {
   /// Per worktree: nil = no pull request; missing = not known yet.
   private(set) var badges: [String: BranchPullRequest?] = [:]
   private(set) var details: [String: PullRequestDetails] = [:]
-  private(set) var inlineComments: [String: [GitHub.InlineComment]] = [:]
+  private(set) var reviewThreads: [String: [ReviewThread]] = [:]
   private(set) var detailsRefreshed: [String: Date] = [:]
   private(set) var detailsFailed: Set<String> = []
   private(set) var refreshingDetails: Set<String> = []
+  /// Per `Repo.id`: the merge methods it allows and whether it auto-merges.
+  private(set) var mergeSettings: [String: MergeSettings] = [:]
+  /// Repositories whose merge settings couldn't be read last time.
+  private(set) var mergeSettingsFailed: Set<String> = []
+  @ObservationIgnored private var loadingMergeSettings: Set<String> = []
 
   @ObservationIgnored private weak var store: AppStore?
   @ObservationIgnored private var timer: Timer?
@@ -27,6 +32,26 @@ final class PullRequestStore {
   }
 
   func badge(for worktree: Worktree) -> BranchPullRequest? { badges[worktree.id] ?? nil }
+
+  /// Asks GitHub for the repository's merge settings; a failure keeps the
+  /// last good answer.
+  func loadMergeSettings(for repo: Repo) async {
+    guard let nameWithOwner = repo.nameWithOwner, !loadingMergeSettings.contains(repo.id) else { return }
+    loadingMergeSettings.insert(repo.id)
+    defer { loadingMergeSettings.remove(repo.id) }
+    guard let settings = try? await GitHub.mergeSettings(nameWithOwner) else {
+      mergeSettingsFailed.insert(repo.id)
+      return
+    }
+    mergeSettingsFailed.remove(repo.id)
+    if mergeSettings[repo.id] != settings { mergeSettings[repo.id] = settings }
+  }
+
+  /// Merge settings for the repository, asked for in the background when
+  /// there are none yet (never asked, or asking failed).
+  func ensureMergeSettings(for repo: Repo) {
+    if mergeSettings[repo.id] == nil { Task { await loadMergeSettings(for: repo) } }
+  }
 
   /// `YATTY_BADGE_FIXTURE=<json file>`: badges by branch, standing in for gh
   /// (snapshots). `{"feature/x": {"number": 4, "checks": "pass", "isDraft": false, "merged": false}}`
@@ -97,9 +122,9 @@ final class PullRequestStore {
     Task {
       defer { refreshingDetails.remove(worktree.id) }
       do {
-        let (fresh, inline) = try await GitHub.pullRequestDetails(badge.number, in: nameWithOwner)
+        let (fresh, threads) = try await GitHub.pullRequestDetails(badge.number, in: nameWithOwner)
         details[worktree.id] = fresh
-        inlineComments[worktree.id] = inline
+        reviewThreads[worktree.id] = threads
         detailsRefreshed[worktree.id] = Date()
         detailsFailed.remove(worktree.id)
       } catch {

@@ -13,12 +13,13 @@ extension GitHub {
     var statusCheckRollup: [RawCheck]?
     var mergeCommit: Oid?
     var commits: [Oid]?
+    var reviewDecision: String?
 
     func badge(merged: Bool) -> BranchPullRequest {
       BranchPullRequest(
         number: number, title: title, url: url, isDraft: isDraft, merged: merged,
         checks: PullRequests.summarize((statusCheckRollup ?? []).map(PullRequests.checkState)),
-        headOid: headRefOid ?? "")
+        headOid: headRefOid ?? "", reviewDecision: reviewDecision.flatMap { $0.isEmpty ? nil : $0 })
     }
   }
 
@@ -30,7 +31,7 @@ extension GitHub {
   ) async throws -> BranchPullRequest? {
     let data = try await run([
       "pr", "list", "-R", nameWithOwner, "--head", branch, "--state", "all", "--limit", "5", "--json",
-      "number,title,url,isDraft,statusCheckRollup,state,headRefOid,mergeCommit,commits",
+      "number,title,url,isDraft,statusCheckRollup,state,headRefOid,mergeCommit,commits,reviewDecision",
     ])
     let prs = try JSONDecoder().decode([ListedPullRequest].self, from: data)
     if let open = prs.first(where: { $0.state == "OPEN" }) { return open.badge(merged: false) }
@@ -56,31 +57,32 @@ extension GitHub {
     return nil
   }
 
-  struct InlineComment: Decodable, Equatable, Sendable {
-    struct User: Decodable, Equatable, Sendable { var login: String }
-    var path: String
-    var line: Int?
-    var original_line: Int?
-    var body: String
-    var user: User?
-    var created_at: String
-    var html_url: String?
-  }
-
-  /// The inspector's data; inline review comments are best effort.
+  /// The inspector's data; review threads are best effort.
   static func pullRequestDetails(_ number: Int, in nameWithOwner: String) async throws
-    -> (details: PullRequestDetails, inline: [InlineComment])
+    -> (details: PullRequestDetails, threads: [ReviewThread])
   {
-    if let path = ProcessInfo.processInfo.environment["YATTY_PR_DETAILS_FIXTURE"], !path.isEmpty,
+    let environment = ProcessInfo.processInfo.environment
+    if let path = environment["YATTY_PR_DETAILS_FIXTURE"], !path.isEmpty,
       let data = FileManager.default.contents(atPath: path)
     {
-      return (try JSONDecoder().decode(PullRequestDetails.self, from: data), [])
+      let threads = environment["YATTY_PR_THREADS_FIXTURE"].flatMap { FileManager.default.contents(atPath: $0) }
+        .flatMap(ReviewThread.parse) ?? []
+      return (try JSONDecoder().decode(PullRequestDetails.self, from: data), threads)
     }
     let data = try await run(["pr", "view", String(number), "-R", nameWithOwner, "--json", PullRequestDetails.fields])
     let details = try JSONDecoder().decode(PullRequestDetails.self, from: data)
-    let inline = (try? await run(["api", "repos/\(nameWithOwner)/pulls/\(number)/comments?per_page=100"]))
-      .flatMap { try? JSONDecoder().decode([InlineComment].self, from: $0) } ?? []
-    return (details, inline)
+    let parts = nameWithOwner.split(separator: "/", maxSplits: 1).map(String.init)
+    guard parts.count == 2 else { return (details, []) }
+    let threads = (try? await run([
+      "api", "graphql", "-f", "query=\(ReviewThread.query)", "-f", "owner=\(parts[0])", "-f", "name=\(parts[1])",
+      "-F", "number=\(number)",
+    ])).flatMap(ReviewThread.parse) ?? []
+    return (details, threads)
+  }
+
+  /// Runs a GitHub Actions run's failed jobs again.
+  static func rerunFailed(runID: String, in nameWithOwner: String) async throws {
+    _ = try await run(["run", "rerun", runID, "--failed", "-R", nameWithOwner])
   }
 
   static func mergeSettings(_ nameWithOwner: String) async throws -> MergeSettings {

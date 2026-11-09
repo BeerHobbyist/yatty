@@ -14,6 +14,14 @@ struct AddHostRequest: Identifiable {
   var host = ""
 }
 
+/// A merge to confirm: with a method picked (the PR panel's button), the
+/// sheet opens at its confirm step; without (menus, palette) it asks for one.
+struct MergeRequest: Identifiable {
+  var worktree: Worktree
+  var method: MergeMethod?
+  var id: String { worktree.id }
+}
+
 struct AppAlert: Identifiable {
   let id = UUID()
   let title: String
@@ -37,11 +45,19 @@ final class AppStore {
   var loadErrors: [String: String] = [:]
   var selection: String? {
     didSet {
-      guard selection != oldValue else { return }
-      updateVisibility()
+      // Whatever selects a worktree (a jump to an agent, the palette, a new
+      // one) shows its row, so its project unfolds.
+      let unfolded =
+        unfoldOnSelect ? selection.flatMap(projectID(of:)).map { foldedProjects.remove($0) != nil } ?? false : false
+      guard selection != oldValue || unfolded else { return }
+      if selection != oldValue { updateVisibility() }
       saveState()
     }
   }
+  /// Sidebar repositories and hosts folded away, by `Repo.id` / `SSHHost.id`.
+  var foldedProjects: Set<String> = []
+  /// False while `select(_:unfolding:)` selects without unfolding.
+  @ObservationIgnored private var unfoldOnSelect = true
   /// Per worktree path; see `layout(for:)`.
   var layouts: [String: WorktreeLayout] = [:]
   /// Per worktree path: a name the user gave it; see `label(for:)`.
@@ -69,7 +85,18 @@ final class AppStore {
   @ObservationIgnored var pickedCommand: Command?
   var pendingHostRemoval: SSHHost?
   var pendingDirectoryRemoval: Worktree?
-  var renamingWorktree: Worktree?
+  /// Being renamed in place in the sidebar; its row has to be there to show it.
+  var renamingWorktree: Worktree? {
+    didSet {
+      guard let worktree = renamingWorktree else { return }
+      if let project = projectID(of: worktree.id) { foldedProjects.remove(project) }
+      if !sidebarFilter.isEmpty { sidebarFilter = "" }
+    }
+  }
+  /// The sidebar's filter; not saved.
+  var sidebarFilter = Snapshot.filter ?? ""
+  /// Asks the sidebar to put the keyboard in its filter (only a view can).
+  var focusingFilter = false
 
   /// `config.json`, as the Settings window last changed it.
   private(set) var config = ConfigFiles.loadConfig()
@@ -78,9 +105,13 @@ final class AppStore {
   let agents = AgentMonitor()
   let gitStatus = GitStatusMonitor()
   let pullRequests = PullRequestStore()
-  var showingPullRequest = Snapshot.sheet == "pr-panel"
-  var mergingWorktree: Worktree?
-  var foldedSections: Set<String> = []
+  var showingPullRequest = Snapshot.sheet?.hasPrefix("pr-") == true
+  /// The merge sheet's subject; see `MergeRequest`.
+  var mergeRequest: MergeRequest?
+  /// Per worktree: the PR panel's tab. Not saved.
+  var prTabs: [String: PullRequestTab] = [:]
+  /// The worktree whose pull request comments are being picked for the agent.
+  var reviewingComments: Worktree?
   var mergeMethod: MergeMethod?
   var diffViewer: DiffViewer?
   var diffingWorktree: Worktree?
@@ -115,7 +146,7 @@ final class AppStore {
       selection = stored.selectedWorktree
       layouts = stored.layouts
       labels = stored.labels
-      foldedSections = Set(stored.foldedSections)
+      foldedProjects = Set(stored.foldedProjects)
       mergeMethod = stored.mergeMethod
       diffViewer = stored.diffViewer
       hosts = stored.hosts
@@ -141,6 +172,12 @@ final class AppStore {
     if Snapshot.sheet == "palette" { showingPalette = true }
     if Snapshot.sheet == "help" { showingHelp = true }
     if Snapshot.sheet == "settings" { openingSettings = true }
+    if Snapshot.sheet == "sidebar-rename" {
+      Task {
+        await refreshAll()
+        renamingWorktree = selectedWorktree
+      }
+    }
     if Snapshot.sheet == "disconnected", let selection {
       disconnectedPanes.insert(PaneKey(worktree: selection, pane: "0"))
     }
@@ -150,14 +187,18 @@ final class AppStore {
         diffingWorktree = selectedWorktree
       }
     }
-    if Snapshot.sheet == "merge" {
+    if Snapshot.sheet == "merge" || Snapshot.sheet == "review-comments" {
       Task {
         await refreshAll()
         try? await Task.sleep(for: .seconds(1))
         if let worktree = selectedWorktree, let repo = repo(of: worktree) {
           pullRequests.refreshDetails(for: worktree, in: repo)
           try? await Task.sleep(for: .milliseconds(500))
-          mergingWorktree = worktree
+          if Snapshot.sheet == "merge" {
+            mergeRequest = MergeRequest(worktree: worktree, method: nil)
+          } else {
+            reviewingComments = worktree
+          }
         }
       }
     }
@@ -194,6 +235,65 @@ final class AppStore {
 
   func repo(of worktree: Worktree) -> Repo? {
     repos.first { worktrees[$0.id]?.contains(worktree) == true }
+  }
+
+  /// The repository or host a worktree is listed under in the sidebar.
+  func projectID(of worktreeID: String) -> String? {
+    guard let worktree = worktree(withID: worktreeID) else { return nil }
+    return repo(of: worktree)?.id ?? host(of: worktree)?.id
+  }
+
+  /// Selects a worktree; `unfolding: false` leaves its project folded as it is.
+  func select(_ id: String?, unfolding: Bool) {
+    unfoldOnSelect = unfolding
+    selection = id
+    unfoldOnSelect = true
+  }
+
+  /// Drops a repository onto another, or a host onto another host: it takes
+  /// that one's place.
+  func moveProject(_ id: String, onto target: String) {
+    reorderProjects { Self.moved($0, id, onto: target) }
+  }
+
+  /// One place up (-1) or down (+1) among its kind.
+  func shiftProject(_ id: String, by delta: Int) {
+    reorderProjects { Self.shifted($0, id, by: delta) }
+  }
+
+  func shiftSelectedProject(by delta: Int) {
+    if let id = selection.flatMap(projectID(of:)) { shiftProject(id, by: delta) }
+  }
+
+  private func reorderProjects(_ reorder: ([String]) -> [String]?) {
+    if let order = reorder(repos.map(\.id)) {
+      repos = order.compactMap { id in repos.first { $0.id == id } }
+    } else if let order = reorder(hosts.map(\.id)) {
+      hosts = order.compactMap { id in hosts.first { $0.id == id } }
+    } else {
+      return
+    }
+    saveState()
+  }
+
+  /// `ids` with `id` at `target`'s place; nil when either isn't in it.
+  nonisolated static func moved(_ ids: [String], _ id: String, onto target: String) -> [String]? {
+    guard id != target, let from = ids.firstIndex(of: id), let to = ids.firstIndex(of: target) else { return nil }
+    var order = ids
+    order.remove(at: from)
+    order.insert(id, at: to)
+    return order
+  }
+
+  /// `ids` with `id` moved `delta` places; nil past either end.
+  nonisolated static func shifted(_ ids: [String], _ id: String, by delta: Int) -> [String]? {
+    guard let from = ids.firstIndex(of: id), ids.indices.contains(from + delta), delta != 0 else { return nil }
+    return moved(ids, id, onto: ids[from + delta])
+  }
+
+  func toggleFold(_ projectID: String) {
+    if foldedProjects.remove(projectID) == nil { foldedProjects.insert(projectID) }
+    saveState()
   }
 
   // MARK: Loading
@@ -477,9 +577,15 @@ final class AppStore {
 
   /// Only the sidebar's name changes; an empty name gives back the branch's.
   func renameWorktree(_ worktree: Worktree, to name: String) {
-    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    labels[worktree.id] = trimmed.isEmpty ? nil : trimmed
+    labels[worktree.id] = Self.cleanLabel(name, automatic: worktree.name)
     saveState()
+  }
+
+  /// A name as the sidebar keeps it: trimmed; nil — follow the branch — when
+  /// empty or the branch's own name.
+  nonisolated static func cleanLabel(_ name: String, automatic: String) -> String? {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty || trimmed == automatic ? nil : trimmed
   }
 
   /// Deletes the worktree's directory (uncommitted changes too) and ends its
@@ -503,16 +609,39 @@ final class AppStore {
     saveState()
   }
 
-  func toggleSection(_ name: String) {
-    if foldedSections.remove(name) == nil { foldedSections.insert(name) }
-    saveState()
-  }
-
   /// Badges, and the inspector's details, asked again now.
   func refreshPullRequests() {
     pullRequests.refreshAll(force: true)
     if let worktree = selectedWorktree, let repo = repo(of: worktree) {
       pullRequests.refreshDetails(for: worktree, in: repo)
+      pullRequests.ensureMergeSettings(for: repo)
+    }
+  }
+
+  /// The PR panel, open at `tab`.
+  func showPullRequestTab(_ tab: PullRequestTab, for worktree: Worktree) {
+    prTabs[worktree.id] = tab
+    showingPullRequest = true
+  }
+
+  func openPullRequest(_ worktree: Worktree) {
+    if let url = pullRequests.badge(for: worktree).flatMap({ URL(string: $0.url) }) { NSWorkspace.shared.open(url) }
+  }
+
+  /// Re-runs the failed jobs of every Actions run with a failed check.
+  func rerunFailedChecks(in worktree: Worktree) {
+    for run in pullRequests.details[worktree.id].map(PullRequests.failedRuns) ?? [] { rerun(run, in: worktree) }
+  }
+
+  func rerun(_ run: ActionsRun, in worktree: Worktree) {
+    guard !Snapshot.isActive else { return }
+    Task {
+      do {
+        try await GitHub.rerunFailed(runID: run.runID, in: run.nameWithOwner)
+        if let repo = repo(of: worktree) { pullRequests.refreshDetails(for: worktree, in: repo) }
+      } catch {
+        alert = AppAlert(title: "Couldn't re-run the checks", message: error.localizedDescription)
+      }
     }
   }
 
@@ -569,7 +698,7 @@ final class AppStore {
     ConfigFiles.saveState(
       StoredState(
         repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
-        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod, diffViewer: diffViewer, hosts: hosts,
-        remoteCleanup: remoteCleanup))
+        foldedProjects: foldedProjects.sorted(), mergeMethod: mergeMethod,
+        diffViewer: diffViewer, hosts: hosts, remoteCleanup: remoteCleanup))
   }
 }
