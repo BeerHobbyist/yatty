@@ -125,6 +125,17 @@ final class AppStore {
   }
   /// Per diff tab: how often its diff was asked for. It reads it again on each.
   var diffReads: [String: Int] = [:]
+  /// Per diff tab: the diff last read, kept while other tabs are shown.
+  var diffTexts: [String: DiffText] = [:]
+  /// Per diff tab: its page, kept alive like a terminal while the tab exists.
+  @ObservationIgnored var diffPages: [String: DiffPage] = [:]
+
+  func diffPage(for tabID: String) -> DiffPage {
+    if let page = diffPages[tabID] { return page }
+    let page = DiffPage()
+    diffPages[tabID] = page
+    return page
+  }
   var diffingWorktree: Worktree?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.

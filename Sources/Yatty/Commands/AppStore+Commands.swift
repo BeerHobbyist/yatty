@@ -38,6 +38,8 @@ struct CommandContext {
   var openPullRequest: Bool
   /// The selected worktree has a pull request, open or merged.
   var hasPullRequest = false
+  /// The selected worktree's front tab shows a diff: nothing to split there.
+  var showingDiffTab = false
   /// Its pull request has failed checks from GitHub Actions runs.
   var hasFailedRuns = false
 
@@ -47,6 +49,8 @@ struct CommandContext {
   var canNewWorktree: Bool { hasRepos && selected?.isRemote != true }
   var canCloseWorktree: Bool { selected.map { !$0.isMain } ?? false }
   var hasTerminals: Bool { selected != nil }
+  /// Splits and moving between panes: a terminal tab in front.
+  var canSplit: Bool { hasTerminals && !showingDiffTab }
   var canDiff: Bool { isLocal }
   var canShowPullRequest: Bool { isLocal }
   var canMerge: Bool { isLocal && openPullRequest }
@@ -60,6 +64,7 @@ extension AppStore {
     return CommandContext(
       selected: selectedWorktree, hasRepos: !repos.isEmpty, openPullRequest: badge.map { !$0.merged } ?? false,
       hasPullRequest: badge != nil,
+      showingDiffTab: selectedWorktree.flatMap { layout(for: $0).selected?.diff } != nil,
       hasFailedRuns: selectedWorktree.flatMap { pullRequests.details[$0.id] }.map { !PullRequests.failedRuns($0).isEmpty }
         ?? false)
   }
@@ -110,11 +115,14 @@ extension AppStore {
       add("diff.open", "Open Diff…", "Terminal", Shortcuts.openDiff, when: context.canDiff) {
         self.diffingWorktree = selected
       }
-      add("split.right", "Split Right", "Terminal", Shortcuts.splitRight, onPane(.split(.horizontal, newFirst: false)))
-      add("split.down", "Split Down", "Terminal", Shortcuts.splitDown, onPane(.split(.vertical, newFirst: false)))
-      add("split.equalize", "Equalize Splits", "Terminal", Shortcuts.equalize, onPane(.equalize))
-      add("pane.next", "Next Pane", "Terminal", Shortcuts.nextPane, onPane(.gotoSplit(.next)))
-      add("pane.previous", "Previous Pane", "Terminal", Shortcuts.previousPane, onPane(.gotoSplit(.previous)))
+      add("split.right", "Split Right", "Terminal", Shortcuts.splitRight, when: context.canSplit,
+        onPane(.split(.horizontal, newFirst: false)))
+      add("split.down", "Split Down", "Terminal", Shortcuts.splitDown, when: context.canSplit,
+        onPane(.split(.vertical, newFirst: false)))
+      add("split.equalize", "Equalize Splits", "Terminal", Shortcuts.equalize, when: context.canSplit, onPane(.equalize))
+      add("pane.next", "Next Pane", "Terminal", Shortcuts.nextPane, when: context.canSplit, onPane(.gotoSplit(.next)))
+      add("pane.previous", "Previous Pane", "Terminal", Shortcuts.previousPane, when: context.canSplit,
+        onPane(.gotoSplit(.previous)))
       add("tab.next", "Next Tab", "Terminal", Shortcuts.nextTab, onPane(.gotoTab(.next)))
       add("tab.previous", "Previous Tab", "Terminal", Shortcuts.previousTab, onPane(.gotoTab(.previous)))
       add("pane.close", "Close Pane", "Terminal", Shortcuts.closePane, onPane(.close))

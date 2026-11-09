@@ -144,6 +144,9 @@ struct TerminalTab: Codable, Identifiable, Equatable, Sendable {
   /// A tab showing a diff (Yatty's own viewer) instead of terminals. Its one
   /// pane is only a handle for focus and closing: it never has a session.
   var diff: DiffTab?
+
+  /// The title when the user gave it none and no terminal names it.
+  var defaultTitle: String? { diff.map { "diff: \($0.target.title)" } }
 }
 
 /// What a diff tab shows, and the comments the user left on it.
@@ -221,6 +224,13 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
     guard let index = tabs.firstIndex(where: { $0.id == tabID }), var diff = tabs[index].diff else { return }
     change(&diff)
     tabs[index].diff = diff
+  }
+
+  /// Whether `tabID` may be closed from the CLI: not the last terminal tab,
+  /// which would leave the worktree with no terminal at all.
+  func canClose(_ tabID: String) -> Bool {
+    guard let tab = tabs.first(where: { $0.id == tabID }) else { return false }
+    return tab.diff != nil || tabs.contains { $0.id != tabID && $0.diff == nil }
   }
 
   /// The tab already showing `target`'s diff.

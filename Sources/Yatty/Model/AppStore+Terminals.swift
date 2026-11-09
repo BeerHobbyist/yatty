@@ -340,6 +340,8 @@ extension AppStore {
       Task { await endSessions(tab.root.panes, of: worktree) }
     } else {
       diffReads[tab.id] = nil
+      diffTexts[tab.id] = nil
+      diffPages.removeValue(forKey: tab.id)?.close()
     }
     if selection == worktree.id { focusSelectedTerminal() }
   }
@@ -364,7 +366,7 @@ extension AppStore {
 
   /// The tab's title: the name the user gave it, else its focused terminal's.
   func title(of tab: TerminalTab, in worktree: Worktree) -> String {
-    tab.name ?? paneTitles[PaneKey(worktree: worktree.id, pane: tab.focusedPane)] ?? "Terminal"
+    tab.name ?? tab.defaultTitle ?? paneTitles[PaneKey(worktree: worktree.id, pane: tab.focusedPane)] ?? "Terminal"
   }
 
   // MARK: Teardown

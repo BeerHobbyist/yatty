@@ -55,7 +55,8 @@ struct TabBar: View {
         }
       }
       Spacer(minLength: 8)
-      if let tab = layout.selected {
+      // A diff tab has no terminal to split.
+      if let tab = layout.selected, tab.diff == nil {
         let focused = PaneKey(worktree: worktree.id, pane: tab.focusedPane)
         Button {
           store.split(focused, axis: .horizontal, newFirst: false)

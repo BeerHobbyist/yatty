@@ -77,8 +77,8 @@ extension AppStore {
       return ""
     case .tabClose:
       let (tab, _) = try cliTab(request.tab, in: worktree)
-      // Closing the last would leave the worktree with no terminal at all.
-      guard layout(for: worktree).tabs.count > 1 else { throw CLIError("that's the only tab; it stays") }
+      // Closing the last terminal would leave the worktree with none at all.
+      guard layout(for: worktree).canClose(tab.id) else { throw CLIError("that's the only terminal tab; it stays") }
       closeTab(tab.id, in: worktree)
       return ""
     case .diff: return try await diff(request, in: worktree, sandboxed: sandboxed)

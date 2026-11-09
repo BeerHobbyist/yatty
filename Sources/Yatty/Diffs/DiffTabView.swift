@@ -9,9 +9,6 @@ struct DiffTabView: View {
   let tab: TerminalTab
   let diffTab: DiffTab
   @Environment(AppStore.self) private var store
-  @State private var diff: String?
-  /// Each file's path in `diff`'s order.
-  @State private var files: [String] = []
   @State private var error: String?
   @State private var loading = false
   @State private var copied = false
@@ -48,15 +45,32 @@ struct DiffTabView: View {
       Divider()
       content
     }
-    // Again whenever this diff is asked for again.
-    .task(id: store.diffReads[tab.id, default: 0]) { await load() }
+    // ⌘1–9 are the terminal's (Ghostty's) keys; a diff tab has none to take them.
+    .background { tabKeys }
+    // Read when first shown and whenever this diff is asked for again; not
+    // on coming back to the tab (it's kept, see `AppStore.diffTexts`).
+    .task(id: store.diffReads[tab.id, default: 0]) {
+      let reads = store.diffReads[tab.id, default: 0]
+      if store.diffTexts[tab.id]?.reads != reads { await load() }
+    }
+  }
+
+  private var tabKeys: some View {
+    ZStack {
+      ForEach(1...9, id: \.self) { number in
+        Button("") { store.performOnFocusedPane(.gotoTab(number == 9 ? .last : .index(number))) }
+          .keyboardShortcut(KeyEquivalent(Character(String(number))), modifiers: .command)
+      }
+    }
+    .opacity(0)
+    .allowsHitTesting(false)
   }
 
   @ViewBuilder private var content: some View {
     if let error {
       ContentUnavailableView(
         "Couldn't Read the Diff", systemImage: "exclamationmark.triangle", description: Text(error))
-    } else if let diff {
+    } else if let diff = store.diffTexts[tab.id]?.text {
       if diff.utf8.count > Self.largest {
         ContentUnavailableView(
           "Too Large to Show", systemImage: "doc.text.magnifyingglass",
@@ -67,7 +81,10 @@ struct DiffTabView: View {
           "No Changes", systemImage: "checkmark.circle",
           description: Text("\(diffTab.target.title) in \(store.label(for: worktree)): nothing differs."))
       } else {
-        DiffWebView(diff: diff, layout: store.diffLayout, files: files, comments: diffTab.comments) { message in
+        DiffWebView(
+          page: store.diffPage(for: tab.id), diff: diff, layout: store.diffLayout,
+          files: store.diffTexts[tab.id]?.files ?? [], comments: diffTab.comments
+        ) { message in
           switch message {
           case .save(let comment): store.saveDiffComment(comment, tab: tab.id, in: worktree)
           case .delete(let id): store.deleteDiffComment(id, tab: tab.id, in: worktree)
@@ -112,9 +129,9 @@ struct DiffTabView: View {
     loading = true
     defer { loading = false }
     do {
+      let reads = store.diffReads[tab.id, default: 0]
       let text = try await GitDiff.text(in: worktree.path, target: diffTab.target)
-      files = UnifiedDiff.files(text)
-      diff = text
+      store.diffTexts[tab.id] = DiffText(text: text, files: UnifiedDiff.files(text), reads: reads)
       error = nil
     } catch {
       self.error = error.localizedDescription
@@ -123,27 +140,27 @@ struct DiffTabView: View {
 }
 
 /// diff2html in a web view, from the `diff/` folder the app bundles.
-struct DiffWebView: NSViewRepresentable {
-  /// What the page asks of the app.
-  enum Message {
-    case save(DiffComment)
-    case delete(String)
-  }
+/// A diff tab's last read diff.
+struct DiffText: Equatable {
+  var text: String
+  /// Each file's path in the diff's order.
+  var files: [String]
+  /// `AppStore.diffReads` when it was read.
+  var reads: Int
+}
 
-  let diff: String
-  let layout: DiffLayout
-  /// Each file's path in the diff's order, for the page's comments.
-  let files: [String]
-  let comments: [DiffComment]
-  let onMessage: (Message) -> Void
+/// A diff tab's web page, kept while the tab exists (`AppStore.diffPages`):
+/// coming back to the tab finds it drawn and scrolled as it was left.
+@MainActor
+final class DiffPage {
+  let view: WKWebView
+  let coordinator = DiffWebView.Bridge()
 
-  func makeCoordinator() -> Coordinator { Coordinator() }
-
-  func makeNSView(context: Context) -> WKWebView {
+  init() {
     let configuration = WKWebViewConfiguration()
-    configuration.userContentController.add(MessageRelay(context.coordinator), name: "yatty")
-    let view = WKWebView(frame: .zero, configuration: configuration)
-    view.navigationDelegate = context.coordinator
+    configuration.userContentController.add(MessageRelay(coordinator), name: "yatty")
+    view = WKWebView(frame: .zero, configuration: configuration)
+    view.navigationDelegate = coordinator
     if let page = DiffAssets.viewer {
       view.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
     } else {
@@ -151,20 +168,46 @@ struct DiffWebView: NSViewRepresentable {
         "<p style=\"font: 13px -apple-system; padding: 20px\">The diff viewer's files are missing from Yatty.app.</p>",
         baseURL: nil)
     }
-    return view
   }
 
-  func updateNSView(_ view: WKWebView, context: Context) {
-    context.coordinator.onMessage = onMessage
-    context.coordinator.show(diff, layout: layout, files: files, comments: comments, in: view)
-  }
-
-  static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
+  func close() {
     view.configuration.userContentController.removeScriptMessageHandler(forName: "yatty")
+    view.removeFromSuperview()
+  }
+}
+
+/// diff2html in a diff tab's kept page, from the `diff/` folder the app bundles.
+struct DiffWebView: NSViewRepresentable {
+  /// What the page asks of the app.
+  enum Message {
+    case save(DiffComment)
+    case delete(String)
+  }
+
+  let page: DiffPage
+  let diff: String
+  let layout: DiffLayout
+  /// Each file's path in the diff's order, for the page's comments.
+  let files: [String]
+  let comments: [DiffComment]
+  let onMessage: (Message) -> Void
+
+  func makeNSView(context: Context) -> NSView { NSView() }
+
+  func updateNSView(_ container: NSView, context: Context) {
+    if page.view.superview !== container {
+      page.view.removeFromSuperview()
+      page.view.frame = container.bounds
+      page.view.autoresizingMask = [.width, .height]
+      container.addSubview(page.view)
+    }
+    page.coordinator.onMessage = onMessage
+    page.coordinator.show(diff, layout: layout, files: files, comments: comments, in: page.view)
   }
 
   @MainActor
-  final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+  /// The page's side: draws what's wanted, relays what it says.
+  final class Bridge: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     var onMessage: (Message) -> Void = { _ in }
     private var loaded = false
     private var wanted: (diff: String, layout: DiffLayout, files: [String], comments: [DiffComment])?

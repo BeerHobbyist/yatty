@@ -24,17 +24,21 @@ struct TerminalCommands: Commands {
           // Diffs run git here; a remote directory's files are there.
           .disabled(!store.commandContext.canDiff)
         Divider()
-        Button("Split Right") { store.performOnFocusedPane(.split(.horizontal, newFirst: false)) }
-          .keyboardShortcut(Shortcuts.splitRight)
-        Button("Split Down") { store.performOnFocusedPane(.split(.vertical, newFirst: false)) }
-          .keyboardShortcut(Shortcuts.splitDown)
-        Button("Equalize Splits") { store.performOnFocusedPane(.equalize) }
-          .keyboardShortcut(Shortcuts.equalize)
-        Divider()
-        Button("Next Pane") { store.performOnFocusedPane(.gotoSplit(.next)) }
-          .keyboardShortcut(Shortcuts.nextPane)
-        Button("Previous Pane") { store.performOnFocusedPane(.gotoSplit(.previous)) }
-          .keyboardShortcut(Shortcuts.previousPane)
+        Group {
+          Button("Split Right") { store.performOnFocusedPane(.split(.horizontal, newFirst: false)) }
+            .keyboardShortcut(Shortcuts.splitRight)
+          Button("Split Down") { store.performOnFocusedPane(.split(.vertical, newFirst: false)) }
+            .keyboardShortcut(Shortcuts.splitDown)
+          Button("Equalize Splits") { store.performOnFocusedPane(.equalize) }
+            .keyboardShortcut(Shortcuts.equalize)
+          Divider()
+          Button("Next Pane") { store.performOnFocusedPane(.gotoSplit(.next)) }
+            .keyboardShortcut(Shortcuts.nextPane)
+          Button("Previous Pane") { store.performOnFocusedPane(.gotoSplit(.previous)) }
+            .keyboardShortcut(Shortcuts.previousPane)
+        }
+        // A diff tab has no terminal to split or move between.
+        .disabled(!store.commandContext.canSplit)
         Button("Next Tab") { store.performOnFocusedPane(.gotoTab(.next)) }
           .keyboardShortcut(Shortcuts.nextTab)
         Button("Previous Tab") { store.performOnFocusedPane(.gotoTab(.previous)) }

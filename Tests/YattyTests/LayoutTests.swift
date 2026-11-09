@@ -126,3 +126,23 @@ import Testing
   let legacy = try JSONDecoder().decode(WorktreeLayout.self, from: Data(old.utf8))
   #expect(legacy.tabs.first?.diff == nil)
 }
+
+@Test func theLastTerminalTabStays() {
+  var layout = WorktreeLayout.initial
+  layout.addDiffTab(pane: "d1", id: "td", target: .working)
+  // Two tabs, but only one terminal: that one stays.
+  #expect(!layout.canClose("t0"))
+  #expect(layout.canClose("td"))
+  layout.addTab(pane: "1", id: "t1")
+  #expect(layout.canClose("t0"))
+  #expect(!layout.canClose("nope"))
+}
+
+@Test func aDiffTabFallsBackToItsDiffsTitle() {
+  var layout = WorktreeLayout.initial
+  layout.addDiffTab(pane: "d1", id: "td", target: .staged)
+  layout.rename("td", to: "  ")
+  #expect(layout.tabs.last?.name == nil)
+  #expect(layout.tabs.last?.defaultTitle == "diff: Staged")
+  #expect(layout.tabs.first?.defaultTitle == nil)
+}
