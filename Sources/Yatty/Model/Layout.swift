@@ -146,9 +146,40 @@ struct TerminalTab: Codable, Identifiable, Equatable, Sendable {
   var diff: DiffTab?
 }
 
-/// What a diff tab shows.
+/// What a diff tab shows, and the comments the user left on it.
 struct DiffTab: Codable, Equatable, Sendable {
   var target: DiffTarget
+  var comments: [DiffComment] = []
+
+  init(target: DiffTarget, comments: [DiffComment] = []) {
+    self.target = target
+    self.comments = comments
+  }
+
+  // A tab saved before comments existed still loads.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    target = try container.decode(DiffTarget.self, forKey: .target)
+    comments = (try? container.decodeIfPresent([DiffComment].self, forKey: .comments)) ?? []
+  }
+}
+
+/// A comment on one line of a diff: the user's own review, for their agent.
+struct DiffComment: Codable, Equatable, Identifiable, Sendable {
+  enum Side: String, Codable, Sendable {
+    /// The line as it is now (added or unchanged).
+    case new
+    /// A removed line, numbered as it was.
+    case old
+  }
+
+  var id: String
+  var path: String
+  var line: Int
+  var side: Side
+  /// The line's text, so the prompt can quote it.
+  var code: String
+  var text: String
 }
 
 /// A worktree's tabs, stored per worktree path in state.json.
@@ -184,6 +215,12 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
     guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
     tabs[index].diff = DiffTab(target: target)
     tabs[index].name = "diff: \(target.title)"
+  }
+
+  mutating func updateDiff(_ tabID: String, _ change: (inout DiffTab) -> Void) {
+    guard let index = tabs.firstIndex(where: { $0.id == tabID }), var diff = tabs[index].diff else { return }
+    change(&diff)
+    tabs[index].diff = diff
   }
 
   /// The tab already showing `target`'s diff.

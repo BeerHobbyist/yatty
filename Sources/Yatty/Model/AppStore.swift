@@ -636,6 +636,27 @@ final class AppStore {
     }
   }
 
+  /// Adds the comment to the diff tab, or changes it if it's there.
+  func saveDiffComment(_ comment: DiffComment, tab tabID: String, in worktree: Worktree) {
+    updateLayout(worktree.id) { layout in
+      layout.updateDiff(tabID) { diff in
+        if let index = diff.comments.firstIndex(where: { $0.id == comment.id }) {
+          diff.comments[index] = comment
+        } else {
+          diff.comments.append(comment)
+        }
+      }
+    }
+  }
+
+  func deleteDiffComment(_ id: String, tab tabID: String, in worktree: Worktree) {
+    updateLayout(worktree.id) { $0.updateDiff(tabID) { $0.comments.removeAll { $0.id == id } } }
+  }
+
+  func clearDiffComments(tab tabID: String, in worktree: Worktree) {
+    updateLayout(worktree.id) { $0.updateDiff(tabID) { $0.comments = [] } }
+  }
+
   func setDiffViewer(_ viewer: DiffViewer) {
     diffViewer = viewer
     saveState()
