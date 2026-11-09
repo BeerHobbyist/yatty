@@ -23,6 +23,7 @@ const check = (ok, what) => { if (!ok) { failures++; console.log("FAIL:", what);
 const click = (node, init = {}) => node.dispatchEvent(new w.MouseEvent("click", { bubbles: true, ...init }));
 const button = (root, title) => [...root.querySelectorAll("button")].find((b) => b.textContent === title);
 const row = (line) => d.querySelector(`.ln[data-line="${line}"]`);
+const rows9 = () => [...d.querySelectorAll(".ln[data-line]")];
 const ghosts = () => [...d.querySelectorAll(".ln.del")];
 const shownTexts = () => [...d.querySelectorAll(".yatty-comment .yatty-text")].map((n) => n.textContent);
 const lineUnder = (comment) => {
@@ -102,6 +103,15 @@ click(button(commentRow(), "Edit"));
 check(commentRow().style.display === "none", "Edit hides the comment");
 d.querySelector(".yatty-box textarea").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 check(commentRow().style.display === "", "Esc shows it again");
+// A comment being written survives the file changing under it.
+click(rows9()[0].querySelector(".n"));
+d.querySelector(".yatty-box textarea").value = "half-typed";
+w.yattyShow(file({ text: "// zero\n// one\n// two\n" + text, diff: "", scroll: null }));
+const draft = d.querySelector(".yatty-box textarea");
+check(draft && draft.value === "half-typed", "a comment being written survives a reload");
+check(draft && lineUnder(draft.closest(".yatty-row")) === "2", "under its line, moved: " + (draft && lineUnder(draft.closest(".yatty-row"))));
+d.querySelector(".yatty-box textarea").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+w.yattyShow(file({ text: "// one\n// two\n" + text, diff: "", scroll: null }));
 w.yattySetComments([{ id: "s", path: "S.swift", line: 1, side: "new", code: "// one", text: "<b>hi</b>", outdated: false, sent: true }]);
 check(!d.querySelector(".yatty-text b") && d.querySelector(".yatty-comment").textContent.includes("sent"), "comment text is text; a sent one says so");
 

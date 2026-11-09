@@ -74,6 +74,38 @@ enum CodeSource {
     return CodeDefinitions.hits(result.stdout, name: name, from: file)
   }
 
+  /// Of the changed `paths` (relative to the worktree at `root`), the ones
+  /// to follow, in order: files that exist, outside any repository inside
+  /// this one (a submodule, another worktree), that git doesn't ignore.
+  static func followable(_ paths: [String], in root: String) async -> [String] {
+    let fm = FileManager.default
+    var nested: [String: Bool] = [:]
+    func insideRepository(_ path: String) -> Bool {
+      var folder = ""
+      for part in path.split(separator: "/").dropLast() {
+        folder += (folder.isEmpty ? "" : "/") + part
+        if let known = nested[folder] {
+          if known { return true } else { continue }
+        }
+        let found = fm.fileExists(atPath: root + "/" + folder + "/.git")
+        nested[folder] = found
+        if found { return true }
+      }
+      return false
+    }
+    let candidates = paths.filter { path in
+      var directory: ObjCBool = false
+      return !insideRepository(path) && fm.fileExists(atPath: root + "/" + path, isDirectory: &directory)
+        && !directory.boolValue
+    }
+    guard !candidates.isEmpty else { return [] }
+    // Tracked files are never ignored; check-ignore names the ignored rest.
+    let input = Data(candidates.map { $0 + "\0" }.joined().utf8)
+    let ignored = await GuardedGit.result(["check-ignore", "-z", "--stdin"], in: root, input: input)
+    let skip = Set(ignored.stdout.split(separator: "\0").map(String.init))
+    return candidates.filter { !skip.contains($0) }
+  }
+
   /// What the changes are marked against: the last commit, or where the
   /// branch left the default branch (nil when there's none to compare with).
   static func revision(_ base: CodeView.Base, in root: String, repository: String) async -> String? {

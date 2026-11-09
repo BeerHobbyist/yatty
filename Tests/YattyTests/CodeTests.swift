@@ -140,3 +140,26 @@ import Testing
   let hits = try await CodeSource.definitions(of: "four", in: repo, from: nil)
   #expect(hits.isEmpty)
 }
+
+@Test func onlyFilesWorthShowingAreFollowed() async throws {
+  let repo = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("yatty-follow-\(UUID().uuidString)").path
+  defer { try? FileManager.default.removeItem(atPath: repo) }
+  _ = await Run.run("/usr/bin/env", ["git", "init", "-q", repo])
+  let fm = FileManager.default
+  for dir in ["build", "src", "vendor/lib", "vendor/lib/.git"] { try fm.createDirectory(atPath: repo + "/" + dir, withIntermediateDirectories: true) }
+  try "build/\n*.log\n".write(toFile: repo + "/.gitignore", atomically: true, encoding: .utf8)
+  for file in ["build/out.o", "src/a.swift", "a.log", "vendor/lib/x.c", "src/b.swift"] {
+    try "x\n".write(toFile: repo + "/" + file, atomically: true, encoding: .utf8)
+  }
+  // Ignored files, folders, a repository inside this one, and a file gone by now don't count.
+  let followed = await CodeSource.followable(
+    ["build/out.o", "src/a.swift", "a.log", "vendor/lib/x.c", "src", "gone.swift", "src/b.swift"], in: repo)
+  #expect(followed == ["src/a.swift", "src/b.swift"])
+}
+
+@Test func commentsGoOnlyToARunningAgent() {
+  #expect(CodeAgent.pane(in: ["0", "a1"], focused: "0", reporting: ["a1"]) == "a1")
+  #expect(CodeAgent.pane(in: ["0", "a1"], focused: "a1", reporting: ["0", "a1"]) == "a1")
+  // No agent reports from the tab: never the shell that's focused.
+  #expect(CodeAgent.pane(in: ["0", "a1"], focused: "0", reporting: []) == nil)
+}

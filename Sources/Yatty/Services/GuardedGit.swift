@@ -80,9 +80,9 @@ enum GuardedGit {
 
   /// `git -C dir args…`, guarded; the result whatever its exit status.
   /// `overrides` saves reading them again in a batch of calls.
-  static func result(_ args: [String], in dir: String, overrides: [Override]? = nil) async -> ProcessResult {
+  static func result(_ args: [String], in dir: String, overrides: [Override]? = nil, input: Data? = nil) async -> ProcessResult {
     let overrides = if let overrides { overrides } else { await self.overrides(in: dir) }
-    return await Run.run("/usr/bin/env", ["git", "-C", dir] + args, env: environment(overrides))
+    return await Run.run("/usr/bin/env", ["git", "-C", dir] + args, env: environment(overrides), input: input)
   }
 
   /// `git -C dir args…`, guarded: stdout, or git's own message thrown.

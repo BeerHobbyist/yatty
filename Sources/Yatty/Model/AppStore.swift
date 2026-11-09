@@ -145,6 +145,9 @@ final class AppStore {
   @ObservationIgnored var codeWatchers: [String: CodeWatcher] = [:]
   /// The tab whose code view is asking for a file by name (⌘P).
   var codeQuickOpen: String?
+  /// Per tab: the last change its code view took in (`CodeChangeEvent.serial`),
+  /// so one shown again catches up on what changed while it wasn't.
+  @ObservationIgnored var codeSeen: [String: Int] = [:]
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
   var trackingEveryClaude = ClaudeSettings.isInstalled()

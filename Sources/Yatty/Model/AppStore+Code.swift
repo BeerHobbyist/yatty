@@ -84,19 +84,22 @@ extension AppStore {
     return LocalReviewPrompt.make(target: target, branch: worktree.branch, comments: comments, view: "code view")
   }
 
-  /// The terminal in the tab an agent runs in; else its focused one.
-  func agentPane(of tab: TerminalTab, in worktree: Worktree) -> String {
-    tab.root.panes.first { agents.panes[PaneKey(worktree: worktree.id, pane: $0)] != nil } ?? tab.focusedPane
+  /// The terminal in the tab an agent reports from; nil when none does.
+  func agentPane(of tab: TerminalTab, in worktree: Worktree) -> String? {
+    let reporting = Set(tab.root.panes.filter { agents.panes[PaneKey(worktree: worktree.id, pane: $0)] != nil })
+    return CodeAgent.pane(in: tab.root.panes, focused: tab.focusedPane, reporting: reporting)
   }
 
   /// Pastes the comments not sent yet into the tab's agent and submits them;
-  /// false when there was nothing to send or its terminal isn't running.
+  /// false when there was nothing to send, no agent reports from the tab,
+  /// or its terminal isn't running.
   func sendCodeComments(tab tabID: String, in worktree: Worktree) async -> Bool {
     guard let tab = layout(for: worktree).tabs.first(where: { $0.id == tabID }), let code = tab.code,
       let prompt = await codePrompt(tab: tabID, in: worktree, unsentOnly: true)
     else { return false }
     let sending = Set(code.comments.filter { !$0.sent }.map(\.id))
-    let pane = agentPane(of: tab, in: worktree)
+    // Never a shell: Enter would run what it was pasted, quoted code and all.
+    guard let pane = agentPane(of: tab, in: worktree) else { return false }
     let session = Zmx.sessionName(for: worktree.sessionKey, pane: pane)
     let input = AgentInput.paste(prompt)
     guard await Zmx.send(session, input.text) else { return false }
@@ -141,14 +144,7 @@ extension AppStore {
       .map { String($0.path.dropFirst(worktree.path.count + 1)) }
     let changed = Array(CodeWatch.relative(absolute, in: watcher.root, excluding: nested).suffix(200))
     guard !changed.isEmpty else { return }
-    // Tracked files are never ignored; check-ignore names the ignored rest.
-    let ignored = await GuardedGit.result(["check-ignore", "-z", "--"] + changed, in: worktree.path)
-    let skip = Set(ignored.stdout.split(separator: "\0").map(String.init))
-    let files = changed.filter { path in
-      var directory: ObjCBool = false
-      return !skip.contains(path)
-        && FileManager.default.fileExists(atPath: worktree.path + "/" + path, isDirectory: &directory) && !directory.boolValue
-    }
+    let files = await CodeSource.followable(changed, in: worktree.path)
     guard let last = files.last else { return }
     let serial = (codeChanges[worktreeID]?.serial ?? 0) + 1
     codeChanges[worktreeID] = CodeChangeEvent(path: last, paths: files, serial: serial)
@@ -157,6 +153,7 @@ extension AppStore {
   /// Lets go of a closed tab's code page.
   func forgetCode(_ tabID: String) {
     codePages.removeValue(forKey: tabID)?.close()
+    codeSeen[tabID] = nil
     if codeQuickOpen == tabID { codeQuickOpen = nil }
   }
 }

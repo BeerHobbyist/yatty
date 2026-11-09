@@ -324,8 +324,14 @@ extension AppStore {
       let worktree = worktree(withID: key.worktree)
     else { return }
     let hadKeyboard = terminals[key].map { $0.window?.firstResponder === $0 } ?? false
+    let tab = layouts[key.worktree]?.tab(containing: key.pane)
     dropTerminal(key)
     updateLayout(key.worktree) { $0.close(key.pane) }
+    // Its last pane: the tab went, and its code page with it.
+    if let tab, !layout(for: worktree).tabs.contains(where: { $0.id == tab.id }) {
+      forgetCode(tab.id)
+      stopWatchingCodeIfUnused(in: worktree)
+    }
     Task { await endSessions([key.pane], of: worktree) }
     if hadKeyboard { focusSelectedTerminal() }
   }

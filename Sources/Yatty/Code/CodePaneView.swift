@@ -48,9 +48,14 @@ struct CodePaneView: View {
     .onAppear { store.watchCode(in: worktree) }
     .task(id: LoadKey(file: code.file, base: code.base, loads: loads)) { await load() }
     .task(id: code.base) { await readChanges() }
-    .onChange(of: store.codeChanges[worktree.id]) { _, event in
-      guard let event else { return }
+    // Initial too: a view shown again catches up on what changed meanwhile.
+    .onChange(of: store.codeChanges[worktree.id], initial: true) { _, event in
+      guard let event, event.serial > store.codeSeen[tab.id, default: 0] else { return }
+      let firstLook = store.codeSeen[tab.id] == nil
+      store.codeSeen[tab.id] = event.serial
       Task { await readChanges() }
+      // Shown for the first time: an old change isn't news.
+      if firstLook, !code.following { return }
       if code.following, event.path != code.file {
         scroll = .change
         store.openCode(event.path, tab: tab.id, in: worktree, following: true)
@@ -220,6 +225,7 @@ struct CodePaneView: View {
       Button(copied ? "Copied" : "Copy Prompt") { copyPrompt() }
         .disabled(count == 0 || copied)
         .help("Your comments as a prompt, on the clipboard")
+      let agent = store.agentPane(of: tab, in: worktree)
       Button("Send to Agent") {
         sending = true
         Task {
@@ -228,8 +234,11 @@ struct CodePaneView: View {
         }
       }
       .buttonStyle(.borderedProminent)
-      .disabled(sending || !code.comments.contains { !$0.sent })
-      .help("Paste the comments not sent yet into the agent beside the code, and submit them")
+      .disabled(sending || agent == nil || !code.comments.contains { !$0.sent })
+      .help(
+        agent == nil
+          ? "No agent is running in this tab's terminals. Copy Prompt puts the comments on the clipboard."
+          : "Paste the comments not sent yet into the agent beside the code, and submit them")
     }
     .controlSize(.small)
     .padding(.horizontal, 10)
@@ -301,8 +310,10 @@ struct CodePaneView: View {
     guard let rev = await revision() else { return }
     do {
       let read = try await CodeSource.load(file, in: worktree.path, against: rev)
-      // The tab moved on while this was read.
-      guard store.layout(for: worktree).tabs.first(where: { $0.id == tab.id })?.code?.file == file else { return }
+      // A newer read took over, or the tab moved on, while this was read.
+      guard !Task.isCancelled,
+        store.layout(for: worktree).tabs.first(where: { $0.id == tab.id })?.code?.file == file
+      else { return }
       let bridge = store.codePage(for: tab.id).bridge
       // The page already shows this file (the tab was left and come back to):
       // stay where the reader was.
@@ -313,7 +324,7 @@ struct CodePaneView: View {
       scroll = .none
       error = nil
     } catch {
-      self.error = error.localizedDescription
+      if !Task.isCancelled { self.error = error.localizedDescription }
     }
   }
 
