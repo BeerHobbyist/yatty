@@ -92,7 +92,7 @@ public enum CLIUsage {
       tab select TAB                          show TAB
       tab rename TAB NAME
       tab close TAB
-      diff [working|staged|base|REF]          open a diff in a tab of its own
+      diff [working|staged|base|REF]          show the user a diff, in their diff viewer
       notify MESSAGE... [--title T]           a notification for the user
       status [--json]                         every worktree and its agent's state
       skill install|uninstall|show            the Claude Code skill that teaches agents this
