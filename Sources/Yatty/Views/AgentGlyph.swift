@@ -8,21 +8,51 @@ struct AgentGlyph: View {
   var body: some View {
     switch state {
     case .needsAction:
-      Image(systemName: "exclamationmark.circle.fill")
-        .foregroundStyle(.orange)
+      Image(systemName: AgentState.needsAction.symbol)
+        .foregroundStyle(AgentState.needsAction.tint)
         .symbolEffect(.pulse, isActive: !Snapshot.isActive)
-        .help("Needs you")
+        .help(AgentState.needsAction.title)
     case .working:
-      Image(systemName: "progress.indicator")
+      Image(systemName: AgentState.working.symbol)
         .foregroundStyle(.primary)
         .symbolEffect(.variableColor.iterative, isActive: !Snapshot.isActive)
-        .help("Working")
+        .help(AgentState.working.title)
     case .done:
-      Image(systemName: "checkmark.circle.fill")
-        .foregroundStyle(.green)
-        .help("Done")
+      Image(systemName: AgentState.done.symbol)
+        .foregroundStyle(AgentState.done.tint)
+        .help(AgentState.done.title)
     case .idle, nil:
       EmptyView()
+    }
+  }
+}
+
+extension AgentState {
+  /// As the sidebar's section of it is called.
+  var title: String {
+    switch self {
+    case .needsAction: "Needs you"
+    case .working: "Working"
+    case .done: "Done"
+    case .idle: "Idle"
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .needsAction: "exclamationmark.circle.fill"
+    case .working: "progress.indicator"
+    case .done: "checkmark.circle.fill"
+    case .idle: "circle"
+    }
+  }
+
+  var tint: Color {
+    switch self {
+    case .needsAction: .orange
+    case .working: .blue
+    case .done: .green
+    case .idle: .secondary
     }
   }
 }

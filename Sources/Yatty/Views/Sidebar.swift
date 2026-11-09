@@ -22,10 +22,17 @@ struct Sidebar: View {
         ForEach(active, id: \.state) { section in
           Section {
             ForEach(section.worktrees) { worktree in
-              WorktreeRow(worktree: worktree, project: projectName(of: worktree)).tag(worktree.id)
+              WorktreeRow(worktree: worktree, project: projectName(of: worktree))
+                .tag(worktree.id)
+                // A faint card in the state's colour: the top reads as its own place.
+                .listRowBackground(
+                  RoundedRectangle(cornerRadius: 8)
+                    .fill(section.state.tint.opacity(0.07))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1))
             }
           } header: {
-            SidebarSectionTitle(title: title(of: section.state), count: section.worktrees.count)
+            FloatedSectionTitle(state: section.state, count: section.worktrees.count)
           }
         }
         ForEach(store.repos) { repo in
@@ -133,15 +140,6 @@ struct Sidebar: View {
       })
   }
 
-  private func title(of state: AgentState) -> String {
-    switch state {
-    case .needsAction: "Needs you"
-    case .working: "Working"
-    case .done: "Done"
-    case .idle: ""
-    }
-  }
-
   private func matches(_ worktree: Worktree, query: String, project: String) -> Bool {
     WorktreeSummary.matches(query, name: store.label(for: worktree), branch: worktree.branch, project: project)
   }
@@ -151,18 +149,24 @@ struct Sidebar: View {
   }
 }
 
-/// A heading over sidebar rows that aren't a project: its name and a count.
-private struct SidebarSectionTitle: View {
-  let title: String
+/// A floated section's heading: the state's symbol and name in its colour,
+/// and how many are in it.
+private struct FloatedSectionTitle: View {
+  let state: AgentState
   let count: Int
 
   var body: some View {
-    HStack {
-      Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+    HStack(spacing: 5) {
+      Image(systemName: state.symbol).imageScale(.small)
+      Text(state.title).font(.subheadline.weight(.semibold))
       Spacer()
-      Text("\(count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-        .padding(.horizontal, 6).background(Capsule().fill(.quaternary))
+      Text("\(count)")
+        .font(.caption.weight(.semibold).monospacedDigit())
+        .padding(.horizontal, 6)
+        .padding(.vertical, 1)
+        .background(Capsule().fill(state.tint.opacity(0.16)))
     }
+    .foregroundStyle(state.tint)
   }
 }
 
