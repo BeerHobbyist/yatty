@@ -136,11 +136,6 @@ import Testing
   #expect(DiffViewers.resolve(.delta, available: [.yatty, .delta, .git]) == .delta)
 }
 
-@Test func diffRequestsSurviveRestoration() throws {
-  let request = DiffRequest(worktreePath: "/r/.worktrees/login", worktreeName: "login", target: .base("origin/main"))
-  let decoded = try JSONDecoder().decode(DiffRequest.self, from: JSONEncoder().encode(request))
-  #expect(decoded == request)
-}
 
 @Test func aSandboxedAgentsDiffStaysInTheSandbox() {
   // The window runs git in the app; a sandboxed agent's diff runs in a

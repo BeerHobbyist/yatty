@@ -107,7 +107,7 @@ Repositories come first, then SSH hosts. Under each, its worktrees.
   switching back to Yatty, or ⌘R, asks again.
 - Worktrees made outside Yatty (by hand, by an agent) appear when you switch
   back to it. One removed outside Yatty takes its terminals with it.
-- Git that Yatty runs to read a worktree (status, the diff window, the commit
+- Git that Yatty runs to read a worktree (status, the diff tab, the commit
   list) switches off what the repository's own config could make it run:
   hooks, fsmonitor, external diff and textconv programs, filters the repository
   defines, signature checks. An agent can write that config, and Yatty runs
@@ -195,10 +195,10 @@ Open Diff… (⌥⌘D, or New Diff… in the tab bar's **+** menu) shows:
 
 Its Viewer menu picks where, and remembers it:
 
-- **Yatty** (the default): Yatty's own diff window. Unified or side by side
+- **Yatty** (the default): a diff tab of Yatty's own, beside the terminals. Unified or side by side
   (remembered), highlighted, with a file list and files that fold. Working
   changes include new files. Refresh reads it again, and so does asking for
-  the same diff again. ⌘W closes it. A diff over 20 MB is left to a terminal
+  the same diff again (its tab comes to the front). ⌘W closes it. A diff over 20 MB is left to a terminal
   viewer.
 - **A terminal viewer**, when it's on your login shell's `PATH`: hunk,
   diffnav (with delta), delta, difftastic, lumen, nvim diffview (only when you
@@ -257,7 +257,7 @@ request on it to these rules:
 - `yatty tab new` starts its tab in the sandbox: your sandbox command, then the
   shell. Its `--cwd` is entered inside the sandbox, so it never widens it.
 - `yatty diff` opens in a terminal viewer's tab, in the sandbox. Never in
-  Yatty's diff window, whose git runs in the app; if that's your viewer, the
+  a Yatty diff tab, whose git runs in the app; if that's your viewer, the
   first terminal viewer installed is used.
 - `yatty tab send` types only into tabs started in the sandbox: never into
   your tabs, nor the panes your agents run in.
@@ -267,7 +267,7 @@ request on it to these rules:
 
 What isn't sandboxed:
 
-- Yatty, and what it runs itself: zmx, git, `gh`, the diff window, your own
+- Yatty, and what it runs itself: zmx, git, `gh`, the diff tab, your own
   tabs (New Shell, New Agent) and agents whose command doesn't start them in
   fence.
 - From the sandbox the CLI can still list, read, select, rename and close
@@ -299,7 +299,7 @@ make run    # build it and open it
 
 `make deps` does nothing when `Vendor/` is up to date; `FORCE=1
 scripts/build-ghostty.sh` rebuilds GhosttyKit anyway. The bundle carries zmx,
-the `yatty` CLI and its skill, Ghostty's resources and the diff window's page,
+the `yatty` CLI and its skill, Ghostty's resources and the diff tab's page,
 and is signed ad hoc.
 
 ### Rebuilding while Yatty is open
@@ -368,7 +368,7 @@ and the new Yatty attaches to them as it opens.
 | ⌃⌘= | Equalize splits |
 | ⌘] / ⌘[ | Next / previous pane |
 | ⇧⌘] / ⇧⌘[ | Next / previous tab |
-| ⌘W | Close pane (in a diff window: close it) |
+| ⌘W | Close pane (in a diff tab: close the tab) |
 | ⌥⌘W | Close tab |
 
 **In a terminal** (Ghostty's defaults)
@@ -446,7 +446,7 @@ yatty <command> [--worktree PATH]
 | `tab select TAB` | Shows TAB. |
 | `tab rename TAB NAME` | Names TAB. |
 | `tab close TAB` | Closes TAB. The last tab stays. |
-| `diff [working\|staged\|base\|REF]` | Shows you a diff (default `working`) in your diff viewer: Yatty's diff window, or a terminal viewer's tab. |
+| `diff [working\|staged\|base\|REF]` | Shows you a diff (default `working`) in your diff viewer: a Yatty diff tab, or a terminal viewer's tab. |
 | `notify MESSAGE... [--title T]` | A notification for you. Clicking it opens the pane that sent it. |
 | `status [--json]` | Every worktree of every repository, and its agent's state. |
 | `skill install\|uninstall\|show` | The Claude Code skill that teaches agents this CLI. |
@@ -544,7 +544,7 @@ scripts/snapshot.sh SCENE # build/snapshots/SCENE.png from sample data
   - the real sidebar list style, split view and inspector: the window is laid
     out as a plain row instead, and Settings as a plain form;
   - sheets in place: they're stacked below the window in the image;
-  - the diff window's page, which is saved beside it as `SCENE-web.png`;
+  - the diff tab's page, which is saved beside it as `SCENE-web.png`;
   - animations and avatars: symbols stand still, and people show as initials.
 
   It needs the window server; under a sandbox that blocks it, it finds no
@@ -566,7 +566,7 @@ scripts/snapshot.sh SCENE # build/snapshots/SCENE.png from sample data
   `scripts/fetch-zmx.sh` downloads and checks against its SHA-256, bundled as
   `Contents/MacOS/zmx`.
 - [diff2html](https://github.com/rtfpessoa/diff2html) 3.4.56 (MIT) and
-  highlight.js 11.12.0 styles (BSD-3-Clause), for the diff window, in
+  highlight.js 11.12.0 styles (BSD-3-Clause), for the diff tab, in
   `Resources/diff/`; their licences are in `Resources/diff/THIRD-PARTY.md`.
 - [Octicons](https://github.com/primer/octicons) 19.15.0 (MIT), GitHub's icons
   for pull requests, branches and checks, in

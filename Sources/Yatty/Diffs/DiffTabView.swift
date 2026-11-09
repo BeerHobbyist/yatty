@@ -1,76 +1,79 @@
 import SwiftUI
 import WebKit
 
-/// Yatty's diff viewer: a diff in a window of its own, unified or side by
-/// side, read again on demand. ⌘W closes it like any window.
-struct DiffWindow: View {
-  let request: DiffRequest
+/// Yatty's diff viewer, in a tab of the worktree: unified or side by side,
+/// read again on demand (or when the same diff is asked for again). ⌘W
+/// closes it like any tab.
+struct DiffTabView: View {
+  let worktree: Worktree
+  let tab: TerminalTab
+  let diffTab: DiffTab
   @Environment(AppStore.self) private var store
-  @Environment(\.dismiss) private var dismiss
-  /// Past this the page would choke: a terminal viewer copes better.
-  private static let largest = 20_000_000
   @State private var diff: String?
   @State private var error: String?
   @State private var loading = false
+  /// Past this the page would choke: a terminal viewer copes better.
+  private static let largest = 20_000_000
 
   var body: some View {
     @Bindable var store = store
-    Group {
-      if let error {
-        ContentUnavailableView(
-          "Couldn't Read the Diff", systemImage: "exclamationmark.triangle", description: Text(error))
-      } else if let diff {
-        if diff.utf8.count > Self.largest {
-          ContentUnavailableView(
-            "Too Large to Show", systemImage: "doc.text.magnifyingglass",
-            description: Text(
-              "\(diff.utf8.count / 1_000_000) MB of changes. Open Diff… (⌥⌘D) can show it in a terminal viewer."))
-        } else if diff.isEmpty {
-          ContentUnavailableView(
-            "No Changes", systemImage: "checkmark.circle",
-            description: Text("\(request.target.title) in \(request.worktreeName): nothing differs."))
-        } else {
-          DiffWebView(diff: diff, layout: store.diffLayout)
-        }
-      } else {
-        ProgressView()
-      }
-    }
-    .frame(minWidth: 640, minHeight: 420)
-    .navigationTitle(request.worktreeName)
-    .navigationSubtitle(request.target.title)
-    .toolbar {
-      ToolbarItem {
+    VStack(spacing: 0) {
+      HStack(spacing: 10) {
+        Octicon(.fileDiff, size: 12).foregroundStyle(.secondary)
+        Text(diffTab.target.title).font(.callout.weight(.medium))
+        Spacer()
         Picker("Layout", selection: $store.diffLayout) {
-          Label("Unified", systemImage: "rectangle").tag(DiffLayout.unified)
-          Label("Side by Side", systemImage: "rectangle.split.2x1").tag(DiffLayout.split)
+          Text("Unified").tag(DiffLayout.unified)
+          Text("Side by Side").tag(DiffLayout.split)
         }
         .pickerStyle(.segmented)
-        .help("Unified or side by side")
-      }
-      ToolbarItem {
+        .labelsHidden()
+        .fixedSize()
         Button {
           Task { await load() }
         } label: {
-          Label("Refresh", systemImage: "arrow.clockwise")
+          Image(systemName: "arrow.clockwise")
         }
+        .buttonStyle(.borderless)
         .help("Read the diff again")
         .disabled(loading)
       }
-    }
-    // ⌘W closes this window: the menu's ⌘W is the terminal's Close Pane.
-    .background {
-      Button("Close") { dismiss() }.keyboardShortcut("w").opacity(0).allowsHitTesting(false)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 6)
+      Divider()
+      content
     }
     // Again whenever this diff is asked for again.
-    .task(id: store.diffReads[request, default: 0]) { await load() }
+    .task(id: store.diffReads[tab.id, default: 0]) { await load() }
+  }
+
+  @ViewBuilder private var content: some View {
+    if let error {
+      ContentUnavailableView(
+        "Couldn't Read the Diff", systemImage: "exclamationmark.triangle", description: Text(error))
+    } else if let diff {
+      if diff.utf8.count > Self.largest {
+        ContentUnavailableView(
+          "Too Large to Show", systemImage: "doc.text.magnifyingglass",
+          description: Text(
+            "\(diff.utf8.count / 1_000_000) MB of changes. Open Diff… (⌥⌘D) can show it in a terminal viewer."))
+      } else if diff.isEmpty {
+        ContentUnavailableView(
+          "No Changes", systemImage: "checkmark.circle",
+          description: Text("\(diffTab.target.title) in \(store.label(for: worktree)): nothing differs."))
+      } else {
+        DiffWebView(diff: diff, layout: store.diffLayout)
+      }
+    } else {
+      ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
   }
 
   private func load() async {
     loading = true
     defer { loading = false }
     do {
-      diff = try await GitDiff.text(in: request.worktreePath, target: request.target)
+      diff = try await GitDiff.text(in: worktree.path, target: diffTab.target)
       error = nil
     } catch {
       self.error = error.localizedDescription

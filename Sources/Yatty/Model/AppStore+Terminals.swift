@@ -71,7 +71,9 @@ extension AppStore {
   func terminal(for key: PaneKey, in worktree: Worktree) -> TerminalView? {
     _ = terminalsStarted
     if let existing = terminals[key] { return existing }
-    guard worktree.exists, !failedPanes.contains(key), !disconnectedPanes.contains(key),
+    // A diff tab's pane never gets a terminal (nor a session).
+    guard layouts[key.worktree, default: .initial].allPanes.contains(key.pane),
+      worktree.exists, !failedPanes.contains(key), !disconnectedPanes.contains(key),
       !retiring.contains(key.worktree), !starting.contains(key)
     else { return nil }
     starting.insert(key)
@@ -210,7 +212,7 @@ extension AppStore {
     guard let worktree = worktree(withID: key.worktree) else { return }
     if let terminal = terminal(for: key, in: worktree) {
       terminal.focus()
-    } else {
+    } else if layout(for: worktree).allPanes.contains(key.pane) {
       focusWhenStarted = key
     }
   }
@@ -311,6 +313,13 @@ extension AppStore {
 
   /// Ends the pane's session. Its sibling takes the space and the keyboard.
   func closePane(_ key: PaneKey) {
+    // ⌘W in a diff tab: the tab goes.
+    if let tab = layouts[key.worktree]?.tab(containing: key.pane), tab.diff != nil,
+      let worktree = worktree(withID: key.worktree)
+    {
+      closeTab(tab.id, in: worktree)
+      return
+    }
     guard layouts[key.worktree, default: .initial].allPanes.contains(key.pane),
       let worktree = worktree(withID: key.worktree)
     else { return }
@@ -327,7 +336,11 @@ extension AppStore {
       dropTerminal(PaneKey(worktree: worktree.id, pane: pane))
       updateLayout(worktree.id) { $0.close(pane) }
     }
-    Task { await endSessions(tab.root.panes, of: worktree) }
+    if tab.diff == nil {
+      Task { await endSessions(tab.root.panes, of: worktree) }
+    } else {
+      diffReads[tab.id] = nil
+    }
     if selection == worktree.id { focusSelectedTerminal() }
   }
 

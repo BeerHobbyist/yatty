@@ -1,20 +1,13 @@
 import Foundation
 
-/// A diff to show in a `DiffWindow`; restored with the window.
-struct DiffRequest: Codable, Hashable, Sendable {
-  var worktreePath: String
-  var worktreeName: String
-  var target: DiffTarget
-}
-
-/// How the diff window lays changes out.
+/// How a diff tab lays changes out.
 enum DiffLayout: String, Codable, CaseIterable, Sendable {
   /// diff2html's names for them.
   case split = "side-by-side"
   case unified = "line-by-line"
 }
 
-/// The text a `DiffWindow` shows: `git diff` through `GuardedGit`, since
+/// The text a diff tab (`DiffTabView`) shows: `git diff` through `GuardedGit`, since
 /// the app reads it outside any sandbox while an agent may have written the
 /// repository's config.
 enum GitDiff {

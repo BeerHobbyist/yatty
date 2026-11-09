@@ -35,7 +35,7 @@ enum DiffTarget: Hashable, Codable, Sendable {
 /// The diff viewers agentree offers, each turning `git diff` arguments into
 /// a shell command (agentree's src/services/diff.ts).
 enum DiffViewer: String, CaseIterable, Codable, Sendable {
-  /// Yatty's own diff window (`DiffWindow`); the rest run in a terminal tab.
+  /// Yatty's own diff tab (`DiffTabView`); the rest run in a terminal tab.
   case yatty
   case hunk, diffnav, delta, difftastic, lumen, diffview, git
 
@@ -66,7 +66,7 @@ enum DiffViewer: String, CaseIterable, Codable, Sendable {
   /// plugin can't be detected).
   var auto: Bool { self != .diffview }
 
-  /// The terminal command; Yatty's own viewer has none (`DiffWindow`).
+  /// The terminal command; Yatty's own viewer has none (`DiffTabView`).
   func command(args: [String]) -> String {
     switch self {
     case .yatty:

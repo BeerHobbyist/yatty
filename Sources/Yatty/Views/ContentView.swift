@@ -3,7 +3,6 @@ import SwiftUI
 struct ContentView: View {
   @Environment(AppStore.self) private var store
   @Environment(\.openSettings) private var openSettings
-  @Environment(\.openWindow) private var openWindow
   @State private var columns = NavigationSplitViewVisibility.all
 
   var body: some View {
@@ -37,12 +36,6 @@ struct ContentView: View {
       if focusing { columns = .all }
     }
     .focusedSceneValue(\.isMainWindow, true)
-    // Initial too: asked while this window was closed, it opens on return.
-    .onChange(of: store.openingDiff, initial: true) { _, request in
-      guard let request else { return }
-      openWindow(value: request)
-      store.openingDiff = nil
-    }
     .task(id: store.openingSettings) {
       guard store.openingSettings else { return }
       store.openingSettings = false

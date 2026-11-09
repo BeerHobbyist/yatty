@@ -13,7 +13,11 @@ struct TerminalsView: View {
       if let tab = layout.selected {
         TabBar(worktree: worktree, layout: layout)
         Divider()
-        SplitNodeView(node: tab.root, path: [], tab: tab, worktree: worktree)
+        if let diff = tab.diff {
+          DiffTabView(worktree: worktree, tab: tab, diffTab: diff).id(tab.id)
+        } else {
+          SplitNodeView(node: tab.root, path: [], tab: tab, worktree: worktree)
+        }
       } else {
         ContentUnavailableView {
           Label("No Terminals", systemImage: "terminal")
@@ -121,6 +125,7 @@ private struct TabButton: View {
           }
           .onChange(of: fieldFocused) { _, focused in if !focused { finishRename() } }
       } else {
+        if tab.diff != nil { Octicon(.fileDiff, size: 11).foregroundStyle(.secondary) }
         Text(middleTruncated(store.title(of: tab, in: worktree), to: 24))
           .lineLimit(1)
       }

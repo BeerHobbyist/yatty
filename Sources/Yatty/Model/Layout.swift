@@ -141,6 +141,14 @@ struct TerminalTab: Codable, Identifiable, Equatable, Sendable {
   var focusedPane: String
   /// Set by the user; otherwise the tab is titled after its focused pane.
   var name: String?
+  /// A tab showing a diff (Yatty's own viewer) instead of terminals. Its one
+  /// pane is only a handle for focus and closing: it never has a session.
+  var diff: DiffTab?
+}
+
+/// What a diff tab shows.
+struct DiffTab: Codable, Equatable, Sendable {
+  var target: DiffTarget
 }
 
 /// A worktree's tabs, stored per worktree path in state.json.
@@ -167,7 +175,21 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
   static let initial = WorktreeLayout(
     tabs: [TerminalTab(id: "t0", root: .pane("0"), focusedPane: "0")], selectedTab: "t0")
 
-  var allPanes: [String] { tabs.flatMap(\.root.panes) }
+  /// Every terminal pane; a diff tab's pane isn't one.
+  var allPanes: [String] { tabs.filter { $0.diff == nil }.flatMap(\.root.panes) }
+
+  /// A new tab showing `target`'s diff, selected.
+  mutating func addDiffTab(pane: String, id: String, target: DiffTarget) {
+    addTab(pane: pane, id: id)
+    guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+    tabs[index].diff = DiffTab(target: target)
+    tabs[index].name = "diff: \(target.title)"
+  }
+
+  /// The tab already showing `target`'s diff.
+  func diffTab(for target: DiffTarget) -> TerminalTab? {
+    tabs.first { $0.diff?.target == target }
+  }
 
   var selected: TerminalTab? { tabs.first { $0.id == selectedTab } }
 
@@ -188,7 +210,7 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
 
   /// Splits `pane`, focusing the new one.
   mutating func split(_ pane: String, new: String, axis: SplitAxis, newFirst: Bool) {
-    guard let index = tabs.firstIndex(where: { $0.root.panes.contains(pane) }) else { return }
+    guard let index = tabs.firstIndex(where: { $0.root.panes.contains(pane) }), tabs[index].diff == nil else { return }
     tabs[index].root = tabs[index].root.splitting(pane, with: new, axis: axis, newFirst: newFirst)
     tabs[index].focusedPane = new
   }

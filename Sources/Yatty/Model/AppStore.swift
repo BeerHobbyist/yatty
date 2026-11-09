@@ -123,10 +123,8 @@ final class AppStore {
   var diffLayout = DiffLayout.split {
     didSet { if diffLayout != oldValue { saveState() } }
   }
-  /// Asks the window to open a diff window (only a view can).
-  var openingDiff: DiffRequest?
-  /// Per diff: how often it was asked for. Its window reads it again on each.
-  var diffReads: [DiffRequest: Int] = [:]
+  /// Per diff tab: how often its diff was asked for. It reads it again on each.
+  var diffReads: [String: Int] = [:]
   var diffingWorktree: Worktree?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
@@ -186,7 +184,7 @@ final class AppStore {
     if Snapshot.sheet == "palette" { showingPalette = true }
     if Snapshot.sheet == "help" { showingHelp = true }
     if Snapshot.sheet == "settings" { openingSettings = true }
-    if Snapshot.sheet == "diff-window" {
+    if Snapshot.sheet == "diff-tab" {
       Task {
         await refreshAll()
         if let worktree = selectedWorktree { openDiff(worktree, target: .working) }
@@ -626,12 +624,16 @@ final class AppStore {
 
   // MARK: Pull requests
 
-  /// The diff in Yatty's own window. Asked again while it's open, it reads
-  /// the diff again (see `diffReads`).
+  /// The diff in a tab of the worktree, Yatty's own viewer. Asked again
+  /// while that tab is open, it's selected and reads the diff again.
   func openDiff(_ worktree: Worktree, target: DiffTarget) {
-    let request = DiffRequest(worktreePath: worktree.path, worktreeName: label(for: worktree), target: target)
-    diffReads[request, default: 0] += 1
-    openingDiff = request
+    if let open = layout(for: worktree).diffTab(for: target) {
+      diffReads[open.id, default: 0] += 1
+      selectTab(open.id, in: worktree)
+    } else {
+      let pane = newPaneID()
+      updateLayout(worktree.id) { $0.addDiffTab(pane: pane, id: "t" + newPaneID(), target: target) }
+    }
   }
 
   func setDiffViewer(_ viewer: DiffViewer) {
