@@ -1,0 +1,63 @@
+<style>
+  .pp { width: 340px; background: #232325; border-radius: 10px; padding: 12px; font: 12.5px -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e8ea; text-align: left; }
+  .pp .muted { color: #8e8e93; } .pp .small { font-size: 11px; }
+  .pp .h { font-size: 15px; font-weight: 600; margin: 4px 0 2px; }
+  .pp .chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 9px; }
+  .pp .open { background: rgba(48,209,88,.18); color: #30d158; }
+  .pp .fail { color: #ff6961; } .pp .ok { color: #30d158; } .pp .run { color: #ffd60a; }
+  .pp .av { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; flex: none; }
+  .pp .a1 { background: #5e5ce6; } .pp .a2 { background: #ff9f0a; } .pp .a3 { background: #30b0c7; }
+  .pp .row { display: flex; align-items: center; gap: 7px; padding: 4px 0; }
+  .pp .grow { flex: 1; min-width: 0; }
+  .pp .card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07); border-radius: 9px; padding: 6px 10px; margin-top: 8px; }
+  .pp .card .row + .row { border-top: 1px solid rgba(255,255,255,.07); }
+  .pp .btn { background: rgba(255,255,255,.12); border-radius: 6px; padding: 2px 9px; font-size: 11.5px; }
+  .pp .split { display: inline-flex; border-radius: 6px; overflow: hidden; }
+  .pp .split span { padding: 3px 9px; background: rgba(255,255,255,.12); color: #8e8e93; font-weight: 600; }
+  .pp .split span + span { border-left: 1px solid rgba(0,0,0,.25); padding: 3px 6px; }
+  .pp .seg { display: flex; background: rgba(255,255,255,.07); border-radius: 7px; padding: 2px; margin: 10px 0 8px; font-size: 11.5px; }
+  .pp .seg div { flex: 1; text-align: center; padding: 3px 0; border-radius: 5px; color: #aeaeb2; }
+  .pp .seg .on { background: rgba(255,255,255,.16); color: #fff; }
+  .pp .bubble { background: rgba(255,255,255,.05); border-radius: 9px; padding: 7px 9px; margin: 2px 0 8px 25px; }
+  .pp .code { font: 11px ui-monospace, Menlo, monospace; background: rgba(0,0,0,.3); border-radius: 5px; padding: 4px 6px; margin-top: 4px; }
+  .pp .thread { border: 1px solid rgba(255,255,255,.08); border-radius: 9px; padding: 6px 8px; margin-bottom: 8px; }
+  .pp .tag { font-size: 10px; font-weight: 600; padding: 0 5px; border-radius: 8px; }
+  .pp .div { border-top: 1px solid rgba(255,255,255,.08); margin: 10px -12px 0; }
+  .wrap { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .note { max-width: 260px; font-size: 13px; color: #aaa; line-height: 1.5; }
+</style>
+
+<h2>A's tabs, B's merge box as the header</h2>
+<p class="subtitle">The header and merge box stay put; the tabs scroll underneath.</p>
+
+<div class="wrap">
+  <div class="pp">
+    <div class="row"><span class="chip open">⑂ Open</span><span class="muted">#42</span><span class="grow"></span><span class="muted small">↻ just now</span><span class="muted small">↗</span></div>
+    <div class="h">Login with magic links</div>
+    <div class="row small muted"><span class="av a1">O</span>octo · main ← feature/login · 9 files <span class="ok">+214</span> <span class="fail">−37</span></div>
+    <div class="card">
+      <div class="row"><span class="fail">●</span><div class="grow"><b>Changes requested</b><div class="small muted">lead · <span class="ok">reviewer approved</span> · security-team waiting</div></div><span class="av a2">L</span><span class="av a3">R</span></div>
+      <div class="row"><span class="fail">●</span><div class="grow"><b>1 check failing</b><div class="small muted">unit tests · lint running · build passed</div></div></div>
+      <div class="row"><span class="ok">●</span><div class="grow"><b>No conflicts</b><span class="small muted"> with main</span></div></div>
+      <div class="row" style="padding-top:6px"><span class="grow small muted">Merging is blocked</span><span class="split"><span>Squash and merge</span><span>▾</span></span></div>
+    </div>
+    <div class="seg"><div class="on">Conversation 5</div><div>Checks <span class="fail">●</span></div><div>Description</div></div>
+    <div class="row"><span class="grow small muted">2 unresolved · 1 resolved hidden</span><span class="btn">Review…</span></div>
+    <div class="row small"><span class="av a1">O</span><b>octo</b><span class="grow"></span><span class="muted">3d</span></div>
+    <div class="bubble small">Ready for another look, <b>expiry</b> is now configurable.</div>
+    <div class="thread small">
+      <div class="row"><span class="muted">📄 MagicLink.swift:42</span><span class="grow"></span><span class="muted">2</span></div>
+      <div class="row"><span class="av a2">L</span><b>lead</b><span class="grow"></span><span class="muted">3d</span></div>
+      <div class="bubble" style="margin-bottom:4px">Should this be configurable?<div class="code">let ttl = 15 * 60</div></div>
+      <div class="row"><span class="av a1">O</span><b>octo</b><span class="grow"></span><span class="muted">3d</span></div>
+      <div class="bubble" style="margin-bottom:2px">Yes, see the latest push.</div>
+    </div>
+    <div class="thread small" style="opacity:.6"><div class="row"><span class="muted">▸ 📄 Mailer.swift:12</span><span class="tag" style="background:rgba(191,90,242,.2);color:#d08cff">Resolved</span><span class="grow"></span><span class="muted">1</span></div></div>
+  </div>
+  <div class="note">
+    <p><b>Merge box lines click through:</b> the reviews line opens Conversation, the checks line opens Checks.</p>
+    <p><b>Checks tab:</b> every check with its time, a re-run button on failed ones, and the log link.</p>
+    <p><b>Description tab:</b> the body as markdown, plus labels.</p>
+    <p><b>Merge:</b> a split button. The arrow picks squash / merge / rebase, and it greys out with the reason when blocked.</p>
+  </div>
+</div>

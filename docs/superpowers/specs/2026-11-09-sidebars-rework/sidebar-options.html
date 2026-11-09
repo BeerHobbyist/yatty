@@ -1,0 +1,112 @@
+<style>
+  .sb { width: 270px; background: #232325; border-radius: 10px; padding: 8px 6px 10px; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e8ea; text-align: left; position: relative; }
+  .sb .sec { display: flex; align-items: center; gap: 6px; padding: 10px 8px 4px; font-size: 11px; font-weight: 600; color: #8e8e93; }
+  .sb .sec .grow { flex: 1; }
+  .sb .row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 7px; position: relative; }
+  .sb .row.sel { background: rgba(10,132,255,.32); }
+  .sb .row.hover { background: rgba(255,255,255,.06); }
+  .sb .ic { width: 16px; text-align: center; color: #3b8cff; font-size: 13px; flex: none; }
+  .sb .t { flex: 1; min-width: 0; }
+  .sb .t b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sb .t i { font-style: normal; font-size: 11px; color: #8e8e93; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sb .pill { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 9px; white-space: nowrap; flex: none; }
+  .sb .pr-open { background: rgba(48,209,88,.18); color: #30d158; }
+  .sb .pr-draft { background: rgba(142,142,147,.2); color: #aeaeb2; }
+  .sb .pr-fail { background: rgba(255,69,58,.18); color: #ff6961; }
+  .sb .pr-merged { background: rgba(191,90,242,.2); color: #d08cff; }
+  .sb .count { font-size: 11px; color: #aeaeb2; background: rgba(255,255,255,.1); border-radius: 8px; padding: 0 6px; flex: none; }
+  .sb .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .sb .needs { background: #ff9f0a; box-shadow: 0 0 0 3px rgba(255,159,10,.25); }
+  .sb .work { background: #64d2ff; }
+  .sb .done { background: #30d158; }
+  .sb .filter { margin: 2px 6px 6px; background: rgba(255,255,255,.07); border-radius: 7px; padding: 4px 8px; color: #8e8e93; font-size: 12px; }
+  .sb .acts { display: flex; gap: 6px; color: #aeaeb2; font-size: 12px; flex: none; }
+  .sb .acts span { background: rgba(255,255,255,.1); border-radius: 5px; padding: 0 5px; }
+  .sb .seg { display: flex; margin: 2px 6px 6px; background: rgba(255,255,255,.07); border-radius: 7px; padding: 2px; font-size: 11.5px; }
+  .sb .seg div { flex: 1; text-align: center; padding: 2px 0; border-radius: 5px; color: #aeaeb2; }
+  .sb .seg .on { background: rgba(255,255,255,.16); color: #fff; }
+  .sb .bar { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.08); padding: 6px 8px 0; font-size: 12px; color: #aeaeb2; display: flex; gap: 12px; }
+  .sb .chev { color: #6e6e73; font-size: 9px; width: 10px; }
+  .sb .plus { color: #8e8e93; }
+  .sb .note { position: absolute; right: -6px; transform: translateX(100%); font-size: 11px; color: #ffd60a; white-space: nowrap; }
+  .sb .tui { font-family: -apple-system; }
+  .sb .tui .o { color: #ff9f0a; font-size: 11px; }
+  .sb .tui .g { color: #30d158; font-size: 11px; }
+  .sb .tui .r { color: #ff6961; font-size: 11px; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important; }
+  .card-image { display: flex; justify-content: center; padding: 14px 0; background: #161618; }
+</style>
+
+<h2>Left sidebar: which direction feels right?</h2>
+<p class="subtitle">Same worktrees in each (from your screenshot). Click the ones you like, several is fine; say in the terminal which parts.</p>
+
+<div class="cards" data-multiselect>
+
+  <div class="card" data-choice="today" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="sb tui">
+        <div class="sec"><span class="chev">▾</span>sap-flutter-framework<span class="grow"></span><span class="plus">+</span></div>
+        <div class="row sel"><span class="ic">⌂</span><div class="t"><b>main <span class="o">●1</span></b><i>+1 −1 ↓18</i></div></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>refactor-pins <span class="o">●13</span></b></div><span class="g">#181</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>onboarding-doc…</b></div><span class="r">#194 draft</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>golden-tests</b></div><span class="g" style="color:#d08cff">✓#172</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>app-lock-device-test <span class="o">●11</span></b></div><span class="o">!</span></div>
+        <div class="bar"><span class="o">! 2</span><span>⟳ 1</span><span class="g">✓ 3</span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>Today</h3><p>For reference. Details only on the selected row, so rows jump; status packed into text.</p></div>
+  </div>
+
+  <div class="card" data-choice="rich" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="sb">
+        <div class="filter">⌕ Filter</div>
+        <div class="sec">NEEDS YOU<span class="grow"></span><span class="count">2</span></div>
+        <div class="row"><span class="dot needs"></span><div class="t"><b>app-lock-device-test</b><i>sap-industry-app · waiting 4m</i></div></div>
+        <div class="row"><span class="dot needs"></span><div class="t"><b>refactor-pins</b><i>sap-flutter-framework · waiting 12m</i></div></div>
+        <div class="sec"><span class="chev">▾</span>SAP-FLUTTER-FRAMEWORK<span class="grow"></span><span class="plus">+</span></div>
+        <div class="row sel"><span class="ic">⌂</span><div class="t"><b>main</b><i>1 change · ↓18 behind</i></div><span class="dot done"></span></div>
+        <div class="row hover"><span class="ic">⑂</span><div class="t"><b>refactor-pins</b><i>13 changes · waiting 12m</i></div><span class="acts"><span>⋯</span><span>✕</span></span><span class="note">← on hover</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>onboarding-docs</b><i>PR #194 · checks failing</i></div><span class="pill pr-fail">#194</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>golden-tests</b><i>merged · ready to close</i></div><span class="pill pr-merged">#172</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>cubits-move-together</b><i>working · 5 changes</i></div><span class="dot work"></span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · Rich rows + "Needs you"</h3><p>Every row has a steady second line in words. Agents that want you float to a section on top. Hover shows actions. Filter field.</p></div>
+  </div>
+
+  <div class="card" data-choice="compact" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="sb">
+        <div class="sec"><span class="chev">▾</span>SAP-FLUTTER-FRAMEWORK<span class="grow"></span><span class="plus">+</span></div>
+        <div class="row sel"><span class="ic">⌂</span><div class="t"><b>main</b></div><span class="count">1</span><span class="dot done"></span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>refactor-pins</b></div><span class="count">13</span><span class="dot needs"></span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>onboarding-docs</b></div><span class="pill pr-fail">#194</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>golden-tests</b></div><span class="pill pr-merged">#172</span></div>
+        <div class="row hover"><span class="ic">⑂</span><div class="t"><b style="background:#2c2c2e;border:1px solid #0a84ff;border-radius:4px;padding:0 3px">cubits-move|</b></div><span class="note">← double-click renames</span></div>
+        <div class="row"><span class="ic">⑂</span><div class="t"><b>app-lock-device-test</b></div><span class="count">11</span><span class="dot needs"></span></div>
+        <div class="filter" style="margin-top:12px">⌕ Filter worktrees</div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B · Compact, native badges</h3><p>One line each, like Mail/Xcode: count capsule, PR pill, agent dot. Hover a dot or pill for details. Rename in place. Filter at the bottom.</p></div>
+  </div>
+
+  <div class="card" data-choice="status" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="sb">
+        <div class="seg"><div>Projects</div><div class="on">Status</div></div>
+        <div class="sec">NEEDS YOU<span class="grow"></span><span class="count">2</span></div>
+        <div class="row"><span class="dot needs"></span><div class="t"><b>app-lock-device-test</b><i>sap-industry-app · 4m</i></div></div>
+        <div class="row"><span class="dot needs"></span><div class="t"><b>refactor-pins</b><i>sap-flutter-framework · 12m</i></div></div>
+        <div class="sec">WORKING<span class="grow"></span><span class="count">1</span></div>
+        <div class="row"><span class="dot work"></span><div class="t"><b>cubits-move-together</b><i>sap-flutter-framework</i></div></div>
+        <div class="sec">DONE<span class="grow"></span><span class="count">3</span></div>
+        <div class="row sel"><span class="dot done"></span><div class="t"><b>main</b><i>sap-flutter-framework</i></div></div>
+        <div class="row"><span class="dot done"></span><div class="t"><b>golden-tests</b><i>sap-flutter-framework · PR merged</i></div></div>
+        <div class="sec">IDLE<span class="grow"></span><span class="count">9</span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>C · Group by agent status</h3><p>A switch at the top regroups everything by what the agents are doing, across projects. "Projects" keeps today's grouping.</p></div>
+  </div>
+
+</div>
