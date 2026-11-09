@@ -17,8 +17,16 @@ struct WorktreeFacts {
   var isMain = false
 }
 
-/// The sidebar's rules: a row's second line, the filter, the order of
-/// "Needs you".
+/// The selected worktree's place among the floated ones, kept until the
+/// selection moves: its row doesn't move or sink under the user.
+struct HeldFloat: Equatable, Sendable {
+  var id: String
+  var state: AgentState
+  var since: Date
+}
+
+/// The sidebar's rules: a row's second line, the filter, which worktrees
+/// float to the top.
 enum WorktreeSummary {
   /// The first fact that applies, in words: waiting on you, a pull request
   /// that wants attention, working, where a remote directory is, changes and
@@ -49,11 +57,31 @@ enum WorktreeSummary {
     return [name, branch ?? "", project].contains { $0.lowercased().contains(needle) }
   }
 
-  /// Longest wait first.
-  static func needsYouOrder(_ waiting: [(id: String, since: Date)]) -> [String] {
-    waiting.enumerated()
-      .sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }
-      .map(\.element.id)
+  /// The worktrees whose agent wants attention or is busy, out of their
+  /// projects and on top: needs you, then working, then done (until seen);
+  /// in each, the longest in that state first. Idle ones stay put.
+  /// `held` stays in its section whatever its agent does now.
+  static func activeSections(_ agents: [(id: String, state: AgentState, since: Date)], held: HeldFloat? = nil)
+    -> [(state: AgentState, ids: [String])]
+  {
+    var agents = agents
+    if let held {
+      agents.removeAll { $0.id == held.id }
+      agents.append((held.id, held.state, held.since))
+    }
+    return [AgentState.needsAction, .working, .done].compactMap { state in
+      let ids = agents.enumerated().filter { $0.element.state == state }
+        .sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }
+        .map(\.element.id)
+      return ids.isEmpty ? nil : (state, ids)
+    }
+  }
+
+  /// Worktree ids as the sidebar lists them: the floated ones first, in
+  /// their sections' order, then the rest in project order.
+  static func sidebarOrder(_ all: [String], active: [(state: AgentState, ids: [String])]) -> [String] {
+    let floated = active.flatMap(\.ids)
+    return floated + all.filter { !floated.contains($0) }
   }
 
   private static func sync(_ status: GitStatus) -> String? {

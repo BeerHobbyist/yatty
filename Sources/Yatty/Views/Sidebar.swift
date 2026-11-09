@@ -1,57 +1,41 @@
 import AppKit
 import SwiftUI
 
-/// How the sidebar's rows are tagged. A worktree in "Needs you" is listed a
-/// second time, so that row's tag says which of the two was clicked.
-enum SidebarSelection {
-  static let needsYouPrefix = "needs-you:"
-
-  static func tag(_ worktreeID: String, inNeedsYou: Bool) -> String {
-    inNeedsYou ? needsYouPrefix + worktreeID : worktreeID
-  }
-
-  static func worktreeID(fromTag tag: String) -> String {
-    isNeedsYou(tag) ? String(tag.dropFirst(needsYouPrefix.count)) : tag
-  }
-
-  static func isNeedsYou(_ tag: String) -> Bool { tag.hasPrefix(needsYouPrefix) }
-}
-
-/// The projects and their worktrees, with what wants the user on top: a
-/// filter, "Needs you", then every repository and host.
+/// The projects and their worktrees. Worktrees whose agent needs the user,
+/// works, or finished unseen float out of their project to the top, and
+/// sink back once seen to.
 struct Sidebar: View {
   @Environment(AppStore.self) private var store
-  /// The selected worktree was clicked in "Needs you", not in its project.
-  @State private var pickedInNeedsYou = false
-  /// What the sidebar itself last selected; any other selection is from elsewhere.
-  @State private var lastPicked: String?
   @FocusState private var filterFocused: Bool
 
   var body: some View {
     @Bindable var store = store
     let query = store.sidebarFilter
     let filtering = !query.trimmingCharacters(in: .whitespaces).isEmpty
-    let needsYou = needsYouWorktrees(query: query)
+    let all = store.repos.flatMap { store.worktrees[$0.id] ?? [] } + store.hosts.flatMap(\.worktrees)
+    let active = store.floatedSections(of: all.filter { matches($0, query: query, project: projectName(of: $0)) })
+      .map { section in (state: section.state, worktrees: section.ids.compactMap { id in all.first { $0.id == id } }) }
+    let floated = Set(active.flatMap { $0.worktrees.map(\.id) })
     let firstProject = store.repos.first?.id ?? store.hosts.first?.id
     ScrollViewReader { proxy in
-      List(selection: selection(needsYou: needsYou)) {
-        if !needsYou.isEmpty {
+      List(selection: selection(floated: floated)) {
+        ForEach(active, id: \.state) { section in
           Section {
-            // Their own ids: the same worktree is listed again in its
-            // project, and a List mixes up rows that share one.
-            ForEach(needsYou.map { (tag: SidebarSelection.tag($0.id, inNeedsYou: true), worktree: $0) }, id: \.tag) {
-              WorktreeRow(worktree: $0.worktree, project: projectName(of: $0.worktree)).tag($0.tag)
+            ForEach(section.worktrees) { worktree in
+              WorktreeRow(worktree: worktree, project: projectName(of: worktree)).tag(worktree.id)
             }
           } header: {
-            SidebarSectionTitle(title: "Needs you", count: needsYou.count)
+            SidebarSectionTitle(title: title(of: section.state), count: section.worktrees.count)
           }
         }
         ForEach(store.repos) { repo in
-          let worktrees = (store.worktrees[repo.id] ?? []).filter { matches($0, query: query, project: repo.name) }
+          let worktrees = (store.worktrees[repo.id] ?? []).filter {
+            !floated.contains($0.id) && matches($0, query: query, project: repo.name)
+          }
           if !filtering || !worktrees.isEmpty {
             ProjectHeader(
               id: repo.id, name: repo.name, icon: .repo, worktrees: store.worktrees[repo.id] ?? [],
-              isFirst: repo.id == firstProject && needsYou.isEmpty, addHelp: "New worktree in \(repo.name)",
+              isFirst: repo.id == firstProject && active.isEmpty, addHelp: "New worktree in \(repo.name)",
               add: { store.newWorktreeRepo = repo }
             ) {
               Button("New Worktree…") { store.newWorktreeRepo = repo }
@@ -68,11 +52,11 @@ struct Sidebar: View {
           }
         }
         ForEach(store.hosts) { host in
-          let worktrees = host.worktrees.filter { matches($0, query: query, project: host.host) }
+          let worktrees = host.worktrees.filter { !floated.contains($0.id) && matches($0, query: query, project: host.host) }
           if !filtering || !worktrees.isEmpty {
             ProjectHeader(
               id: host.id, name: host.host, icon: .server, worktrees: host.worktrees,
-              isFirst: host.id == firstProject && needsYou.isEmpty, addHelp: "Add a directory on \(host.host)",
+              isFirst: host.id == firstProject && active.isEmpty, addHelp: "Add a directory on \(host.host)",
               add: { store.addingHost = AddHostRequest(host: host.host) }
             ) {
               Button("Add Directory…") { store.addingHost = AddHostRequest(host: host.host) }
@@ -86,7 +70,8 @@ struct Sidebar: View {
           }
         }
       }
-      .animation(.easeOut(duration: 0.2), value: needsYou.map(\.id))
+      // Rows float up and sink back, not jump.
+      .animation(.easeOut(duration: 0.25), value: active.map { $0.worktrees.map(\.id) })
       .onChange(of: store.renamingWorktree?.id) { _, id in
         // Lazily built: a row scrolled away has no field to edit until shown.
         if let id { withAnimation { proxy.scrollTo(id) } }
@@ -99,11 +84,6 @@ struct Sidebar: View {
       filterFocused = true
       // Later: the window shows a hidden sidebar on the same request.
       DispatchQueue.main.async { store.focusingFilter = false }
-    }
-    .onChange(of: store.selection) { _, selection in
-      // Selected from elsewhere (the palette, ⇧⌘J, a notification): its
-      // project's row shows it.
-      if selection != lastPicked { pickedInNeedsYou = false }
     }
     .onKeyPress(.return) {
       guard store.renamingWorktree == nil else { return .ignored }
@@ -142,31 +122,24 @@ struct Sidebar: View {
     }
   }
 
-  /// The list's selection, through the row tags: a click in "Needs you"
-  /// selects without unfolding the worktree's project.
-  private func selection(needsYou: [Worktree]) -> Binding<String?> {
+  /// The list's selection. A click on a floated row leaves its project
+  /// folded or not as it was.
+  private func selection(floated: Set<String>) -> Binding<String?> {
     Binding(
-      get: {
-        guard let selected = store.selection else { return nil }
-        let inNeedsYou = pickedInNeedsYou && needsYou.contains { $0.id == selected }
-        return SidebarSelection.tag(selected, inNeedsYou: inNeedsYou)
-      },
-      set: { tag in
-        guard let tag else { return }
-        let inNeedsYou = SidebarSelection.isNeedsYou(tag)
-        let id = SidebarSelection.worktreeID(fromTag: tag)
-        pickedInNeedsYou = inNeedsYou
-        lastPicked = id
-        store.select(id, unfolding: !inNeedsYou)
+      get: { store.selection },
+      set: { id in
+        guard let id else { return }
+        store.select(id, unfolding: !floated.contains(id))
       })
   }
 
-  /// Worktrees whose agent waits on the user, longest wait first.
-  private func needsYouWorktrees(query: String) -> [Worktree] {
-    let all = store.repos.flatMap { store.worktrees[$0.id] ?? [] } + store.hosts.flatMap(\.worktrees)
-    let waiting = all.filter { store.agents.state(of: $0) == .needsAction && matches($0, query: query, project: projectName(of: $0)) }
-    let order = WorktreeSummary.needsYouOrder(waiting.map { ($0.id, store.agents.waitingSince(of: $0) ?? .distantFuture) })
-    return order.compactMap { id in waiting.first { $0.id == id } }
+  private func title(of state: AgentState) -> String {
+    switch state {
+    case .needsAction: "Needs you"
+    case .working: "Working"
+    case .done: "Done"
+    case .idle: ""
+    }
   }
 
   private func matches(_ worktree: Worktree, query: String, project: String) -> Bool {
@@ -281,7 +254,8 @@ struct WorktreeRow: View {
   @FocusState private var nameFocused: Bool
 
   var body: some View {
-    let renaming = project == nil && store.renamingWorktree?.id == worktree.id
+    // Each worktree has one row, floated or not: that's where it's renamed.
+    let renaming = store.renamingWorktree?.id == worktree.id
     HStack(spacing: 8) {
       Octicon(worktree.isRemote ? .fileDirectory : worktree.isMain ? .home : .gitBranch, size: 14)
         .foregroundStyle(Color.accentColor)

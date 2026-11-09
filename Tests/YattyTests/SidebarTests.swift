@@ -62,10 +62,22 @@ import Testing
   #expect(!WorktreeSummary.matches("zzz", name: "login", branch: "feature/login", project: "p"))
 }
 
-@Test func needsYouLongestWaitFirst() {
+@Test func activeAgentsFloatUpByState() {
   let t = Date(timeIntervalSince1970: 1_000)
-  let order = WorktreeSummary.needsYouOrder([("a", t), ("b", t.addingTimeInterval(-60)), ("c", t.addingTimeInterval(30))])
-  #expect(order == ["b", "a", "c"])
+  let sections = WorktreeSummary.activeSections([
+    ("idle", .idle, t),
+    ("w2", .working, t),
+    ("n1", .needsAction, t),
+    ("d1", .done, t),
+    ("w1", .working, t.addingTimeInterval(-60)),
+    ("n2", .needsAction, t.addingTimeInterval(-30)),
+    ("n3", .needsAction, t),
+  ])
+  // Needs you, then working, then done; idle stays in its project. Longest
+  // in its state first; ties keep their order.
+  #expect(sections.map(\.state) == [.needsAction, .working, .done])
+  #expect(sections.map(\.ids) == [["n2", "n1", "n3"], ["w1", "w2"], ["d1"]])
+  #expect(WorktreeSummary.activeSections([("a", .idle, t)]).isEmpty)
 }
 
 @Test func projectsMoveWithinTheirOwnList() {
@@ -83,19 +95,53 @@ import Testing
   #expect(AppStore.shifted(["/a", "/b"], "/b", by: 1) == nil)
 }
 
-@Test func sidebarSelectionMapsNeedsYouRows() {
-  #expect(SidebarSelection.tag("/r/a", inNeedsYou: true) == "needs-you:/r/a")
-  #expect(SidebarSelection.tag("/r/a", inNeedsYou: false) == "/r/a")
-  #expect(SidebarSelection.worktreeID(fromTag: "needs-you:/r/a") == "/r/a")
-  #expect(SidebarSelection.worktreeID(fromTag: "/r/a") == "/r/a")
-  #expect(SidebarSelection.isNeedsYou("needs-you:ssh:devbox:/x"))
-  #expect(!SidebarSelection.isNeedsYou("ssh:devbox:/x"))
-}
-
 @Test func renameRules() {
   #expect(AppStore.cleanLabel("", automatic: "login") == nil)
   #expect(AppStore.cleanLabel("  \n", automatic: "login") == nil)
   #expect(AppStore.cleanLabel("  api ", automatic: "login") == "api")
   // The automatic name typed back (⏎ on an unedited field): still automatic.
   #expect(AppStore.cleanLabel(" login", automatic: "login") == nil)
+}
+
+@Test func agentsAreOrderedByWhenTheyEnteredTheirState() {
+  let a = PaneKey(worktree: "/a", pane: "0"), b = PaneKey(worktree: "/b", pane: "0"), c = PaneKey(worktree: "/c", pane: "0")
+  let entered = AgentMonitor.enteredTimes(
+    old: [a: 100, b: 200],
+    oldStates: [a: .working, b: .needsAction],
+    newStates: [a: .working, b: .working, c: .done],
+    reportedAt: [a: 900, b: 950, c: 50],
+    now: 1_000)
+  // Still working: its time stays, however often the report is rewritten.
+  #expect(entered[a] == 100)
+  // Changed state: from now.
+  #expect(entered[b] == 1_000)
+  // First seen: from its report.
+  #expect(entered[c] == 50)
+  #expect(entered.count == 3)
+}
+
+@Test func onlyFreshFinishesFloat() {
+  #expect(AgentMonitor.floats(.needsAction, reportedAt: 10, launchedAt: 100))
+  #expect(AgentMonitor.floats(.working, reportedAt: 10, launchedAt: 100))
+  #expect(AgentMonitor.floats(.done, reportedAt: 150, launchedAt: 100))
+  // Finished before Yatty started: seen or not, it stays in its project.
+  #expect(!AgentMonitor.floats(.done, reportedAt: 50, launchedAt: 100))
+  #expect(!AgentMonitor.floats(.idle, reportedAt: 150, launchedAt: 100))
+}
+
+@Test func sidebarOrderPutsFloatedRowsFirst() {
+  let active: [(state: AgentState, ids: [String])] = [(.needsAction, ["/b"]), (.done, ["/c"])]
+  #expect(WorktreeSummary.sidebarOrder(["/a", "/b", "/c", "/d"], active: active) == ["/b", "/c", "/a", "/d"])
+}
+
+@Test func theSelectedWorktreeStaysInItsSection() {
+  let t = Date(timeIntervalSince1970: 1_000)
+  let held = HeldFloat(id: "s", state: .done, since: t.addingTimeInterval(-10))
+  // Seen and gone idle: still under Done, where it was, until deselected.
+  #expect(WorktreeSummary.activeSections([("d", .done, t)], held: held).map(\.ids) == [["s", "d"]])
+  // Its agent moved on (a prompt): it doesn't jump sections under the user.
+  let moved = WorktreeSummary.activeSections([("s", .needsAction, t), ("n", .needsAction, t)], held: held)
+  #expect(moved.map(\.state) == [.needsAction, .done])
+  #expect(moved.map(\.ids) == [["n"], ["s"]])
+  #expect(WorktreeSummary.activeSections([("d", .done, t)], held: nil).map(\.ids) == [["d"]])
 }

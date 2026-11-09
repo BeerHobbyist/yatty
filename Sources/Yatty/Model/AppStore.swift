@@ -50,12 +50,17 @@ final class AppStore {
       let unfolded =
         unfoldOnSelect ? selection.flatMap(projectID(of:)).map { foldedProjects.remove($0) != nil } ?? false : false
       guard selection != oldValue || unfolded else { return }
-      if selection != oldValue { updateVisibility() }
+      if selection != oldValue {
+        heldFloat = selection.flatMap(floatHold)
+        updateVisibility()
+      }
       saveState()
     }
   }
   /// Sidebar repositories and hosts folded away, by `Repo.id` / `SSHHost.id`.
   var foldedProjects: Set<String> = []
+  /// The selected worktree's floated place, while it's selected; see `HeldFloat`.
+  private(set) var heldFloat: HeldFloat?
   /// False while `select(_:unfolding:)` selects without unfolding.
   @ObservationIgnored private var unfoldOnSelect = true
   /// Per worktree path; see `layout(for:)`.
@@ -308,6 +313,8 @@ final class AppStore {
 
   /// An agent changed state: it has probably just edited or pushed.
   func agentStatesChanged(in worktreeIDs: Set<String>) {
+    // The selected worktree just floated up: it stays put while selected.
+    if heldFloat == nil, let selection, worktreeIDs.contains(selection) { heldFloat = floatHold(selection) }
     gitStatus.refresh()
     for repo in repos {
       for worktree in worktrees[repo.id] ?? [] where worktreeIDs.contains(worktree.id) {
@@ -628,6 +635,22 @@ final class AppStore {
     if let url = pullRequests.badge(for: worktree).flatMap({ URL(string: $0.url) }) { NSWorkspace.shared.open(url) }
   }
 
+  /// The sidebar's sections on top, over `worktrees`: see `WorktreeSummary.activeSections`.
+  func floatedSections(of worktrees: [Worktree]) -> [(state: AgentState, ids: [String])] {
+    WorktreeSummary.activeSections(
+      worktrees.compactMap { worktree in
+        guard let state = agents.floatingState(of: worktree) else { return nil }
+        return (worktree.id, state, agents.since(of: worktree, in: state) ?? .distantFuture)
+      },
+      held: heldFloat.flatMap { held in worktrees.contains { $0.id == held.id } ? held : nil })
+  }
+
+  /// Where `id` floats now, to hold it there; nil when it doesn't float.
+  private func floatHold(_ id: String) -> HeldFloat? {
+    guard let worktree = worktree(withID: id), let state = agents.floatingState(of: worktree) else { return nil }
+    return HeldFloat(id: id, state: state, since: agents.since(of: worktree, in: state) ?? .distantFuture)
+  }
+
   /// Re-runs the failed jobs of every Actions run with a failed check.
   func rerunFailedChecks(in worktree: Worktree) {
     for run in pullRequests.details[worktree.id].map(PullRequests.failedRuns) ?? [] { rerun(run, in: worktree) }
@@ -657,10 +680,11 @@ final class AppStore {
   /// The next worktree (in sidebar order, after the selected one) whose agent
   /// needs you, else is done; its pane gets the keyboard.
   func jumpToNextAgent() {
-    let order = repos.flatMap { worktrees[$0.id] ?? [] }
+    let all = repos.flatMap { worktrees[$0.id] ?? [] }
+    let order = WorktreeSummary.sidebarOrder(all.map(\.id), active: floatedSections(of: all))
     var states: [String: AgentState] = [:]
-    for worktree in order { states[worktree.id] = agents.state(of: worktree) }
-    guard let target = AgentMonitor.nextTarget(order: order.map(\.id), states: states, after: selection),
+    for worktree in all { states[worktree.id] = agents.state(of: worktree) }
+    guard let target = AgentMonitor.nextTarget(order: order, states: states, after: selection),
       let worktree = worktree(withID: target), let state = states[target],
       let pane = agents.pane(of: worktree, in: state)
     else { return }

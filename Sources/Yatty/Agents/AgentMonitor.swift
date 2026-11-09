@@ -9,8 +9,11 @@ import UserNotifications
 final class AgentMonitor {
   /// Every reporting pane's state, as the sidebar shows it.
   private(set) var panes: [PaneKey: AgentState] = [:]
-  /// When each pane's report was written: how long it has been in its state.
+  /// When each pane got into the state it's in (not when its report was
+  /// last rewritten: a working agent's is, after every tool call).
   private(set) var since: [PaneKey: Int] = [:]
+  /// When each pane's report was last written.
+  @ObservationIgnored private var reportedAt: [PaneKey: Int] = [:]
 
   @ObservationIgnored private weak var store: AppStore?
   @ObservationIgnored private var timer: Timer?
@@ -42,10 +45,48 @@ final class AgentMonitor {
   }
 
   /// When the first of the worktree's agents that wait on the user started to.
-  func waitingSince(of worktree: Worktree) -> Date? {
-    panes.filter { $0.key.worktree == worktree.id && $0.value == .needsAction }
+  func waitingSince(of worktree: Worktree) -> Date? { since(of: worktree, in: .needsAction) }
+
+  /// When the first of the worktree's agents in `state` got there.
+  func since(of worktree: Worktree, in state: AgentState) -> Date? {
+    panes.filter { $0.key.worktree == worktree.id && $0.value == state }
       .compactMap { since[$0.key] }.min()
       .map { Date(timeIntervalSince1970: TimeInterval($0)) }
+  }
+
+  /// The state that floats the worktree to the top of the sidebar, if one
+  /// does: see `floats`.
+  func floatingState(of worktree: Worktree) -> AgentState? {
+    panes.filter {
+      $0.key.worktree == worktree.id && Self.floats($0.value, reportedAt: reportedAt[$0.key] ?? 0, launchedAt: launchedAt)
+    }.values.min()
+  }
+
+  /// Needs you and working float; done floats only if it finished since
+  /// Yatty started (an older one was most likely seen already).
+  nonisolated static func floats(_ state: AgentState, reportedAt: Int, launchedAt: Int) -> Bool {
+    switch state {
+    case .needsAction, .working: true
+    case .done: reportedAt >= launchedAt
+    case .idle: false
+    }
+  }
+
+  /// When each pane in `newStates` got into its state: kept while it stays,
+  /// now when it changes, its report's time when first seen.
+  nonisolated static func enteredTimes(
+    old: [PaneKey: Int], oldStates: [PaneKey: AgentState], newStates: [PaneKey: AgentState],
+    reportedAt: [PaneKey: Int], now: Int
+  ) -> [PaneKey: Int] {
+    var entered: [PaneKey: Int] = [:]
+    for (key, state) in newStates {
+      if let before = oldStates[key] {
+        entered[key] = before == state ? (old[key] ?? reportedAt[key] ?? now) : now
+      } else {
+        entered[key] = reportedAt[key] ?? now
+      }
+    }
+    return entered
   }
 
   func count(_ state: AgentState) -> Int {
@@ -117,7 +158,9 @@ final class AgentMonitor {
         notify(key, state)
       }
     }
-    if times != since { since = times }
+    reportedAt = times
+    let entered = Self.enteredTimes(old: since, oldStates: panes, newStates: states, reportedAt: times, now: now)
+    if entered != since { since = entered }
     if states != panes {
       let changed = Set(states.keys.filter { states[$0] != panes[$0] }.map(\.worktree))
       panes = states
