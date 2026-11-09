@@ -15,8 +15,14 @@ extension AppStore {
     guard !worktree.isRemote, let tab = layout(for: worktree).selected, tab.diff == nil else { return }
     let shown = !(tab.code?.shown ?? false)
     updateLayout(worktree.id) { $0.updateCode(tab.id) { $0.shown = shown } }
-    if shown { watchCode(in: worktree) } else { stopWatchingCodeIfUnused(in: worktree) }
-    if !shown, codeQuickOpen == tab.id { codeQuickOpen = nil }
+    if shown {
+      watchCode(in: worktree)
+    } else {
+      stopWatchingCodeIfUnused(in: worktree)
+      if codeQuickOpen == tab.id { codeQuickOpen = nil }
+      // The code may have had the keyboard; it goes back to the terminal.
+      focusPane(PaneKey(worktree: worktree.id, pane: tab.focusedPane))
+    }
   }
 
   /// Opens `file` in the tab's code view; the user chose it, so the view

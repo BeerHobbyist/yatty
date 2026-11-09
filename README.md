@@ -224,7 +224,8 @@ Its Viewer menu picks where, and remembers it:
 
 Show Code (⌘E, or the **</>** button in the tab bar) puts the code on the left
 of a tab and its terminals on the right, as in Cursor: for reading what your
-agent writes, not for typing.
+agent writes, not for typing. With the code shown, ⌘W closes the code first,
+never the agent beside it.
 
 - **It follows the agent.** Each file that changes in the worktree opens as it
   changes, scrolled to the change. Scroll or click to look around yourself and
@@ -415,7 +416,7 @@ and the new Yatty attaches to them as it opens.
 | ⌃⌘= | Equalize splits |
 | ⌘] / ⌘[ | Next / previous pane |
 | ⇧⌘] / ⇧⌘[ | Next / previous tab |
-| ⌘W | Close pane (in a diff tab: close the tab) |
+| ⌘W | Close pane (in a diff tab: close the tab; with the code shown: close the code) |
 | ⌥⌘W | Close tab |
 
 **In a terminal** (Ghostty's defaults)

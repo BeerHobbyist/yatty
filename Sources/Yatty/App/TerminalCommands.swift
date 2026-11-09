@@ -54,7 +54,7 @@ struct TerminalCommands: Commands {
         Button("Previous Tab") { store.performOnFocusedPane(.gotoTab(.previous)) }
           .keyboardShortcut(Shortcuts.previousTab)
         Divider()
-        Button("Close Pane") { store.performOnFocusedPane(.close) }
+        Button(store.commandContext.closeTitle) { store.performOnFocusedPane(.close) }
           .keyboardShortcut(Shortcuts.closePane)
         Button("Close Tab") { store.performOnFocusedPane(.closeTab) }
           .keyboardShortcut(Shortcuts.closeTab)

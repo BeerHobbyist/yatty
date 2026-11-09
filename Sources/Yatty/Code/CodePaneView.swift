@@ -133,7 +133,7 @@ struct CodePaneView: View {
       } label: {
         Image(systemName: "sidebar.left")
       }
-      .help("Hide Code (⌘E)")
+      .help("Hide Code (⌘E or ⌘W)")
     }
     .buttonStyle(.borderless)
     .controlSize(.small)

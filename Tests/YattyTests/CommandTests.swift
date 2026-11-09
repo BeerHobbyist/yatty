@@ -113,3 +113,12 @@ import Testing
   #expect(try String(contentsOf: dir.appendingPathComponent("config.unreadable.json"), encoding: .utf8) == "{ not json")
   #expect((try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])?["agentCommand"] != nil)
 }
+
+/// ⌘W's menu item and palette entry say what it closes: the code first.
+@Test func closeSaysWhatItCloses() {
+  let local = Worktree(path: "/r", branch: "main", head: nil, isMain: true)
+  let remote = Worktree(path: "/srv/app", branch: nil, head: nil, isMain: false, host: "box")
+  #expect(CommandContext(selected: local, hasRepos: true, openPullRequest: false, showingCode: true).closeTitle == "Close Code")
+  #expect(CommandContext(selected: local, hasRepos: true, openPullRequest: false).closeTitle == "Close Pane")
+  #expect(CommandContext(selected: remote, hasRepos: true, openPullRequest: false, showingCode: true).closeTitle == "Close Pane")
+}

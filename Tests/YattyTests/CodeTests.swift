@@ -166,3 +166,12 @@ import Testing
   #expect(CodeAgent.pane(in: ["0", "a1"], focused: "0", reporting: ["a1"], asking: ["a1"]) == nil)
   #expect(CodeAgent.pane(in: ["0", "a1"], focused: "a1", reporting: ["0", "a1"], asking: ["0"]) == "a1")
 }
+
+@Test func closeTakesTheCodeFirstAndOneThingPerPress() {
+  // ⌘W with the code shown: the code goes, wherever the keyboard is.
+  #expect(CloseTarget.of(codeShown: true, repeated: false) == .code)
+  #expect(CloseTarget.of(codeShown: false, repeated: false) == .pane)
+  // A held key closes nothing more: its repeat would end the agent next.
+  #expect(CloseTarget.of(codeShown: true, repeated: true) == .nothing)
+  #expect(CloseTarget.of(codeShown: false, repeated: true) == .nothing)
+}

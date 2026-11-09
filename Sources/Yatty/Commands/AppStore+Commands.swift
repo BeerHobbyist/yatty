@@ -59,6 +59,8 @@ struct CommandContext {
   /// Code beside a terminal tab: its files are here.
   var canShowCode: Bool { isLocal && !showingDiffTab }
   var canGoToFile: Bool { canShowCode && showingCode }
+  /// ⌘W closes the code before any terminal (see `CloseTarget`).
+  var closeTitle: String { canShowCode && showingCode ? "Close Code" : "Close Pane" }
   var canShowPullRequest: Bool { isLocal }
   var canMerge: Bool { isLocal && openPullRequest }
   var canReviewComments: Bool { isLocal && hasPullRequest }
@@ -140,7 +142,7 @@ extension AppStore {
         onPane(.gotoSplit(.previous)))
       add("tab.next", "Next Tab", "Terminal", Shortcuts.nextTab, onPane(.gotoTab(.next)))
       add("tab.previous", "Previous Tab", "Terminal", Shortcuts.previousTab, onPane(.gotoTab(.previous)))
-      add("pane.close", "Close Pane", "Terminal", Shortcuts.closePane, onPane(.close))
+      add("pane.close", context.closeTitle, "Terminal", Shortcuts.closePane) { self.performOnFocusedPane(.close) }
       add("tab.close", "Close Tab", "Terminal", Shortcuts.closeTab, onPane(.closeTab))
       // No key shown: ⌘1–9 are Ghostty's (and may be rebound there), not a menu's.
       for (index, tab) in layout(for: selected).tabs.enumerated() {

@@ -186,3 +186,14 @@ enum CodeAgent {
     return pane.flatMap { asking.contains($0) ? nil : $0 }
   }
 }
+
+/// What ⌘W closes in the selected tab. Closing a terminal ends what runs in
+/// it, so the code goes first, and a held key closes no more than one thing.
+enum CloseTarget: Equatable {
+  case nothing, code, pane
+
+  static func of(codeShown: Bool, repeated: Bool) -> CloseTarget {
+    if repeated { return .nothing }
+    return codeShown ? .code : .pane
+  }
+}

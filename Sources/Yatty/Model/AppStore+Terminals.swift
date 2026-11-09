@@ -237,6 +237,18 @@ extension AppStore {
       if case .newTab = command { newTab(in: worktree, agent: false) }
       return
     }
+    if case .close = command {
+      // isARepeat raises for anything but a key event (a menu click).
+      let event = NSApp.currentEvent
+      let repeated = event?.type == .keyDown && event?.isARepeat == true
+      switch CloseTarget.of(codeShown: tab.code?.shown == true && !worktree.isRemote, repeated: repeated) {
+      case .nothing: return
+      case .code:
+        toggleCode(in: worktree)
+        return
+      case .pane: break
+      }
+    }
     handle(command, from: PaneKey(worktree: worktree.id, pane: tab.focusedPane))
   }
 
