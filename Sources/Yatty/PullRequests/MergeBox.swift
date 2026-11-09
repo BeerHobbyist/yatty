@@ -109,9 +109,18 @@ extension PullRequests {
   }
 
   /// The GitHub Actions run a check's link points into, for re-running it.
-  static func actionsRun(_ link: String) -> (nameWithOwner: String, runID: String)? {
+  static func actionsRun(_ link: String) -> ActionsRun? {
     guard let match = link.firstMatch(of: /^https:\/\/github\.com\/([^\/]+\/[^\/]+)\/actions\/runs\/(\d+)/) else { return nil }
-    return (String(match.1), String(match.2))
+    return ActionsRun(nameWithOwner: String(match.1), runID: String(match.2))
+  }
+
+  /// The Actions runs with a failed check, each once, in the checks' order.
+  static func failedRuns(_ d: PullRequestDetails) -> [ActionsRun] {
+    var runs: [ActionsRun] = []
+    for check in d.statusCheckRollup where checkState(check) == .fail {
+      if let run = check.detailsUrl.flatMap(actionsRun), !runs.contains(run) { runs.append(run) }
+    }
+    return runs
   }
 }
 
@@ -127,6 +136,12 @@ extension RawCheck {
   }
 }
 
+/// A GitHub Actions run: what `gh run rerun` takes.
+struct ActionsRun: Equatable, Sendable {
+  var nameWithOwner: String
+  var runID: String
+}
+
 /// What the merge box's button does now.
 enum MergeButton: Equatable, Sendable {
   case merge(MergeMethod)
@@ -138,8 +153,12 @@ enum MergeButton: Equatable, Sendable {
 extension MergeBox {
   /// Today's merge rules (`PullRequests.mergeOptions`), with the method used
   /// last when the repository still allows it, else its first.
-  static func button(_ d: PullRequestDetails, settings: MergeSettings?, lastMethod: MergeMethod?) -> MergeButton {
-    guard let settings else { return .disabled("Loading merge options…") }
+  static func button(
+    _ d: PullRequestDetails, settings: MergeSettings?, lastMethod: MergeMethod?, settingsFailed: Bool = false
+  ) -> MergeButton {
+    guard let settings else {
+      return .disabled(settingsFailed ? "Couldn't load merge options — refresh to try again" : "Loading merge options…")
+    }
     guard let method = lastMethod.flatMap({ settings.methods.contains($0) ? $0 : nil }) ?? settings.methods.first
     else { return .disabled("The repository allows no merge method") }
     let options = PullRequests.mergeOptions(d, settings: settings)

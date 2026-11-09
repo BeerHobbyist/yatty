@@ -121,3 +121,21 @@ private func details(
   let skipped = details(checks: [check("a", conclusion: "SKIPPED"), check("b", conclusion: "NEUTRAL")])
   #expect(MergeBox.checks(skipped) == MergeBoxLine(verdict: "All checks passed", detail: "2 skipped", tone: .good))
 }
+
+@Test func mergeButtonWhenSettingsFailedAndFailedRuns() {
+  #expect(MergeBox.button(details(status: "CLEAN"), settings: nil, lastMethod: nil, settingsFailed: true)
+    == .disabled("Couldn't load merge options — refresh to try again"))
+  var a = check("unit", conclusion: "FAILURE")
+  a.detailsUrl = "https://github.com/me/app/actions/runs/1/job/10"
+  var b = check("lint", conclusion: "FAILURE")
+  b.detailsUrl = "https://github.com/me/app/actions/runs/1/job/11"
+  var c = check("e2e", conclusion: "FAILURE")
+  c.detailsUrl = "https://github.com/me/app/actions/runs/2/job/12"
+  var ok = check("build", conclusion: "SUCCESS")
+  ok.detailsUrl = "https://github.com/me/app/actions/runs/3/job/13"
+  var other = check("ci", conclusion: "FAILURE")
+  other.detailsUrl = "https://ci.example.com/9"
+  let runs = PullRequests.failedRuns(details(checks: [a, b, c, ok, other]))
+  #expect(runs.map(\.runID) == ["1", "2"])
+  #expect(runs.allSatisfy { $0.nameWithOwner == "me/app" })
+}

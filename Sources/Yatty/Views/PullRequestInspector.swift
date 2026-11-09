@@ -3,6 +3,14 @@ import SwiftUI
 /// The PR panel's tabs, under its header and merge box.
 enum PullRequestTab: String, CaseIterable, Sendable {
   case conversation, checks, description
+
+  var title: String {
+    switch self {
+    case .conversation: "Conversation"
+    case .checks: "Checks"
+    case .description: "Description"
+    }
+  }
 }
 
 /// The pull request of the worktree on screen. A header that stays put — the
@@ -48,10 +56,13 @@ struct PullRequestInspector: View {
         }
       }
       .task(id: worktree.id) {
-        await store.pullRequests.loadMergeSettings(for: repo)
-        // Fresh while it's on screen: now, then every 30 seconds.
+        // Fresh while it's on screen: now, then every 30 seconds. Merge
+        // settings alongside, until there are some.
         while !Task.isCancelled {
-          if NSApp.isActive || Snapshot.isActive { store.pullRequests.refreshDetails(for: worktree, in: repo) }
+          if NSApp.isActive || Snapshot.isActive {
+            store.pullRequests.refreshDetails(for: worktree, in: repo)
+            store.pullRequests.ensureMergeSettings(for: repo)
+          }
           try? await Task.sleep(for: .seconds(30))
         }
       }
@@ -221,9 +232,12 @@ struct PullRequestInspector: View {
 
   @ViewBuilder private func mergeButton(_ details: PullRequestDetails, repo: Repo) -> some View {
     let settings = store.pullRequests.mergeSettings[repo.id]
-    switch MergeBox.button(details, settings: settings, lastMethod: store.mergeMethod) {
-    case .merge(let method): splitButton(method: method, auto: false, settings: settings)
-    case .autoMerge(let method): splitButton(method: method, auto: true, settings: settings)
+    let failed = store.pullRequests.mergeSettingsFailed.contains(repo.id)
+    switch MergeBox.button(details, settings: settings, lastMethod: store.mergeMethod, settingsFailed: failed) {
+    case .merge(let method):
+      splitButton(method: method, auto: false, settings: settings, caption: PullRequests.mergeStatus(details).label)
+    case .autoMerge(let method):
+      splitButton(method: method, auto: true, settings: settings, caption: "Merges once it's ready")
     case .disabled(let reason):
       HStack {
         Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -235,9 +249,9 @@ struct PullRequestInspector: View {
 
   /// Merges (or turns on auto-merge) with `method`; its arrow picks another.
   /// Either way the merge sheet asks to confirm first.
-  private func splitButton(method: MergeMethod, auto: Bool, settings: MergeSettings?) -> some View {
+  private func splitButton(method: MergeMethod, auto: Bool, settings: MergeSettings?, caption: String) -> some View {
       HStack {
-        Text(auto ? "Merges once it's ready" : "Ready to merge").font(.caption).foregroundStyle(.secondary)
+        Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(2)
         Spacer()
         Menu {
           ForEach(settings?.methods ?? [], id: \.self) { other in
@@ -325,7 +339,7 @@ struct PullRequestInspector: View {
         }
         if state == .fail, let link = check.detailsUrl, let run = PullRequests.actionsRun(link) {
           Button {
-            rerun(run, repo: repo)
+            store.rerun(run, in: worktree)
           } label: {
             Image(systemName: "arrow.clockwise")
           }
@@ -334,18 +348,6 @@ struct PullRequestInspector: View {
         }
       }
       .padding(.vertical, 2)
-    }
-  }
-
-  private func rerun(_ run: (nameWithOwner: String, runID: String), repo: Repo) {
-    guard !Snapshot.isActive else { return }
-    Task {
-      do {
-        try await GitHub.rerunFailed(runID: run.runID, in: run.nameWithOwner)
-        store.pullRequests.refreshDetails(for: worktree, in: repo)
-      } catch {
-        store.alert = AppAlert(title: "Couldn't re-run the check", message: error.localizedDescription)
-      }
     }
   }
 

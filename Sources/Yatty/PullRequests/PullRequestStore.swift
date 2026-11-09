@@ -15,6 +15,9 @@ final class PullRequestStore {
   private(set) var refreshingDetails: Set<String> = []
   /// Per `Repo.id`: the merge methods it allows and whether it auto-merges.
   private(set) var mergeSettings: [String: MergeSettings] = [:]
+  /// Repositories whose merge settings couldn't be read last time.
+  private(set) var mergeSettingsFailed: Set<String> = []
+  @ObservationIgnored private var loadingMergeSettings: Set<String> = []
 
   @ObservationIgnored private weak var store: AppStore?
   @ObservationIgnored private var timer: Timer?
@@ -33,10 +36,21 @@ final class PullRequestStore {
   /// Asks GitHub for the repository's merge settings; a failure keeps the
   /// last good answer.
   func loadMergeSettings(for repo: Repo) async {
-    guard let nameWithOwner = repo.nameWithOwner,
-      let settings = try? await GitHub.mergeSettings(nameWithOwner)
-    else { return }
+    guard let nameWithOwner = repo.nameWithOwner, !loadingMergeSettings.contains(repo.id) else { return }
+    loadingMergeSettings.insert(repo.id)
+    defer { loadingMergeSettings.remove(repo.id) }
+    guard let settings = try? await GitHub.mergeSettings(nameWithOwner) else {
+      mergeSettingsFailed.insert(repo.id)
+      return
+    }
+    mergeSettingsFailed.remove(repo.id)
     if mergeSettings[repo.id] != settings { mergeSettings[repo.id] = settings }
+  }
+
+  /// Merge settings for the repository, asked for in the background when
+  /// there are none yet (never asked, or asking failed).
+  func ensureMergeSettings(for repo: Repo) {
+    if mergeSettings[repo.id] == nil { Task { await loadMergeSettings(for: repo) } }
   }
 
   /// `YATTY_BADGE_FIXTURE=<json file>`: badges by branch, standing in for gh

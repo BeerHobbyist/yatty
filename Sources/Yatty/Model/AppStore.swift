@@ -614,6 +614,34 @@ final class AppStore {
     pullRequests.refreshAll(force: true)
     if let worktree = selectedWorktree, let repo = repo(of: worktree) {
       pullRequests.refreshDetails(for: worktree, in: repo)
+      pullRequests.ensureMergeSettings(for: repo)
+    }
+  }
+
+  /// The PR panel, open at `tab`.
+  func showPullRequestTab(_ tab: PullRequestTab, for worktree: Worktree) {
+    prTabs[worktree.id] = tab
+    showingPullRequest = true
+  }
+
+  func openPullRequest(_ worktree: Worktree) {
+    if let url = pullRequests.badge(for: worktree).flatMap({ URL(string: $0.url) }) { NSWorkspace.shared.open(url) }
+  }
+
+  /// Re-runs the failed jobs of every Actions run with a failed check.
+  func rerunFailedChecks(in worktree: Worktree) {
+    for run in pullRequests.details[worktree.id].map(PullRequests.failedRuns) ?? [] { rerun(run, in: worktree) }
+  }
+
+  func rerun(_ run: ActionsRun, in worktree: Worktree) {
+    guard !Snapshot.isActive else { return }
+    Task {
+      do {
+        try await GitHub.rerunFailed(runID: run.runID, in: run.nameWithOwner)
+        if let repo = repo(of: worktree) { pullRequests.refreshDetails(for: worktree, in: repo) }
+      } catch {
+        alert = AppAlert(title: "Couldn't re-run the checks", message: error.localizedDescription)
+      }
     }
   }
 

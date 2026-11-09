@@ -127,7 +127,10 @@ struct MergeSheet: View {
     do {
       let loaded = try await GitHub.mergeSettings(nameWithOwner)
       settings = loaded
-      if let preset, loaded.methods.contains(preset) {
+      // Straight to confirming only when it can still be merged (or set to):
+      // otherwise the choosing step says why not.
+      let options = store.pullRequests.details[worktree.id].map { PullRequests.mergeOptions($0, settings: loaded) }
+      if let preset, loaded.methods.contains(preset), let options, options.now || options.auto {
         method = preset
         step = .confirming
       } else {

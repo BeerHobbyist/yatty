@@ -38,6 +38,8 @@ struct CommandContext {
   var openPullRequest: Bool
   /// The selected worktree has a pull request, open or merged.
   var hasPullRequest = false
+  /// Its pull request has failed checks from GitHub Actions runs.
+  var hasFailedRuns = false
 
   /// A worktree here, with git: diffs and pull requests apply.
   var isLocal: Bool { selected.map { !$0.isRemote } ?? false }
@@ -49,6 +51,7 @@ struct CommandContext {
   var canShowPullRequest: Bool { isLocal }
   var canMerge: Bool { isLocal && openPullRequest }
   var canReviewComments: Bool { isLocal && hasPullRequest }
+  var canRerunChecks: Bool { isLocal && hasFailedRuns }
 }
 
 extension AppStore {
@@ -56,7 +59,9 @@ extension AppStore {
     let badge = selectedWorktree.flatMap { pullRequests.badge(for: $0) }
     return CommandContext(
       selected: selectedWorktree, hasRepos: !repos.isEmpty, openPullRequest: badge.map { !$0.merged } ?? false,
-      hasPullRequest: badge != nil)
+      hasPullRequest: badge != nil,
+      hasFailedRuns: selectedWorktree.flatMap { pullRequests.details[$0.id] }.map { !PullRequests.failedRuns($0).isEmpty }
+        ?? false)
   }
 
   /// Every command that applies now, in the palette's order.
@@ -131,6 +136,19 @@ extension AppStore {
     }
     add("pr.reviewComments", "Review Comments…", "Pull Request", when: context.canReviewComments) {
       self.reviewingComments = selected
+    }
+    if let selected {
+      for tab in PullRequestTab.allCases {
+        add("pr.tab.\(tab.rawValue)", "Show \(tab.title)", "Pull Request", when: context.canReviewComments) {
+          self.showPullRequestTab(tab, for: selected)
+        }
+      }
+      add("pr.open", "Open Pull Request on GitHub", "Pull Request", when: context.canReviewComments) {
+        self.openPullRequest(selected)
+      }
+      add("pr.rerun", "Re-run Failed Checks", "Pull Request", when: context.canRerunChecks) {
+        self.rerunFailedChecks(in: selected)
+      }
     }
 
     add("agent.next", "Go to Next Agent", "Agents", Shortcuts.nextAgent) { self.jumpToNextAgent() }

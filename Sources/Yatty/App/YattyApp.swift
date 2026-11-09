@@ -58,6 +58,16 @@ struct YattyApp: App {
           if let worktree = store.selectedWorktree { store.reviewingComments = worktree }
         }
         .disabled(!context.canReviewComments)
+        Menu("Show in Pull Request Panel") {
+          ForEach(PullRequestTab.allCases, id: \.self) { tab in
+            Button(tab.title) { if let worktree = store.selectedWorktree { store.showPullRequestTab(tab, for: worktree) } }
+          }
+        }
+        .disabled(!context.canReviewComments)
+        Button("Open Pull Request on GitHub") { if let worktree = store.selectedWorktree { store.openPullRequest(worktree) } }
+          .disabled(!context.canReviewComments)
+        Button("Re-run Failed Checks") { if let worktree = store.selectedWorktree { store.rerunFailedChecks(in: worktree) } }
+          .disabled(!context.canRerunChecks)
         Divider()
       }
       CommandMenu("Worktree") {
