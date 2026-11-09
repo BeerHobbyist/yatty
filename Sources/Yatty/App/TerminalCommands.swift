@@ -5,10 +5,13 @@ import SwiftUI
 /// action.
 struct TerminalCommands: Commands {
   let store: AppStore
+  /// Only while the main window is in front: in a diff window, ⌘W must not
+  /// close the terminal pane focused behind it.
+  @FocusedValue(\.isMainWindow) private var isMainWindow
 
   var body: some Commands {
     CommandMenu("Terminal") {
-      let enabled = store.commandContext.hasTerminals
+      let enabled = store.commandContext.hasTerminals && isMainWindow == true
       Group {
         Button("New Tab") { store.performOnFocusedPane(.newTab) }
           .keyboardShortcut(Shortcuts.newTab)
@@ -44,5 +47,17 @@ struct TerminalCommands: Commands {
       }
       .disabled(!enabled)
     }
+  }
+}
+
+/// Set by the main window's content: menus that act on its terminals check it.
+struct MainWindowKey: FocusedValueKey {
+  typealias Value = Bool
+}
+
+extension FocusedValues {
+  var isMainWindow: Bool? {
+    get { self[MainWindowKey.self] }
+    set { self[MainWindowKey.self] = newValue }
   }
 }

@@ -45,8 +45,7 @@
       diffMaxChanges: 5000,
       maxLineLengthHighlight: 2000,
     });
-    ui.draw();
-    ui.highlightCode();
+    ui.draw(); // highlights too
     window.scrollTo(0, y);
     return document.querySelectorAll(".d2h-file-wrapper").length;
   };

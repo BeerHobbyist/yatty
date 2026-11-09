@@ -14,32 +14,29 @@ enum DiffLayout: String, Codable, CaseIterable, Sendable {
   case unified = "line-by-line"
 }
 
-/// The text a `DiffWindow` shows: `git diff`, run so that nothing in the
-/// repository's config can run a program — a sandboxed agent can write that
-/// config, and the app reads the diff outside the sandbox.
+/// The text a `DiffWindow` shows: `git diff` through `GuardedGit`, since
+/// the app reads it outside any sandbox while an agent may have written the
+/// repository's config.
 enum GitDiff {
-  private static let guarded = ["-c", "core.fsmonitor=false", "-c", "diff.external="]
-  private static let flags = ["--no-ext-diff", "--no-textconv", "--no-color", "-M"]
-
-  static func arguments(_ args: [String]) -> [String] {
-    guarded + ["diff"] + flags + args
-  }
-
-  /// A new, untracked file as an addition.
-  static func untrackedArguments(_ file: String) -> [String] {
-    guarded + ["diff", "--no-index"] + flags + ["--", "/dev/null", file]
-  }
+  static let flags = ["--no-ext-diff", "--no-textconv", "--no-color", "-M", "--submodule=short"]
+  /// A new file bigger than this isn't shown (it would be read whole).
+  static let largestNewFile = 2_000_000
 
   /// The diff of `target` in `path`; for working changes, new files too
   /// (the first 200), which plain `git diff` leaves out.
   static func text(in path: String, target: DiffTarget) async throws -> String {
-    var text = try await Git.run(arguments(target.args), in: path)
+    let filters = await GuardedGit.filters(in: path)
+    var text = try await GuardedGit.run(["diff"] + flags + target.args, in: path, filters: filters)
     guard target == .working else { return text }
-    let untracked = try await Git.run(["ls-files", "--others", "--exclude-standard", "-z"], in: path)
-      .split(separator: "\0").map(String.init)
+    let untracked = try await GuardedGit.run(
+      ["ls-files", "--others", "--exclude-standard", "-z"], in: path, filters: filters
+    ).split(separator: "\0").map(String.init)
     for file in untracked.prefix(200) {
+      let size = (try? FileManager.default.attributesOfItem(atPath: path + "/" + file)[.size] as? Int) ?? 0
+      guard size <= largestNewFile else { continue }
       // `--no-index` exits 1 when the files differ, which they always do here.
-      let result = await Run.run("/usr/bin/env", ["git", "-C", path] + untrackedArguments(file))
+      let result = await GuardedGit.result(
+        ["diff", "--no-index"] + flags + ["--", "/dev/null", file], in: path, filters: filters)
       if result.status == 0 || result.status == 1 { text += result.stdout }
     }
     return text

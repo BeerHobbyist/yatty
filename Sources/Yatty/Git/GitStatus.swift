@@ -13,13 +13,20 @@ struct GitStatus: Equatable, Sendable {
 extension Git {
   /// nil when git couldn't read the worktree at all.
   static func status(path: String) async -> GitStatus? {
-    guard let porcelain = try? await run(["status", "--porcelain"], in: path) else { return nil }
+    // Every few seconds, on a worktree an agent may have rigged: guarded.
+    let filters = await GuardedGit.filters(in: path)
+    guard let porcelain = try? await GuardedGit.run(["status", "--porcelain"], in: path, filters: filters)
+    else { return nil }
     var status = GitStatus(changed: parsePorcelainCount(porcelain))
-    if let numstat = try? await run(["diff", "--numstat", "HEAD"], in: path) {
+    if let numstat = try? await GuardedGit.run(
+      ["diff", "--numstat", "--no-ext-diff", "--no-textconv", "--submodule=short", "HEAD"], in: path, filters: filters)
+    {
       (status.added, status.removed) = parseNumstat(numstat)
     }
     // No upstream: nothing to be ahead of or behind.
-    if let counts = try? await run(["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], in: path) {
+    if let counts = try? await GuardedGit.run(
+      ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], in: path, filters: filters)
+    {
       (status.ahead, status.behind) = parseAheadBehind(counts)
     }
     return status
@@ -53,6 +60,6 @@ extension Git {
 extension Git {
   /// `git merge-base --is-ancestor`: false on any error too.
   static func isAncestor(_ commit: String, of head: String, in path: String) async -> Bool {
-    await Run.run("/usr/bin/env", ["git", "-C", path, "merge-base", "--is-ancestor", commit, head]).ok
+    await GuardedGit.result(["merge-base", "--is-ancestor", commit, head], in: path).ok
   }
 }

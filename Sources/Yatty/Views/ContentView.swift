@@ -36,7 +36,9 @@ struct ContentView: View {
       // Filtering needs the sidebar there.
       if focusing { columns = .all }
     }
-    .onChange(of: store.openingDiff) { _, request in
+    .focusedSceneValue(\.isMainWindow, true)
+    // Initial too: asked while this window was closed, it opens on return.
+    .onChange(of: store.openingDiff, initial: true) { _, request in
       guard let request else { return }
       openWindow(value: request)
       store.openingDiff = nil

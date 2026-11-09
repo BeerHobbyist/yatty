@@ -125,6 +125,8 @@ final class AppStore {
   }
   /// Asks the window to open a diff window (only a view can).
   var openingDiff: DiffRequest?
+  /// Per diff: how often it was asked for. Its window reads it again on each.
+  var diffReads: [DiffRequest: Int] = [:]
   var diffingWorktree: Worktree?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
@@ -624,9 +626,12 @@ final class AppStore {
 
   // MARK: Pull requests
 
-  /// The diff in Yatty's own window.
+  /// The diff in Yatty's own window. Asked again while it's open, it reads
+  /// the diff again (see `diffReads`).
   func openDiff(_ worktree: Worktree, target: DiffTarget) {
-    openingDiff = DiffRequest(worktreePath: worktree.path, worktreeName: label(for: worktree), target: target)
+    let request = DiffRequest(worktreePath: worktree.path, worktreeName: label(for: worktree), target: target)
+    diffReads[request, default: 0] += 1
+    openingDiff = request
   }
 
   func setDiffViewer(_ viewer: DiffViewer) {

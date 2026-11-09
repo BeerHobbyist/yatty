@@ -23,8 +23,9 @@ has tabs and splits, and every one of them is a real
   (re-run failed ones) and the description. Review… hands chosen comments to
   your agent.
 - **Diffs your way.** Working changes, staged, against the base branch, a ref
-  or a range of commits, in hunk, diffnav, delta, difftastic, lumen, nvim
-  diffview or plain git.
+  or a range of commits, in Yatty's own diff window (unified or side by side,
+  highlighted, new files included) or in hunk, diffnav, delta, difftastic,
+  lumen, nvim diffview or plain git.
 - **Remote machines.** A directory on an SSH host runs its terminals there.
 - **A CLI for agents.** `yatty tab new --name dev -- npm run dev` lets an agent
   run and watch long-lived processes in their own tabs, sandboxed with it.
@@ -119,7 +120,7 @@ Every Yatty terminal has the `yatty` command on its `PATH` (and at
 yatty tab new --name dev -- npm run dev   # a tab in the background, running it
 yatty tab read dev --lines 30             # what it shows
 yatty tab send dev --key C-c              # stop it
-yatty diff                                # working changes, in a tab of its own
+yatty diff                                # working changes, in Yatty's diff window
 yatty notify "Ready for review"           # a notification for you
 yatty status                              # every worktree and its agent's state
 ```
@@ -131,7 +132,8 @@ start; `yatty skill install` adds a Claude Code skill that teaches it in full
 ## Running agents in fence
 
 Inside [fence](https://github.com/Use-Tusk/fence) the CLI talks to the app on
-the sandbox's terms: what `tab new` and `diff` start runs in the sandbox too,
+the sandbox's terms: what `tab new` and `diff` start runs in the sandbox too
+(a diff opens in a terminal viewer's tab there, not in Yatty's diff window),
 and `tab send` types only into tabs opened that way, never into your own shell.
 
 1. Set the sandbox to start things in: Settings > Sandbox command (a command

@@ -56,16 +56,63 @@ import Testing
   #expect(commits.map(\.subject) == ["first", "second"])
 }
 
-@Test func guiDiffRunsGitWithoutRepoPrograms() {
-  // A sandboxed agent can write the repository's config: nothing in it may
-  // run when the app reads the diff.
-  let args = GitDiff.arguments(["--staged"])
-  #expect(args.prefix(4) == ["-c", "core.fsmonitor=false", "-c", "diff.external="])
-  #expect(args.contains("--no-ext-diff") && args.contains("--no-textconv") && args.contains("--no-color"))
-  #expect(args.last == "--staged")
-  let untracked = GitDiff.untrackedArguments("new file.swift")
-  #expect(untracked.suffix(3) == ["--", "/dev/null", "new file.swift"])
-  #expect(untracked.contains("--no-index") && untracked.contains("--no-ext-diff"))
+@Test func guardedGitDisablesWhatRepoConfigCouldRun() {
+  let args = GuardedGit.arguments(["diff", "--stat"], filters: ["x", "a.b"])
+  for setting in [
+    "core.fsmonitor=false", "core.hooksPath=/dev/null", "diff.external=", "core.quotePath=false",
+    "log.showSignature=false", "diff.submodule=short", "filter.x.clean=", "filter.x.process=",
+    "filter.a.b.smudge=", "filter.a.b.required=false",
+  ] {
+    #expect(args.contains(setting), "missing \(setting)")
+  }
+  #expect(args.suffix(2) == ["diff", "--stat"])
+  #expect(GuardedGit.environment["GIT_NO_LAZY_FETCH"] == "1")
+  #expect(GitDiff.flags.contains("--no-ext-diff") && GitDiff.flags.contains("--no-textconv"))
+  #expect(GitDiff.flags.contains("--submodule=short"))
+}
+
+@Test func onlyFiltersAnAgentCouldWriteAreTurnedOff() {
+  let config = """
+    local\tfilter.x.clean ./evil
+    global\tfilter.lfs.clean git-lfs clean -- %f
+    worktree\tfilter.a.b.process ./evil
+    local\tfilter.x.smudge ./evil
+    command\tfilter.y.clean ./other
+    """
+  #expect(GuardedGit.repositoryFilters(config) == ["x", "a.b"])
+}
+
+/// A repository whose config tries everything the reviewer found: none of it may run.
+@Test func hostileRepositoryRunsNothing() async throws {
+  let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("yatty-hostile-\(UUID().uuidString)")
+  let repo = root.appendingPathComponent("repo").path
+  let marker = root.appendingPathComponent("ran").path
+  let hooks = root.appendingPathComponent("hooks").path
+  try FileManager.default.createDirectory(atPath: hooks, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let script = root.appendingPathComponent("evil.sh").path
+  try "#!/bin/sh\necho \"$0 $*\" >> '\(marker)'\ncat\n".write(toFile: script, atomically: true, encoding: .utf8)
+  try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script)
+  try FileManager.default.copyItem(atPath: script, toPath: hooks + "/post-index-change")
+  func git(_ args: String...) async { _ = await Run.run("/usr/bin/env", ["git", "-C", repo] + args) }
+  _ = await Run.run("/usr/bin/env", ["git", "init", "-q", repo])
+  try "* filter=x\n".write(toFile: repo + "/.gitattributes", atomically: true, encoding: .utf8)
+  try "one\n".write(toFile: repo + "/a.txt", atomically: true, encoding: .utf8)
+  await git("add", ".")
+  await git("-c", "user.name=y", "-c", "user.email=y@y", "commit", "-qm", "init")
+  // What an agent would plant once the repository exists.
+  await git("config", "core.fsmonitor", script)
+  await git("config", "core.hooksPath", hooks)
+  await git("config", "filter.x.clean", script)
+  await git("config", "log.showSignature", "true")
+  try "two\n".write(toFile: repo + "/a.txt", atomically: true, encoding: .utf8)
+  try "new\n".write(toFile: repo + "/new.txt", atomically: true, encoding: .utf8)
+
+  let diff = try await GitDiff.text(in: repo, target: .working)
+  _ = await Git.status(path: repo)
+  #expect(diff.contains("+two"))
+  #expect(diff.contains("new.txt"))
+  #expect(!FileManager.default.fileExists(atPath: marker), "ran: \((try? String(contentsOfFile: marker, encoding: .utf8)) ?? "")")
 }
 
 @Test func yattyIsTheDefaultViewer() {
@@ -78,4 +125,12 @@ import Testing
   let request = DiffRequest(worktreePath: "/r/.worktrees/login", worktreeName: "login", target: .base("origin/main"))
   let decoded = try JSONDecoder().decode(DiffRequest.self, from: JSONEncoder().encode(request))
   #expect(decoded == request)
+}
+
+@Test func aSandboxedAgentsDiffStaysInTheSandbox() {
+  // The window runs git in the app; a sandboxed agent's diff runs in a
+  // sandboxed terminal tab instead, whatever the user's viewer.
+  #expect(DiffViewers.forSandbox(.yatty, available: [.yatty, .delta, .git]) == .delta)
+  #expect(DiffViewers.forSandbox(.yatty, available: [.yatty]) == .git)
+  #expect(DiffViewers.forSandbox(.hunk, available: [.yatty, .hunk, .git]) == .hunk)
 }

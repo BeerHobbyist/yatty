@@ -17,7 +17,8 @@ struct DiffSheet: View {
   @State private var commits: [Commit] = []
   @State private var cursor: String?
   @State private var mark: String?
-  @State private var available: [DiffViewer] = []
+  /// Yatty's window needs nothing installed: there from the start.
+  @State private var available: [DiffViewer] = [.yatty]
 
   var body: some View {
     let viewer = DiffViewers.resolve(store.diffViewer, available: available)

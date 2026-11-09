@@ -6,6 +6,9 @@ import WebKit
 struct DiffWindow: View {
   let request: DiffRequest
   @Environment(AppStore.self) private var store
+  @Environment(\.dismiss) private var dismiss
+  /// Past this the page would choke: a terminal viewer copes better.
+  private static let largest = 20_000_000
   @State private var diff: String?
   @State private var error: String?
   @State private var loading = false
@@ -17,7 +20,12 @@ struct DiffWindow: View {
         ContentUnavailableView(
           "Couldn't Read the Diff", systemImage: "exclamationmark.triangle", description: Text(error))
       } else if let diff {
-        if diff.isEmpty {
+        if diff.utf8.count > Self.largest {
+          ContentUnavailableView(
+            "Too Large to Show", systemImage: "doc.text.magnifyingglass",
+            description: Text(
+              "\(diff.utf8.count / 1_000_000) MB of changes. Open Diff… (⌥⌘D) can show it in a terminal viewer."))
+        } else if diff.isEmpty {
           ContentUnavailableView(
             "No Changes", systemImage: "checkmark.circle",
             description: Text("\(request.target.title) in \(request.worktreeName): nothing differs."))
@@ -50,7 +58,12 @@ struct DiffWindow: View {
         .disabled(loading)
       }
     }
-    .task { await load() }
+    // ⌘W closes this window: the menu's ⌘W is the terminal's Close Pane.
+    .background {
+      Button("Close") { dismiss() }.keyboardShortcut("w").opacity(0).allowsHitTesting(false)
+    }
+    // Again whenever this diff is asked for again.
+    .task(id: store.diffReads[request, default: 0]) { await load() }
   }
 
   private func load() async {
@@ -131,8 +144,12 @@ struct DiffWebView: NSViewRepresentable {
       Snapshot.note("diff page failed to load: \(error)")
     }
 
+    /// The page's process died (memory, a crash): load it again and redraw.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
       Snapshot.note("diff page's process ended")
+      loaded = false
+      shown = nil
+      webView.reload()
     }
 
     /// Links (none expected in a diff) open in the browser, never in here.
