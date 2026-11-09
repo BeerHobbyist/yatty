@@ -13,6 +13,8 @@ final class PullRequestStore {
   private(set) var detailsRefreshed: [String: Date] = [:]
   private(set) var detailsFailed: Set<String> = []
   private(set) var refreshingDetails: Set<String> = []
+  /// Per `Repo.id`: the merge methods it allows and whether it auto-merges.
+  private(set) var mergeSettings: [String: MergeSettings] = [:]
 
   @ObservationIgnored private weak var store: AppStore?
   @ObservationIgnored private var timer: Timer?
@@ -27,6 +29,15 @@ final class PullRequestStore {
   }
 
   func badge(for worktree: Worktree) -> BranchPullRequest? { badges[worktree.id] ?? nil }
+
+  /// Asks GitHub for the repository's merge settings; a failure keeps the
+  /// last good answer.
+  func loadMergeSettings(for repo: Repo) async {
+    guard let nameWithOwner = repo.nameWithOwner,
+      let settings = try? await GitHub.mergeSettings(nameWithOwner)
+    else { return }
+    if mergeSettings[repo.id] != settings { mergeSettings[repo.id] = settings }
+  }
 
   /// `YATTY_BADGE_FIXTURE=<json file>`: badges by branch, standing in for gh
   /// (snapshots). `{"feature/x": {"number": 4, "checks": "pass", "isDraft": false, "merged": false}}`

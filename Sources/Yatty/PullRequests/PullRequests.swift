@@ -14,6 +14,9 @@ struct RawCheck: Decodable, Equatable, Sendable {
   var context: String?
   var detailsUrl: String?
   var targetUrl: String?
+  /// ISO 8601, for check runs.
+  var startedAt: String? = nil
+  var completedAt: String? = nil
 
   var displayName: String { name ?? context ?? "check" }
   var link: URL? { (detailsUrl ?? targetUrl).flatMap(URL.init(string:)) }

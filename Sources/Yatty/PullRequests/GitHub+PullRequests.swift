@@ -80,6 +80,11 @@ extension GitHub {
     return (details, threads)
   }
 
+  /// Runs a GitHub Actions run's failed jobs again.
+  static func rerunFailed(runID: String, in nameWithOwner: String) async throws {
+    _ = try await run(["run", "rerun", runID, "--failed", "-R", nameWithOwner])
+  }
+
   static func mergeSettings(_ nameWithOwner: String) async throws -> MergeSettings {
     // Snapshots can't reach GitHub: every method, auto-merge on.
     if Snapshot.isActive { return MergeSettings(methods: MergeMethod.allCases, autoMerge: true) }
