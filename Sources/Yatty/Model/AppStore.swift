@@ -39,7 +39,8 @@ final class AppStore {
     didSet {
       // Whatever selects a worktree (a jump to an agent, the palette, a new
       // one) shows its row, so its project unfolds.
-      let unfolded = selection.flatMap(projectID(of:)).map { foldedProjects.remove($0) != nil } ?? false
+      let unfolded =
+        unfoldOnSelect ? selection.flatMap(projectID(of:)).map { foldedProjects.remove($0) != nil } ?? false : false
       guard selection != oldValue || unfolded else { return }
       if selection != oldValue { updateVisibility() }
       saveState()
@@ -47,6 +48,8 @@ final class AppStore {
   }
   /// Sidebar repositories and hosts folded away, by `Repo.id` / `SSHHost.id`.
   var foldedProjects: Set<String> = []
+  /// False while `select(_:unfolding:)` selects without unfolding.
+  @ObservationIgnored private var unfoldOnSelect = true
   /// Per worktree path; see `layout(for:)`.
   var layouts: [String: WorktreeLayout] = [:]
   /// Per worktree path: a name the user gave it; see `label(for:)`.
@@ -208,6 +211,35 @@ final class AppStore {
   func projectID(of worktreeID: String) -> String? {
     guard let worktree = worktree(withID: worktreeID) else { return nil }
     return repo(of: worktree)?.id ?? host(of: worktree)?.id
+  }
+
+  /// Selects a worktree; `unfolding: false` leaves its project folded as it is.
+  func select(_ id: String?, unfolding: Bool) {
+    unfoldOnSelect = unfolding
+    selection = id
+    unfoldOnSelect = true
+  }
+
+  /// Moves a repository before another, or a host before another host.
+  func moveProject(_ id: String, before target: String) {
+    if let order = Self.moved(repos.map(\.id), id, before: target) {
+      repos = order.compactMap { id in repos.first { $0.id == id } }
+    } else if let order = Self.moved(hosts.map(\.id), id, before: target) {
+      hosts = order.compactMap { id in hosts.first { $0.id == id } }
+    } else {
+      return
+    }
+    saveState()
+  }
+
+  /// `ids` with `id` moved to just before `target`; nil when either isn't in it.
+  nonisolated static func moved(_ ids: [String], _ id: String, before target: String) -> [String]? {
+    guard id != target, ids.contains(target), let from = ids.firstIndex(of: id) else { return nil }
+    var order = ids
+    order.remove(at: from)
+    guard let to = order.firstIndex(of: target) else { return nil }
+    order.insert(id, at: to)
+    return order
   }
 
   func toggleFold(_ projectID: String) {

@@ -28,6 +28,8 @@ struct BranchPullRequest: Equatable, Sendable {
   var merged: Bool
   var checks: CheckState?
   var headOid: String
+  /// APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or nil.
+  var reviewDecision: String? = nil
 }
 
 /// A conversation on the diff. GitHub folds resolved ones away.

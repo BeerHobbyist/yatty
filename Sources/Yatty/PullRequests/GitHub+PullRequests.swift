@@ -13,12 +13,13 @@ extension GitHub {
     var statusCheckRollup: [RawCheck]?
     var mergeCommit: Oid?
     var commits: [Oid]?
+    var reviewDecision: String?
 
     func badge(merged: Bool) -> BranchPullRequest {
       BranchPullRequest(
         number: number, title: title, url: url, isDraft: isDraft, merged: merged,
         checks: PullRequests.summarize((statusCheckRollup ?? []).map(PullRequests.checkState)),
-        headOid: headRefOid ?? "")
+        headOid: headRefOid ?? "", reviewDecision: reviewDecision.flatMap { $0.isEmpty ? nil : $0 })
     }
   }
 
@@ -30,7 +31,7 @@ extension GitHub {
   ) async throws -> BranchPullRequest? {
     let data = try await run([
       "pr", "list", "-R", nameWithOwner, "--head", branch, "--state", "all", "--limit", "5", "--json",
-      "number,title,url,isDraft,statusCheckRollup,state,headRefOid,mergeCommit,commits",
+      "number,title,url,isDraft,statusCheckRollup,state,headRefOid,mergeCommit,commits,reviewDecision",
     ])
     let prs = try JSONDecoder().decode([ListedPullRequest].self, from: data)
     if let open = prs.first(where: { $0.state == "OPEN" }) { return open.badge(merged: false) }

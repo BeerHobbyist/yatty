@@ -9,6 +9,8 @@ import UserNotifications
 final class AgentMonitor {
   /// Every reporting pane's state, as the sidebar shows it.
   private(set) var panes: [PaneKey: AgentState] = [:]
+  /// When each pane's report was written: how long it has been in its state.
+  private(set) var since: [PaneKey: Int] = [:]
 
   @ObservationIgnored private weak var store: AppStore?
   @ObservationIgnored private var timer: Timer?
@@ -37,6 +39,13 @@ final class AgentMonitor {
   /// A worktree's most urgent agent.
   func state(of worktree: Worktree) -> AgentState? {
     panes.filter { $0.key.worktree == worktree.id }.values.min()
+  }
+
+  /// When the first of the worktree's agents that wait on the user started to.
+  func waitingSince(of worktree: Worktree) -> Date? {
+    panes.filter { $0.key.worktree == worktree.id && $0.value == .needsAction }
+      .compactMap { since[$0.key] }.min()
+      .map { Date(timeIntervalSince1970: TimeInterval($0)) }
   }
 
   func count(_ state: AgentState) -> Int {
@@ -93,8 +102,10 @@ final class AgentMonitor {
     }
 
     var states: [PaneKey: AgentState] = [:]
+    var times: [PaneKey: Int] = [:]
     for (session, report) in reports {
       guard let key = paneOf[session] else { continue }
+      times[key] = report.since
       let baseline = baselines[session]
       let moved = baseline.map { $0.since == report.since && screens[session]?.hash != $0.hash } ?? false
       var state = AgentStatus.effective(
@@ -106,6 +117,7 @@ final class AgentMonitor {
         notify(key, state)
       }
     }
+    if times != since { since = times }
     if states != panes {
       let changed = Set(states.keys.filter { states[$0] != panes[$0] }.map(\.worktree))
       panes = states
