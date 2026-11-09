@@ -96,6 +96,12 @@ What the user decided: **option A, with the filter**. The user also said
 8. **Project headers stay** as they are: chevron, icon, name, the summary
    when folded, and +.
 
+**Amended 2026-11-09, after using it:** "Needs you" became three sections on
+top — **Needs you**, **Working**, **Done** (finished, not yet seen) — and a
+worktree in one of them moves there instead of being listed twice. Once its
+agent goes idle (a finished one is seen) it sinks back into its project. In
+each section, the longest in that state comes first.
+
 ### Row content
 
 The second line picks the first of these that applies (my call on the order;

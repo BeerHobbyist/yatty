@@ -17,8 +17,8 @@ struct WorktreeFacts {
   var isMain = false
 }
 
-/// The sidebar's rules: a row's second line, the filter, the order of
-/// "Needs you".
+/// The sidebar's rules: a row's second line, the filter, which worktrees
+/// float to the top.
 enum WorktreeSummary {
   /// The first fact that applies, in words: waiting on you, a pull request
   /// that wants attention, working, where a remote directory is, changes and
@@ -49,11 +49,18 @@ enum WorktreeSummary {
     return [name, branch ?? "", project].contains { $0.lowercased().contains(needle) }
   }
 
-  /// Longest wait first.
-  static func needsYouOrder(_ waiting: [(id: String, since: Date)]) -> [String] {
-    waiting.enumerated()
-      .sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }
-      .map(\.element.id)
+  /// The worktrees whose agent wants attention or is busy, out of their
+  /// projects and on top: needs you, then working, then done (until seen);
+  /// in each, the longest in that state first. Idle ones stay put.
+  static func activeSections(_ agents: [(id: String, state: AgentState, since: Date)])
+    -> [(state: AgentState, ids: [String])]
+  {
+    [AgentState.needsAction, .working, .done].compactMap { state in
+      let ids = agents.enumerated().filter { $0.element.state == state }
+        .sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }
+        .map(\.element.id)
+      return ids.isEmpty ? nil : (state, ids)
+    }
   }
 
   private static func sync(_ status: GitStatus) -> String? {

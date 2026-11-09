@@ -12,9 +12,10 @@ has tabs and splits, and every one of them is a real
   drag projects into order, close them when done.
 - **Terminals that stay.** Tabs and splits per worktree, with Ghostty's own
   keys. Quit and reopen: every pane comes back, attached to the same session.
-- **Agents at a glance.** Claude Code in a new worktree starts by itself; every
-  agent waiting on you is listed on top of the sidebar, longest wait first,
-  each row says what's going on in words, and a notification tells you when
+- **Agents at a glance.** Claude Code in a new worktree starts by itself. Its
+  worktree floats to the top of the sidebar while the agent needs you, works,
+  or has finished, and sinks back into its project once you've seen it; each
+  row says what's going on in words, and a notification tells you when
   you're elsewhere.
 - **Git and pull requests.** Uncommitted changes, ahead/behind, a PR badge
   coloured by CI, and a PR panel like GitHub's: a merge box (reviews, checks,

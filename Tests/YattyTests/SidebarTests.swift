@@ -62,10 +62,22 @@ import Testing
   #expect(!WorktreeSummary.matches("zzz", name: "login", branch: "feature/login", project: "p"))
 }
 
-@Test func needsYouLongestWaitFirst() {
+@Test func activeAgentsFloatUpByState() {
   let t = Date(timeIntervalSince1970: 1_000)
-  let order = WorktreeSummary.needsYouOrder([("a", t), ("b", t.addingTimeInterval(-60)), ("c", t.addingTimeInterval(30))])
-  #expect(order == ["b", "a", "c"])
+  let sections = WorktreeSummary.activeSections([
+    ("idle", .idle, t),
+    ("w2", .working, t),
+    ("n1", .needsAction, t),
+    ("d1", .done, t),
+    ("w1", .working, t.addingTimeInterval(-60)),
+    ("n2", .needsAction, t.addingTimeInterval(-30)),
+    ("n3", .needsAction, t),
+  ])
+  // Needs you, then working, then done; idle stays in its project. Longest
+  // in its state first; ties keep their order.
+  #expect(sections.map(\.state) == [.needsAction, .working, .done])
+  #expect(sections.map(\.ids) == [["n2", "n1", "n3"], ["w1", "w2"], ["d1"]])
+  #expect(WorktreeSummary.activeSections([("a", .idle, t)]).isEmpty)
 }
 
 @Test func projectsMoveWithinTheirOwnList() {
@@ -81,15 +93,6 @@ import Testing
   #expect(AppStore.shifted(["/a", "/b", "/c"], "/b", by: 1) == ["/a", "/c", "/b"])
   #expect(AppStore.shifted(["/a", "/b"], "/a", by: -1) == nil)
   #expect(AppStore.shifted(["/a", "/b"], "/b", by: 1) == nil)
-}
-
-@Test func sidebarSelectionMapsNeedsYouRows() {
-  #expect(SidebarSelection.tag("/r/a", inNeedsYou: true) == "needs-you:/r/a")
-  #expect(SidebarSelection.tag("/r/a", inNeedsYou: false) == "/r/a")
-  #expect(SidebarSelection.worktreeID(fromTag: "needs-you:/r/a") == "/r/a")
-  #expect(SidebarSelection.worktreeID(fromTag: "/r/a") == "/r/a")
-  #expect(SidebarSelection.isNeedsYou("needs-you:ssh:devbox:/x"))
-  #expect(!SidebarSelection.isNeedsYou("ssh:devbox:/x"))
 }
 
 @Test func renameRules() {

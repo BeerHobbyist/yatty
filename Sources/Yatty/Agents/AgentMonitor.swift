@@ -42,8 +42,11 @@ final class AgentMonitor {
   }
 
   /// When the first of the worktree's agents that wait on the user started to.
-  func waitingSince(of worktree: Worktree) -> Date? {
-    panes.filter { $0.key.worktree == worktree.id && $0.value == .needsAction }
+  func waitingSince(of worktree: Worktree) -> Date? { since(of: worktree, in: .needsAction) }
+
+  /// When the first of the worktree's agents in `state` got there.
+  func since(of worktree: Worktree, in state: AgentState) -> Date? {
+    panes.filter { $0.key.worktree == worktree.id && $0.value == state }
       .compactMap { since[$0.key] }.min()
       .map { Date(timeIntervalSince1970: TimeInterval($0)) }
   }
