@@ -14,18 +14,21 @@ extension Git {
   /// nil when git couldn't read the worktree at all.
   static func status(path: String) async -> GitStatus? {
     // Every few seconds, on a worktree an agent may have rigged: guarded.
-    let filters = await GuardedGit.filters(in: path)
-    guard let porcelain = try? await GuardedGit.run(["status", "--porcelain"], in: path, filters: filters)
+    let overrides = await GuardedGit.overrides(in: path)
+    guard
+      let porcelain = try? await GuardedGit.run(
+        ["status", "--porcelain", "--ignore-submodules=dirty"], in: path, overrides: overrides)
     else { return nil }
     var status = GitStatus(changed: parsePorcelainCount(porcelain))
     if let numstat = try? await GuardedGit.run(
-      ["diff", "--numstat", "--no-ext-diff", "--no-textconv", "--submodule=short", "HEAD"], in: path, filters: filters)
+      ["diff", "--numstat", "--no-ext-diff", "--no-textconv", "--submodule=short", "--ignore-submodules=dirty", "HEAD"],
+      in: path, overrides: overrides)
     {
       (status.added, status.removed) = parseNumstat(numstat)
     }
     // No upstream: nothing to be ahead of or behind.
     if let counts = try? await GuardedGit.run(
-      ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], in: path, filters: filters)
+      ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], in: path, overrides: overrides)
     {
       (status.ahead, status.behind) = parseAheadBehind(counts)
     }

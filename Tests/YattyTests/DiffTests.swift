@@ -57,29 +57,37 @@ import Testing
 }
 
 @Test func guardedGitDisablesWhatRepoConfigCouldRun() {
-  let args = GuardedGit.arguments(["diff", "--stat"], filters: ["x", "a.b"])
+  let overrides = GuardedGit.overrides(filters: ["x", "a=b"], hooks: ["evil"])
+  let pairs = Set(overrides.map { "\($0.key)=\($0.value)" })
   for setting in [
     "core.fsmonitor=false", "core.hooksPath=/dev/null", "diff.external=", "core.quotePath=false",
-    "log.showSignature=false", "diff.submodule=short", "filter.x.clean=", "filter.x.process=",
-    "filter.a.b.smudge=", "filter.a.b.required=false",
+    "log.showSignature=false", "diff.submodule=short", "diff.ignoreSubmodules=dirty",
+    "filter.x.clean=", "filter.x.process=", "filter.a=b.smudge=", "filter.a=b.required=false", "hook.evil.enabled=false",
   ] {
-    #expect(args.contains(setting), "missing \(setting)")
+    #expect(pairs.contains(setting), "missing \(setting)")
   }
-  #expect(args.suffix(2) == ["diff", "--stat"])
-  #expect(GuardedGit.environment["GIT_NO_LAZY_FETCH"] == "1")
+  // Through the environment, where a key can hold "=" (`-c` splits at the first).
+  let env = GuardedGit.environment(overrides)
+  #expect(env["GIT_CONFIG_COUNT"] == String(overrides.count))
+  let index = overrides.firstIndex { $0.key == "filter.a=b.clean" }!
+  #expect(env["GIT_CONFIG_KEY_\(index)"] == "filter.a=b.clean" && env["GIT_CONFIG_VALUE_\(index)"] == "")
+  #expect(env["GIT_NO_LAZY_FETCH"] == "1")
   #expect(GitDiff.flags.contains("--no-ext-diff") && GitDiff.flags.contains("--no-textconv"))
-  #expect(GitDiff.flags.contains("--submodule=short"))
+  #expect(GitDiff.flags.contains("--submodule=short") && GitDiff.flags.contains("--ignore-submodules=dirty"))
 }
 
-@Test func onlyFiltersAnAgentCouldWriteAreTurnedOff() {
-  let config = """
-    local\tfilter.x.clean ./evil
-    global\tfilter.lfs.clean git-lfs clean -- %f
-    worktree\tfilter.a.b.process ./evil
-    local\tfilter.x.smudge ./evil
-    command\tfilter.y.clean ./other
-    """
-  #expect(GuardedGit.repositoryFilters(config) == ["x", "a.b"])
+@Test func onlyWhatAnAgentCouldWriteIsTurnedOff() {
+  // `git config --show-scope --includes -z --get-regexp`: scope NUL key LF value NUL.
+  let records: [(String, String)] = [
+    ("local", "filter.x.clean"), ("global", "filter.lfs.clean"), ("worktree", "filter.a.b.process"),
+    ("local", "filter.x.smudge"), ("command", "filter.y.clean"), ("local", "filter.foo"),
+    ("local", "filter..clean"), ("local", "filter.a b.clean"), ("local", "filter.a=b.clean"),
+    ("local", "hook.evil.command"), ("local", "hook.evil.event"), ("global", "hook.mine.command"),
+  ]
+  let config = records.map { "\($0.0)\u{0}\($0.1)\nsome value\u{0}" }.joined()
+  let found = GuardedGit.repositoryConfig(config)
+  #expect(found.filters == ["x", "a.b", "a b", "a=b"])
+  #expect(found.hooks == ["evil"])
 }
 
 /// A repository whose config tries everything the reviewer found: none of it may run.
@@ -105,6 +113,13 @@ import Testing
   await git("config", "core.hooksPath", hooks)
   await git("config", "filter.x.clean", script)
   await git("config", "log.showSignature", "true")
+  await git("config", "hook.evil.command", script)
+  await git("config", "--add", "hook.evil.event", "post-index-change")
+  await git("config", "filter.a=b.clean", script)
+  await git("config", "filter.a b.clean", script)
+  try "* filter=x\n*.md filter=a=b\n*.txt filter=\"a b\"\n".write(toFile: repo + "/.gitattributes", atomically: true, encoding: .utf8)
+  try "doc\n".write(toFile: repo + "/b.md", atomically: true, encoding: .utf8)
+  _ = await Run.run("/usr/bin/env", ["touch", repo + "/a.txt"])
   try "two\n".write(toFile: repo + "/a.txt", atomically: true, encoding: .utf8)
   try "new\n".write(toFile: repo + "/new.txt", atomically: true, encoding: .utf8)
 
