@@ -162,4 +162,7 @@ import Testing
   #expect(CodeAgent.pane(in: ["0", "a1"], focused: "a1", reporting: ["0", "a1"]) == "a1")
   // No agent reports from the tab: never the shell that's focused.
   #expect(CodeAgent.pane(in: ["0", "a1"], focused: "0", reporting: []) == nil)
+  // One asking the user something: Enter would answer it, so wait.
+  #expect(CodeAgent.pane(in: ["0", "a1"], focused: "0", reporting: ["a1"], asking: ["a1"]) == nil)
+  #expect(CodeAgent.pane(in: ["0", "a1"], focused: "a1", reporting: ["0", "a1"], asking: ["0"]) == "a1")
 }

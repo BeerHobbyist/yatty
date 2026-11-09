@@ -84,10 +84,18 @@ extension AppStore {
     return LocalReviewPrompt.make(target: target, branch: worktree.branch, comments: comments, view: "code view")
   }
 
-  /// The terminal in the tab an agent reports from; nil when none does.
+  /// The terminal in the tab an agent reports from; nil when none does, or
+  /// while it's asking the user something.
   func agentPane(of tab: TerminalTab, in worktree: Worktree) -> String? {
-    let reporting = Set(tab.root.panes.filter { agents.panes[PaneKey(worktree: worktree.id, pane: $0)] != nil })
-    return CodeAgent.pane(in: tab.root.panes, focused: tab.focusedPane, reporting: reporting)
+    let state = { (pane: String) in self.agents.panes[PaneKey(worktree: worktree.id, pane: pane)] }
+    let reporting = Set(tab.root.panes.filter { state($0) != nil })
+    let asking = Set(tab.root.panes.filter { state($0) == .needsAction })
+    return CodeAgent.pane(in: tab.root.panes, focused: tab.focusedPane, reporting: reporting, asking: asking)
+  }
+
+  /// An agent in the tab is waiting on the user (a permission, a question, a plan).
+  func agentAsking(in tab: TerminalTab, of worktree: Worktree) -> Bool {
+    tab.root.panes.contains { agents.panes[PaneKey(worktree: worktree.id, pane: $0)] == .needsAction }
   }
 
   /// Pastes the comments not sent yet into the tab's agent and submits them;

@@ -134,10 +134,12 @@
   };
 
   function restore(draft) {
-    const found = find(draft) || (rowAt(draft.side, draft.line) ? { row: rowAt(draft.side, draft.line) } : null);
-    if (!found) return;
+    // By its line's text, else its number, else the nearest line there is.
+    const row = find(draft)?.row || rowAt(draft.side, draft.line) || rows[Math.min(Math.max(draft.line, 1), rows.length) - 1];
+    if (!row) return;
     const existing = draft.id ? comments.find((comment) => comment.id === draft.id) || null : null;
-    openEditor(found.row, existing, draft.focused);
+    // Focused again where it is, without undoing the scroll the reload asked for.
+    openEditor(row, existing, draft.focused ? "quietly" : false);
     editor.querySelector("textarea").value = draft.text;
   }
 
@@ -345,7 +347,8 @@
     editor.yattyEditing = existing ? existing.id : null;
     editor.yattyWhere = where;
     if (shownRow) { shownRow.style.display = "none"; hidden = shownRow; }
-    if (focus) area.focus();
+    if (focus === "quietly") area.focus({ preventScroll: true });
+    else if (focus) area.focus();
   }
 
   function closeEditor() {

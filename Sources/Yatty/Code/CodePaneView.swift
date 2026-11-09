@@ -21,6 +21,9 @@ struct CodePaneView: View {
   @State private var showingFiles = false
   @State private var sending = false
   @State private var copied = false
+  /// Shown again with the page as it was left: stay where the reader was,
+  /// unless the file changed meanwhile.
+  @State private var keepPlace = true
 
   var body: some View {
     VStack(spacing: 0) {
@@ -61,6 +64,7 @@ struct CodePaneView: View {
         store.openCode(event.path, tab: tab.id, in: worktree, following: true)
       } else if let file = code.file, event.paths.contains(file) {
         scroll = code.following ? .change : .none
+        keepPlace = !code.following
         loads += 1
       } else if !code.following {
         changedElsewhere = event.path
@@ -236,9 +240,11 @@ struct CodePaneView: View {
       .buttonStyle(.borderedProminent)
       .disabled(sending || agent == nil || !code.comments.contains { !$0.sent })
       .help(
-        agent == nil
-          ? "No agent is running in this tab's terminals. Copy Prompt puts the comments on the clipboard."
-          : "Paste the comments not sent yet into the agent beside the code, and submit them")
+        agent != nil
+          ? "Paste the comments not sent yet into the agent beside the code, and submit them"
+          : store.agentAsking(in: tab, of: worktree)
+            ? "The agent is asking you something: answer it first, so Enter doesn't."
+            : "No agent is running in this tab's terminals. Copy Prompt puts the comments on the clipboard.")
     }
     .controlSize(.small)
     .padding(.horizontal, 10)
@@ -317,7 +323,8 @@ struct CodePaneView: View {
       let bridge = store.codePage(for: tab.id).bridge
       // The page already shows this file (the tab was left and come back to):
       // stay where the reader was.
-      if loaded == nil, bridge.current?.path == file, scroll == .change { scroll = .none }
+      if keepPlace, loaded == nil, bridge.current?.path == file, scroll == .change { scroll = .none }
+      keepPlace = false
       loaded = CodeShown(
         path: file, text: read.text, diff: read.diff, untracked: read.untracked, language: Self.language(of: file),
         serial: (bridge.current?.serial ?? 0) + 1, scroll: scroll)

@@ -179,9 +179,10 @@ enum CodeWatch {
 
 enum CodeAgent {
   /// The pane comments go to: the focused one if an agent reports from it,
-  /// else the first that does; nil when none does (a shell would run them).
-  static func pane(in panes: [String], focused: String, reporting: Set<String>) -> String? {
-    if reporting.contains(focused) { return focused }
-    return panes.first { reporting.contains($0) }
+  /// else the first that does; nil when none does (a shell would run them),
+  /// or when that agent is `asking` the user something (Enter would answer it).
+  static func pane(in panes: [String], focused: String, reporting: Set<String>, asking: Set<String> = []) -> String? {
+    let pane = reporting.contains(focused) ? focused : panes.first { reporting.contains($0) }
+    return pane.flatMap { asking.contains($0) ? nil : $0 }
   }
 }

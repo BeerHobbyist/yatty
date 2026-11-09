@@ -111,6 +111,13 @@ const draft = d.querySelector(".yatty-box textarea");
 check(draft && draft.value === "half-typed", "a comment being written survives a reload");
 check(draft && lineUnder(draft.closest(".yatty-row")) === "2", "under its line, moved: " + (draft && lineUnder(draft.closest(".yatty-row"))));
 d.querySelector(".yatty-box textarea").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+// Its line gone altogether: the nearest one keeps it.
+click(rows9().at(-1).querySelector(".n"));
+d.querySelector(".yatty-box textarea").value = "still here";
+w.yattyShow(file({ text: "a\nb\n", diff: "", scroll: null }));
+const kept = d.querySelector(".yatty-box textarea");
+check(kept && kept.value === "still here" && lineUnder(kept.closest(".yatty-row")) === "2", "a draft whose line went stays, at the nearest line");
+kept && kept.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 w.yattyShow(file({ text: "// one\n// two\n" + text, diff: "", scroll: null }));
 w.yattySetComments([{ id: "s", path: "S.swift", line: 1, side: "new", code: "// one", text: "<b>hi</b>", outdated: false, sent: true }]);
 check(!d.querySelector(".yatty-text b") && d.querySelector(".yatty-comment").textContent.includes("sent"), "comment text is text; a sent one says so");
