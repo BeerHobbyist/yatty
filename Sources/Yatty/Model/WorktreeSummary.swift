@@ -63,6 +63,13 @@ enum WorktreeSummary {
     }
   }
 
+  /// Worktree ids as the sidebar lists them: the floated ones first, in
+  /// their sections' order, then the rest in project order.
+  static func sidebarOrder(_ all: [String], active: [(state: AgentState, ids: [String])]) -> [String] {
+    let floated = active.flatMap(\.ids)
+    return floated + all.filter { !floated.contains($0) }
+  }
+
   private static func sync(_ status: GitStatus) -> String? {
     if status.changed == 0 {
       switch (status.ahead, status.behind) {

@@ -102,3 +102,34 @@ import Testing
   // The automatic name typed back (⏎ on an unedited field): still automatic.
   #expect(AppStore.cleanLabel(" login", automatic: "login") == nil)
 }
+
+@Test func agentsAreOrderedByWhenTheyEnteredTheirState() {
+  let a = PaneKey(worktree: "/a", pane: "0"), b = PaneKey(worktree: "/b", pane: "0"), c = PaneKey(worktree: "/c", pane: "0")
+  let entered = AgentMonitor.enteredTimes(
+    old: [a: 100, b: 200],
+    oldStates: [a: .working, b: .needsAction],
+    newStates: [a: .working, b: .working, c: .done],
+    reportedAt: [a: 900, b: 950, c: 50],
+    now: 1_000)
+  // Still working: its time stays, however often the report is rewritten.
+  #expect(entered[a] == 100)
+  // Changed state: from now.
+  #expect(entered[b] == 1_000)
+  // First seen: from its report.
+  #expect(entered[c] == 50)
+  #expect(entered.count == 3)
+}
+
+@Test func onlyFreshFinishesFloat() {
+  #expect(AgentMonitor.floats(.needsAction, reportedAt: 10, launchedAt: 100))
+  #expect(AgentMonitor.floats(.working, reportedAt: 10, launchedAt: 100))
+  #expect(AgentMonitor.floats(.done, reportedAt: 150, launchedAt: 100))
+  // Finished before Yatty started: seen or not, it stays in its project.
+  #expect(!AgentMonitor.floats(.done, reportedAt: 50, launchedAt: 100))
+  #expect(!AgentMonitor.floats(.idle, reportedAt: 150, launchedAt: 100))
+}
+
+@Test func sidebarOrderPutsFloatedRowsFirst() {
+  let active: [(state: AgentState, ids: [String])] = [(.needsAction, ["/b"]), (.done, ["/c"])]
+  #expect(WorktreeSummary.sidebarOrder(["/a", "/b", "/c", "/d"], active: active) == ["/b", "/c", "/a", "/d"])
+}

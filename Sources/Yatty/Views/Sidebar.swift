@@ -12,7 +12,10 @@ struct Sidebar: View {
     @Bindable var store = store
     let query = store.sidebarFilter
     let filtering = !query.trimmingCharacters(in: .whitespaces).isEmpty
-    let active = activeSections(query: query)
+    let all = store.repos.flatMap { store.worktrees[$0.id] ?? [] } + store.hosts.flatMap(\.worktrees)
+    let everyFloated = Set(store.floatedSections(of: all).flatMap(\.ids))
+    let active = store.floatedSections(of: all.filter { matches($0, query: query, project: projectName(of: $0)) })
+      .map { section in (state: section.state, worktrees: section.ids.compactMap { id in all.first { $0.id == id } }) }
     let floated = Set(active.flatMap { $0.worktrees.map(\.id) })
     let firstProject = store.repos.first?.id ?? store.hosts.first?.id
     ScrollViewReader { proxy in
@@ -70,6 +73,13 @@ struct Sidebar: View {
       }
       // Rows float up and sink back, not jump.
       .animation(.easeOut(duration: 0.25), value: active.map { $0.worktrees.map(\.id) })
+      .onChange(of: everyFloated) { before, after in
+        // The selected row sinking into a folded project would vanish: open it.
+        guard let selected = store.selection, before.contains(selected), !after.contains(selected),
+          let project = store.projectID(of: selected), store.foldedProjects.contains(project)
+        else { return }
+        withAnimation(.easeOut(duration: 0.2)) { store.toggleFold(project) }
+      }
       .onChange(of: store.renamingWorktree?.id) { _, id in
         // Lazily built: a row scrolled away has no field to edit until shown.
         if let id { withAnimation { proxy.scrollTo(id) } }
@@ -129,20 +139,6 @@ struct Sidebar: View {
         guard let id else { return }
         store.select(id, unfolding: !floated.contains(id))
       })
-  }
-
-  /// Worktrees whose agent wants attention or works, by state, filtered.
-  private func activeSections(query: String) -> [(state: AgentState, worktrees: [Worktree])] {
-    let all = store.repos.flatMap { store.worktrees[$0.id] ?? [] } + store.hosts.flatMap(\.worktrees)
-    let agents = all.compactMap { worktree -> (id: String, state: AgentState, since: Date)? in
-      guard let state = store.agents.state(of: worktree), state != .idle,
-        matches(worktree, query: query, project: projectName(of: worktree))
-      else { return nil }
-      return (worktree.id, state, store.agents.since(of: worktree, in: state) ?? .distantFuture)
-    }
-    return WorktreeSummary.activeSections(agents).map { section in
-      (section.state, section.ids.compactMap { id in all.first { $0.id == id } })
-    }
   }
 
   private func title(of state: AgentState) -> String {
@@ -266,7 +262,8 @@ struct WorktreeRow: View {
   @FocusState private var nameFocused: Bool
 
   var body: some View {
-    let renaming = project == nil && store.renamingWorktree?.id == worktree.id
+    // Each worktree has one row, floated or not: that's where it's renamed.
+    let renaming = store.renamingWorktree?.id == worktree.id
     HStack(spacing: 8) {
       Octicon(worktree.isRemote ? .fileDirectory : worktree.isMain ? .home : .gitBranch, size: 14)
         .foregroundStyle(Color.accentColor)
