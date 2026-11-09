@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="diff2html.min.css">
+<link rel="stylesheet" href="github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  /* Yatty's diff window: diff2html, dressed to sit in a Mac window. */
+  :root { color-scheme: light dark; }
+  body { margin: 0; background: Canvas; color: CanvasText; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; }
+  #diff { padding: 12px 14px 40px; }
+  .d2h-wrapper { font-family: inherit; }
+  .d2h-code-line, .d2h-code-side-line, .d2h-code-linenumber, .d2h-code-side-linenumber,
+  .d2h-code-line-ctn { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  /* The theme's own background would paint over diff2html's line colours. */
+  .hljs { background: transparent !important; }
+  .d2h-file-wrapper { border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+  .d2h-file-header { position: sticky; top: 0; z-index: 2; }
+  .d2h-file-list-wrapper { margin-bottom: 14px; }
+</style>
+<script src="diff2html-ui-slim.min.js"></script>
+</head>
+<body>
+<div id="diff"></div>
+<script>
+  // Called by the app with the unified diff and "side-by-side" or "line-by-line".
+  // Keeps the scroll position, so refreshing doesn't throw the reader back up.
+  window.yattyRender = function (diff, layout) {
+    const y = window.scrollY;
+    const target = document.getElementById("diff");
+    const ui = new Diff2HtmlUI(target, diff, {
+      outputFormat: layout,
+      drawFileList: true,
+      fileListToggle: true,
+      fileListStartVisible: false,
+      fileContentToggle: true,
+      matching: "lines",
+      diffStyle: "word",
+      highlight: true,
+      synchronisedScroll: true,
+      colorScheme: "auto",
+      stickyFileHeaders: true,
+      diffMaxChanges: 5000,
+      maxLineLengthHighlight: 2000,
+    });
+    ui.draw(); // highlights too
+    window.scrollTo(0, y);
+    return document.querySelectorAll(".d2h-file-wrapper").length;
+  };
+</script>
+</body>
+</html>

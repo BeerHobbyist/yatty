@@ -28,6 +28,8 @@ install -m 755 "$root/Vendor/zmx" "$app/Contents/MacOS/zmx"
 mkdir -p "$app/Contents/Resources/bin" "$app/Contents/Resources/skills"
 install -m 755 "$bindir/yatty-cli" "$app/Contents/Resources/bin/yatty"
 cp -R "$root/skills/yatty" "$app/Contents/Resources/skills/yatty"
+# The diff window's page and its renderer (diff2html; see THIRD-PARTY.md).
+cp -R "$root/Resources/diff" "$app/Contents/Resources/diff"
 
 codesign --force --sign - "$app/Contents/MacOS/zmx"
 codesign --force --sign - "$app/Contents/Resources/bin/yatty"

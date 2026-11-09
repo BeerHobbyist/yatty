@@ -177,9 +177,15 @@ extension AppStore {
     let base = word == "base" ? await Git.defaultBase(root: repo.path) : ""
     let target = try CLIRules.diffTarget(word, base: base).get()
     let available = await Task.detached { DiffViewers.available(in: Run.loginPath) }.value
-    let viewer = DiffViewers.resolve(diffViewer, available: available)
+    let chosen = DiffViewers.resolve(diffViewer, available: available)
+    // A sandboxed agent's diff runs in a sandboxed tab, never in the app.
+    let viewer = sandboxed ? DiffViewers.forSandbox(chosen, available: available) : chosen
     // It may have been closed meanwhile.
     guard let current = self.worktree(withID: worktree.id) else { throw CLIError("the worktree was closed") }
+    if viewer == .yatty {
+      openDiff(current, target: target)
+      return "diff (\(word)) opened in Yatty's diff window"
+    }
     newTab(
       in: current, command: DiffViewers.command(viewer, args: target.args), name: "diff: \(target.title)",
       sandboxed: sandboxed)

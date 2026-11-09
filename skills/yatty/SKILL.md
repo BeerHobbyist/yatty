@@ -19,7 +19,7 @@ If `yatty` isn't on your PATH, use `"$YATTY_CLI"` instead: same commands.
 
 - **A command that doesn't finish by itself**: a dev server, `--watch` mode, a long build or test run you want to check on later. Run it in its own tab instead of in your own shell, where it would block you (or be killed when your command times out).
 - **Checking on it**: read the tab's output instead of guessing.
-- **Showing the user something**: open a diff in a tab, or ask for their attention when you're blocked or done with something they need to see.
+- **Showing the user something**: open a diff for them, or ask for their attention when you're blocked or done with something they need to see.
 
 Don't use it for quick commands that finish in seconds; run those directly.
 
@@ -32,7 +32,7 @@ yatty tab read dev --lines 40           # its last 40 lines (default 50)
 yatty tab send dev --key C-c            # stop it (keys: C-c, Enter, Escape, Up, Tab, M-x…)
 yatty tab send dev "rs"                 # type a line into it (Enter follows unless --no-enter)
 yatty tab close dev
-yatty diff                              # working changes, in a tab for the user (also: staged, base, a ref, or a range like SHA^..SHA)
+yatty diff                              # working changes, shown to the user in Yatty's diff window or their viewer's tab (also: staged, base, a ref, or a range like SHA^..SHA)
 yatty notify "Migration ready: review the SQL in tab db"
 yatty status                            # every worktree and its agent's state
 ```
@@ -49,7 +49,7 @@ yatty status                            # every worktree and its agent's state
 
 ## In a sandbox
 
-Inside fence (`$FENCE_SANDBOX` is set), `yatty` asks the app on the sandbox's terms: what `tab new` and `diff` start runs in the sandbox too, and `tab send` types only into tabs opened that way, not into the user's tabs or other agents'. It needs the app open, and fence must allow Yatty's sandbox socket. If it can't reach Yatty, or refuses, tell the user; don't look for a way around it.
+Inside fence (`$FENCE_SANDBOX` is set), `yatty` asks the app on the sandbox's terms: what `tab new` and `diff` start runs in the sandbox too (a diff opens in a terminal viewer's tab then, not in Yatty's diff window), and `tab send` types only into tabs opened that way, not into the user's tabs or other agents'. It needs the app open, and fence must allow Yatty's sandbox socket. If it can't reach Yatty, or refuses, tell the user; don't look for a way around it.
 
 ## Etiquette
 

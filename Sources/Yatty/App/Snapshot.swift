@@ -1,4 +1,5 @@
 import AppKit
+import WebKit
 
 /// With `YATTY_SNAPSHOT=<png path>`, draws the app's windows into one PNG once
 /// they've settled, then quits: how visual checks see the app. Terminals draw
@@ -30,6 +31,19 @@ enum Snapshot {
     return value.isEmpty ? nil : value
   }
 
+  /// A web view draws out of process, where the window capture can't see
+  /// it: its own picture goes beside the snapshot, as `<name>-web.png`.
+  @MainActor static func saveWebView(_ view: WKWebView) {
+    guard let path = ProcessInfo.processInfo.environment["YATTY_SNAPSHOT"], !path.isEmpty else { return }
+    view.takeSnapshot(with: nil) { image, error in
+      if let error { note("diff picture failed: \(error)") }
+      guard let image, let tiff = image.tiffRepresentation,
+        let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
+      else { return }
+      try? png.write(to: URL(fileURLWithPath: path.replacingOccurrences(of: ".png", with: "-web.png")))
+    }
+  }
+
   @MainActor private static var scheduled = false
 
   /// A line for the snapshot script's log; nothing outside snapshot mode.
@@ -56,6 +70,12 @@ enum Snapshot {
   /// the sidebar's contents. Blur and Metal content still come out empty.
   @MainActor private static func capture(_ view: NSView) -> NSBitmapImageRep? {
     guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+    // On a 2x display the layer render below comes out blank; AppKit's own
+    // display caching draws it.
+    if (view.window?.backingScaleFactor ?? 1) > 1 {
+      view.cacheDisplay(in: view.bounds, to: rep)
+      return rep
+    }
     guard let layer = view.layer, let context = NSGraphicsContext(bitmapImageRep: rep) else {
       view.cacheDisplay(in: view.bounds, to: rep)
       return rep

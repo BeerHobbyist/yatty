@@ -1,7 +1,7 @@
 import Foundation
 
 /// What to diff, as `git diff` arguments.
-enum DiffTarget: Hashable, Sendable {
+enum DiffTarget: Hashable, Codable, Sendable {
   case working
   case staged
   /// Against the base branch (`origin/main`): what the branch adds.
@@ -35,10 +35,13 @@ enum DiffTarget: Hashable, Sendable {
 /// The diff viewers agentree offers, each turning `git diff` arguments into
 /// a shell command (agentree's src/services/diff.ts).
 enum DiffViewer: String, CaseIterable, Codable, Sendable {
+  /// Yatty's own diff window (`DiffWindow`); the rest run in a terminal tab.
+  case yatty
   case hunk, diffnav, delta, difftastic, lumen, diffview, git
 
   var label: String {
     switch self {
+    case .yatty: "Yatty"
     case .diffview: "nvim diffview"
     case .git: "git diff"
     default: rawValue
@@ -48,6 +51,7 @@ enum DiffViewer: String, CaseIterable, Codable, Sendable {
   /// Programs it needs on PATH.
   var needs: [String] {
     switch self {
+    case .yatty: []
     case .hunk: ["hunk"]
     case .diffnav: ["diffnav", "delta"]
     case .delta: ["delta"]
@@ -62,8 +66,11 @@ enum DiffViewer: String, CaseIterable, Codable, Sendable {
   /// plugin can't be detected).
   var auto: Bool { self != .diffview }
 
+  /// The terminal command; Yatty's own viewer has none (`DiffWindow`).
   func command(args: [String]) -> String {
     switch self {
+    case .yatty:
+      return Self.git(args)
     case .hunk:
       return (["hunk", "diff"] + args).map(shellQuote).joined(separator: " ")
     case .diffnav:
@@ -127,6 +134,12 @@ enum DiffViewers {
     return DiffViewer.allCases.first { $0.auto && $0 != .git && available.contains($0) } ?? .git
   }
 
+  /// For a sandboxed agent: never Yatty's window, which runs git in the app,
+  /// outside the sandbox; the user's terminal viewer, else the first installed.
+  static func forSandbox(_ viewer: DiffViewer, available: [DiffViewer]) -> DiffViewer {
+    viewer == .yatty ? resolve(nil, available: available.filter { $0 != .yatty }) : viewer
+  }
+
   static func next(after current: DiffViewer, available: [DiffViewer]) -> DiffViewer {
     let list = available.isEmpty ? [.git] : available
     let index = list.firstIndex(of: current) ?? -1
@@ -167,7 +180,8 @@ extension Git {
   /// The branch's own commits (since `base`), else the last 50.
   static func branchCommits(path: String, base: String) async -> [Commit] {
     func log(_ args: [String]) async -> String {
-      (try? await run(["log", "--first-parent", "--format=%H%x1f%h%x1f%P%x1f%s"] + args, in: path)) ?? ""
+      // Guarded: log.showSignature in the repository's config would run gpg.program.
+      (try? await GuardedGit.run(["log", "--first-parent", "--format=%H%x1f%h%x1f%P%x1f%s"] + args, in: path)) ?? ""
     }
     var out = await log(["--max-count=200", "\(base)..HEAD"])
     if out.isEmpty { out = await log(["--max-count=50", "HEAD"]) }

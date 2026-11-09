@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Picks what to diff and opens it in the user's viewer, in a tab of its
-/// own — agentree's diff picker.
+/// Picks what to diff and opens it in the user's viewer: Yatty's diff
+/// window, or a terminal program in a tab of its own.
 struct DiffSheet: View {
   let worktree: Worktree
   @Environment(AppStore.self) private var store
@@ -17,7 +17,8 @@ struct DiffSheet: View {
   @State private var commits: [Commit] = []
   @State private var cursor: String?
   @State private var mark: String?
-  @State private var available: [DiffViewer] = []
+  /// Yatty's window needs nothing installed: there from the start.
+  @State private var available: [DiffViewer] = [.yatty]
 
   var body: some View {
     let viewer = DiffViewers.resolve(store.diffViewer, available: available)
@@ -104,7 +105,11 @@ struct DiffSheet: View {
 
   private func open(_ viewer: DiffViewer) {
     guard let target else { return }
-    store.newTab(in: worktree, command: DiffViewers.command(viewer, args: target.args), name: "diff: \(target.title)")
+    if viewer == .yatty {
+      store.openDiff(worktree, target: target)
+    } else {
+      store.newTab(in: worktree, command: DiffViewers.command(viewer, args: target.args), name: "diff: \(target.title)")
+    }
     dismiss()
   }
 }
