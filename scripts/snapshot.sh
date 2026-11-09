@@ -4,7 +4,7 @@
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
 #   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff,
 #   ssh, add-host, disconnected, folded, review-comments, sidebar-filter, sidebar-hover,
-#   sidebar-rename, pr-checks, pr-description, pr-ready, pr-merged, diff-tab, palette, help, settings
+#   sidebar-rename, pr-checks, pr-description, pr-ready, pr-merged, diff-tab, code, palette, help, settings
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -208,6 +208,31 @@ EOF
     printf '# Sample\n\nLogin with magic links.\n\n- emails a one-time link\n' > "$login/README.md"
     printf 'import Foundation\n\n/// How long a link lasts.\nlet linkLifetime: TimeInterval = 15 * 60\n\nfunc expires(at issued: Date) -> Date {\n  issued.addingTimeInterval(linkLifetime)\n}\n' > "$login/MagicLink.swift"
     export YATTY_SNAPSHOT_SHEET=diff-tab YATTY_SNAPSHOT_DELAY="${YATTY_SNAPSHOT_DELAY:-6}"
+    ;;
+  code)
+    # The code beside the agent: a changed file, a comment on it.
+    printf 'import Foundation\n\n/// How long a link lasts.\nlet linkLifetime: TimeInterval = 15 * 60\n' > "$login/MagicLink.swift"
+    git -C "$login" add MagicLink.swift
+    git -C "$login" -c user.name=y -c user.email=y@y commit -q -m link
+    printf 'import Foundation\n\n/// How long a link lasts.\nlet linkLifetime: TimeInterval = 10 * 60\n\nfunc expires(at issued: Date) -> Date {\n  issued.addingTimeInterval(linkLifetime)\n}\n' > "$login/MagicLink.swift"
+    cat > "$state" <<EOF
+{
+  "repos": [{ "name": "sample-app", "path": "$repo" }],
+  "selectedWorktree": "$login",
+  "layouts": {
+    "$login": {
+      "selectedTab": "t0",
+      "tabs": [
+        { "id": "t0", "focusedPane": "0", "root": { "pane": { "_0": "0" } },
+          "code": { "file": "MagicLink.swift", "following": false, "comments": [
+            { "id": "c1", "path": "MagicLink.swift", "line": 4, "side": "new", "code": "let linkLifetime: TimeInterval = 10 * 60",
+              "text": "Why 10 minutes? Make it a setting." } ] } }
+      ]
+    }
+  }
+}
+EOF
+    export YATTY_SNAPSHOT_DELAY="${YATTY_SNAPSHOT_DELAY:-6}"
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

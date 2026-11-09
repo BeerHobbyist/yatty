@@ -337,6 +337,8 @@ extension AppStore {
       updateLayout(worktree.id) { $0.close(pane) }
     }
     if tab.diff == nil {
+      forgetCode(tab.id)
+      stopWatchingCodeIfUnused(in: worktree)
       Task { await endSessions(tab.root.panes, of: worktree) }
     } else {
       forgetDiff(tab.id)
@@ -392,7 +394,11 @@ extension AppStore {
     defer { retiring.remove(worktree.id) }
     let panes = Set(layout(for: worktree).allPanes).union(["0"])
     for pane in panes { dropTerminal(PaneKey(worktree: worktree.id, pane: pane)) }
-    for tab in layout(for: worktree).tabs where tab.diff != nil { forgetDiff(tab.id) }
+    for tab in layout(for: worktree).tabs {
+      if tab.diff != nil { forgetDiff(tab.id) } else { forgetCode(tab.id) }
+    }
+    codeWatchers.removeValue(forKey: worktree.id)?.stop()
+    codeChanges[worktree.id] = nil
     layouts[worktree.id] = nil
     labels[worktree.id] = nil
     saveState()

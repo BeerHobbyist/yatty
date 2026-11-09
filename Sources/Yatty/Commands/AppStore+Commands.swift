@@ -16,6 +16,8 @@ enum Shortcuts {
   static let newTab = KeyboardShortcut("t")
   static let newAgentTab = KeyboardShortcut("t", modifiers: [.command, .option])
   static let openDiff = KeyboardShortcut("d", modifiers: [.command, .option])
+  static let showCode = KeyboardShortcut("e")
+  static let goToFile = KeyboardShortcut("p")
   static let splitRight = KeyboardShortcut("d")
   static let splitDown = KeyboardShortcut("d", modifiers: [.command, .shift])
   static let equalize = KeyboardShortcut("=", modifiers: [.command, .control])
@@ -42,6 +44,8 @@ struct CommandContext {
   var showingDiffTab = false
   /// Its pull request has failed checks from GitHub Actions runs.
   var hasFailedRuns = false
+  /// The front tab shows its code beside the terminals.
+  var showingCode = false
 
   /// A worktree here, with git: diffs and pull requests apply.
   var isLocal: Bool { selected.map { !$0.isRemote } ?? false }
@@ -52,6 +56,9 @@ struct CommandContext {
   /// Splits and moving between panes: a terminal tab in front.
   var canSplit: Bool { hasTerminals && !showingDiffTab }
   var canDiff: Bool { isLocal }
+  /// Code beside a terminal tab: its files are here.
+  var canShowCode: Bool { isLocal && !showingDiffTab }
+  var canGoToFile: Bool { canShowCode && showingCode }
   var canShowPullRequest: Bool { isLocal }
   var canMerge: Bool { isLocal && openPullRequest }
   var canReviewComments: Bool { isLocal && hasPullRequest }
@@ -66,7 +73,8 @@ extension AppStore {
       hasPullRequest: badge != nil,
       showingDiffTab: selectedWorktree.flatMap { layout(for: $0).selected?.diff } != nil,
       hasFailedRuns: selectedWorktree.flatMap { pullRequests.details[$0.id] }.map { !PullRequests.failedRuns($0).isEmpty }
-        ?? false)
+        ?? false,
+      showingCode: selectedWorktree.flatMap { layout(for: $0).selected?.code?.shown } == true)
   }
 
   /// Every command that applies now, in the palette's order.
@@ -114,6 +122,13 @@ extension AppStore {
       add("tab.agent", "New Agent Tab", "Terminal", Shortcuts.newAgentTab) { self.newTab(in: selected, agent: true) }
       add("diff.open", "Open Diff…", "Terminal", Shortcuts.openDiff, when: context.canDiff) {
         self.diffingWorktree = selected
+      }
+      add("code.toggle", context.showingCode ? "Hide Code" : "Show Code", "Terminal", Shortcuts.showCode,
+        detail: "The file the agent is changing, beside its terminal", when: context.canShowCode) {
+        self.toggleCode(in: selected)
+      }
+      add("code.goto", "Go to File…", "Terminal", Shortcuts.goToFile, when: context.canGoToFile) {
+        self.codeQuickOpen = self.layout(for: selected).selectedTab
       }
       add("split.right", "Split Right", "Terminal", Shortcuts.splitRight, when: context.canSplit,
         onPane(.split(.horizontal, newFirst: false)))

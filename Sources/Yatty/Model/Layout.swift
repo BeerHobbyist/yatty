@@ -144,6 +144,8 @@ struct TerminalTab: Codable, Identifiable, Equatable, Sendable {
   /// A tab showing a diff (Yatty's own viewer) instead of terminals. Its one
   /// pane is only a handle for focus and closing: it never has a session.
   var diff: DiffTab?
+  /// The code beside the tab's terminals, once the user showed it.
+  var code: CodeView?
 
   /// The title when the user gave it none and no terminal names it.
   var defaultTitle: String? { diff.map { "diff: \($0.target.title)" } }
@@ -167,6 +169,50 @@ struct DiffTab: Codable, Equatable, Sendable {
   }
 }
 
+/// The code beside a tab's terminals, as in Cursor: the file it shows, and
+/// the comments the user left for the agent.
+struct CodeView: Codable, Equatable, Sendable {
+  /// What the changes are marked against.
+  enum Base: String, Codable, Sendable {
+    /// The last commit: what isn't committed yet.
+    case head
+    /// Where the branch left the repository's default branch: all of its work.
+    case branch
+  }
+
+  var shown = true
+  /// The file shown, relative to the worktree.
+  var file: String?
+  /// Opens each file that changes, until the user looks around themselves.
+  var following = true
+  var base = Base.head
+  /// The code's share of the tab's width.
+  var ratio = 0.55
+  var comments: [DiffComment] = []
+
+  init(shown: Bool = true, file: String? = nil, following: Bool = true, base: Base = .head, ratio: Double = 0.55,
+    comments: [DiffComment] = [])
+  {
+    self.shown = shown
+    self.file = file
+    self.following = following
+    self.base = base
+    self.ratio = ratio
+    self.comments = comments
+  }
+
+  // Saved by an older Yatty, or with fields it didn't know: the defaults.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    shown = (try? container.decodeIfPresent(Bool.self, forKey: .shown)) ?? true
+    file = try? container.decodeIfPresent(String.self, forKey: .file)
+    following = (try? container.decodeIfPresent(Bool.self, forKey: .following)) ?? true
+    base = (try? container.decodeIfPresent(Base.self, forKey: .base)) ?? .head
+    ratio = (try? container.decodeIfPresent(Double.self, forKey: .ratio)) ?? 0.55
+    comments = (try? container.decodeIfPresent([DiffComment].self, forKey: .comments)) ?? []
+  }
+}
+
 /// A comment on one line of a diff: the user's own review, for their agent.
 struct DiffComment: Codable, Equatable, Identifiable, Sendable {
   enum Side: String, Codable, Sendable {
@@ -186,6 +232,8 @@ struct DiffComment: Codable, Equatable, Identifiable, Sendable {
   var text: String
   /// Its line is no longer in the diff (the page found it nowhere).
   var outdated = false
+  /// Sent to the agent already (from the code view).
+  var sent = false
 
   /// Where the page found a comment's line in the diff it drew.
   struct Anchor: Equatable, Sendable {
@@ -206,6 +254,7 @@ extension DiffComment {
     code = try container.decode(String.self, forKey: .code)
     text = try container.decode(String.self, forKey: .text)
     outdated = try container.decodeIfPresent(Bool.self, forKey: .outdated) ?? false
+    sent = try container.decodeIfPresent(Bool.self, forKey: .sent) ?? false
   }
 }
 
@@ -259,6 +308,14 @@ struct WorktreeLayout: Codable, Equatable, Sendable {
     guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
     tabs[index].diff = DiffTab(target: target)
     tabs[index].name = "diff: \(target.title)"
+  }
+
+  /// Changes a terminal tab's code view, making one if it has none.
+  mutating func updateCode(_ tabID: String, _ change: (inout CodeView) -> Void) {
+    guard let index = tabs.firstIndex(where: { $0.id == tabID }), tabs[index].diff == nil else { return }
+    var code = tabs[index].code ?? CodeView()
+    change(&code)
+    tabs[index].code = code
   }
 
   mutating func updateDiff(_ tabID: String, _ change: (inout DiffTab) -> Void) {

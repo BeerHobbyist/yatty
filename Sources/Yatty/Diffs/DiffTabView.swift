@@ -292,34 +292,18 @@ struct DiffWebView: NSViewRepresentable {
       render(in: webView)
     }
 
-    /// A comment as the page has it.
-    private static func page(_ comment: DiffComment) -> [String: Any] {
-      [
-        "id": comment.id, "path": comment.path, "line": comment.line, "side": comment.side.rawValue,
-        "code": comment.code, "text": comment.text, "outdated": comment.outdated,
-      ]
-    }
+    private static func page(_ comment: DiffComment) -> [String: Any] { comment.page }
 
     /// The page saved or deleted a comment, or found where comments' lines went.
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
       guard let body = message.body as? [String: Any], let type = body["type"] as? String else { return }
       switch type {
       case "save":
-        guard let path = body["path"] as? String, let line = (body["line"] as? NSNumber)?.intValue,
-          let side = (body["side"] as? String).flatMap(DiffComment.Side.init(rawValue:)),
-          let text = (body["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty
-        else { return }
-        let id = (body["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString
-        onMessage(.save(DiffComment(id: id, path: path, line: line, side: side, code: body["code"] as? String ?? "", text: text)))
+        if let comment = DiffComment(saved: body) { onMessage(.save(comment)) }
       case "delete":
         if let id = body["id"] as? String { onMessage(.delete(id)) }
       case "place":
-        let anchors = (body["anchors"] as? [[String: Any]] ?? []).compactMap { anchor -> DiffComment.Anchor? in
-          guard let id = anchor["id"] as? String, let line = (anchor["line"] as? NSNumber)?.intValue,
-            let outdated = (anchor["outdated"] as? NSNumber)?.boolValue
-          else { return nil }
-          return DiffComment.Anchor(id: id, line: line, outdated: outdated)
-        }
+        let anchors = DiffComment.Anchor.list(body)
         if !anchors.isEmpty { onMessage(.place(anchors)) }
       default:
         break
@@ -374,17 +358,51 @@ private final class MessageRelay: NSObject, WKScriptMessageHandler {
 }
 
 enum DiffAssets {
-  /// `Contents/Resources/diff/viewer.html` in the app, else the repository's
-  /// copy (a run from the build folder has no bundle).
-  static var viewer: URL? {
-    if let bundled = Bundle.main.resourceURL?.appendingPathComponent("diff/viewer.html"),
+  static var viewer: URL? { page("viewer.html") }
+
+  /// `Contents/Resources/diff/<name>` in the app, else the repository's copy
+  /// (a run from the build folder has no bundle).
+  static func page(_ name: String) -> URL? {
+    if let bundled = Bundle.main.resourceURL?.appendingPathComponent("diff/" + name),
       FileManager.default.fileExists(atPath: bundled.path)
     {
       return bundled
     }
     let repo = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-      .deletingLastPathComponent().appendingPathComponent("Resources/diff/viewer.html")
+      .deletingLastPathComponent().appendingPathComponent("Resources/diff/" + name)
     return FileManager.default.fileExists(atPath: repo.path) ? repo : nil
+  }
+}
+
+extension DiffComment {
+  /// A comment a page saved; nil without a path, line, side or text.
+  init?(saved body: [String: Any]) {
+    guard let path = body["path"] as? String, let line = (body["line"] as? NSNumber)?.intValue,
+      let side = (body["side"] as? String).flatMap(Side.init(rawValue:)),
+      let text = (body["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty
+    else { return nil }
+    let id = (body["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString
+    self.init(id: id, path: path, line: line, side: side, code: body["code"] as? String ?? "", text: text)
+  }
+
+  /// The comment as the pages have it.
+  var page: [String: Any] {
+    [
+      "id": id, "path": path, "line": line, "side": side.rawValue, "code": code, "text": text,
+      "outdated": outdated, "sent": sent,
+    ]
+  }
+}
+
+extension DiffComment.Anchor {
+  /// Where a page found comments' lines (its "place" message).
+  static func list(_ body: [String: Any]) -> [Self] {
+    (body["anchors"] as? [[String: Any]] ?? []).compactMap { anchor in
+      guard let id = anchor["id"] as? String, let line = (anchor["line"] as? NSNumber)?.intValue,
+        let outdated = (anchor["outdated"] as? NSNumber)?.boolValue
+      else { return nil }
+      return Self(id: id, line: line, outdated: outdated)
+    }
   }
 }

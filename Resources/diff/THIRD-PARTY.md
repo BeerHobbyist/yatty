@@ -1,7 +1,8 @@
 # Third-party files in this folder
 
 - `diff2html.min.js`, `diff2html-ui-slim.min.js`, `diff2html.min.css`: diff2html 3.4.56 (npm), MIT.
-- `github.min.css`, `github-dark.min.css`: highlight.js 11.12.0 styles (npm), BSD-3-Clause.
+- `highlight.min.js`, `dart.min.js`, `github.min.css`, `github-dark.min.css`: highlight.js 11.12.0
+  (npm `@highlightjs/cdn-assets`), BSD-3-Clause.
 
 ## diff2html
 

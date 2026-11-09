@@ -220,6 +220,32 @@ Its Viewer menu picks where, and remembers it:
   the viewer quits. An empty diff says so instead of flashing past, and pagers
   don't quit on a short one.
 
+### Code beside the agent
+
+Show Code (⌘E, or the **</>** button in the tab bar) puts the code on the left
+of a tab and its terminals on the right, as in Cursor: for reading what your
+agent writes, not for typing.
+
+- **It follows the agent.** Each file that changes in the worktree opens as it
+  changes, scrolled to the change. Scroll or click to look around yourself and
+  it stops; **Follow** picks it up again, and a bar names the files that change
+  meanwhile. Files git ignores, and other worktrees inside this one, don't count.
+- **The whole file, changes in place.** Added and changed lines are marked
+  green, removed ones show in red where they were. **Last Commit** marks what
+  isn't committed; **vs origin/main** marks all of the branch's work.
+- **Finding your way.** ⌘-click a name to go to where it's declared (a list when
+  there are several); ⌘P opens a file by a few letters of its name, changed
+  files first; the path bar lists the changed files, then every file.
+- **Comments for the agent.** Click a line number to comment, as in the diff tab.
+  A comment follows its line's text as the file changes, or is listed as
+  outdated. **Send to Agent** pastes the comments not sent yet into the agent's
+  terminal in that tab and submits them; **Copy Prompt** puts them all on the
+  clipboard.
+
+Going to a declaration searches the worktree (`git grep`) instead of running a
+language server, which would run the repository's own code outside any sandbox.
+It's for local worktrees only.
+
 ### SSH hosts
 
 Add SSH Host (⇧⌘O) adds a directory on another machine: any host `ssh` can
@@ -383,6 +409,8 @@ and the new Yatty attaches to them as it opens.
 | ⌘T | New tab |
 | ⌥⌘T | New agent tab |
 | ⌥⌘D | Open a diff |
+| ⌘E | Show or hide the code beside the terminals |
+| ⌘P | Go to a file (with the code shown) |
 | ⌘D / ⇧⌘D | Split right / down |
 | ⌃⌘= | Equalize splits |
 | ⌘] / ⌘[ | Next / previous pane |
@@ -587,7 +615,7 @@ scripts/snapshot.sh SCENE # build/snapshots/SCENE.png from sample data
   `scripts/fetch-zmx.sh` downloads and checks against its SHA-256, bundled as
   `Contents/MacOS/zmx`.
 - [diff2html](https://github.com/rtfpessoa/diff2html) 3.4.56 (MIT) and
-  highlight.js 11.12.0 styles (BSD-3-Clause), for the diff tab, in
+  highlight.js 11.12.0 with its styles (BSD-3-Clause), for the diff tab and the code view, in
   `Resources/diff/`; their licences are in `Resources/diff/THIRD-PARTY.md`.
 - [Octicons](https://github.com/primer/octicons) 19.15.0 (MIT), GitHub's icons
   for pull requests, branches and checks, in

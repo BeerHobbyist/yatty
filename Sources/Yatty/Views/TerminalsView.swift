@@ -15,6 +15,8 @@ struct TerminalsView: View {
         Divider()
         if let diff = tab.diff {
           DiffTabView(worktree: worktree, tab: tab, diffTab: diff).id(tab.id)
+        } else if let code = tab.code, code.shown, !worktree.isRemote {
+          CodeBeside(worktree: worktree, tab: tab, code: code)
         } else {
           SplitNodeView(node: tab.root, path: [], tab: tab, worktree: worktree)
         }
@@ -55,9 +57,18 @@ struct TabBar: View {
         }
       }
       Spacer(minLength: 8)
-      // A diff tab has no terminal to split.
+      // A diff tab has no terminal to split, nor code beside one.
       if let tab = layout.selected, tab.diff == nil {
         let focused = PaneKey(worktree: worktree.id, pane: tab.focusedPane)
+        if !worktree.isRemote {
+          Button {
+            store.toggleCode(in: worktree)
+          } label: {
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+              .foregroundStyle(tab.code?.shown == true ? Color.accentColor : .secondary)
+          }
+          .help(tab.code?.shown == true ? "Hide Code (⌘E)" : "Show Code beside the terminals (⌘E)")
+        }
         Button {
           store.split(focused, axis: .horizontal, newFirst: false)
         } label: {
@@ -167,6 +178,48 @@ private struct TabButton: View {
     renaming = false
     store.renameTab(tab.id, to: draft, in: worktree)
     store.focusSelectedTerminal()
+  }
+}
+
+/// The code on the left of a tab, its terminals on the right, with a
+/// divider between them to drag.
+private struct CodeBeside: View {
+  let worktree: Worktree
+  let tab: TerminalTab
+  let code: CodeView
+  @Environment(AppStore.self) private var store
+
+  var body: some View {
+    GeometryReader { geometry in
+      let total = geometry.size.width
+      let codeWidth = max(0, total * code.ratio)
+      HStack(spacing: 0) {
+        CodePaneView(worktree: worktree, tab: tab, code: code)
+          .id(tab.id)
+          .frame(width: codeWidth)
+        Rectangle()
+          .fill(Color(nsColor: .separatorColor))
+          .frame(width: 1)
+          .overlay {
+            Color.clear
+              .frame(width: 7)
+              .contentShape(Rectangle())
+              .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+              }
+              .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .named("code-beside"))
+                  .onChanged { value in
+                    guard total > 0 else { return }
+                    store.setCodeRatio(value.location.x / total, tab: tab.id, in: worktree, save: false)
+                  }
+                  .onEnded { _ in store.saveState() })
+          }
+          .zIndex(1)
+        SplitNodeView(node: tab.root, path: [], tab: tab, worktree: worktree)
+      }
+      .coordinateSpace(.named("code-beside"))
+    }
   }
 }
 

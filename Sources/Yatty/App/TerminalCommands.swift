@@ -23,6 +23,16 @@ struct TerminalCommands: Commands {
           .keyboardShortcut(Shortcuts.openDiff)
           // Diffs run git here; a remote directory's files are there.
           .disabled(!store.commandContext.canDiff)
+        Button(store.commandContext.showingCode ? "Hide Code" : "Show Code") {
+          if let worktree = store.selectedWorktree { store.toggleCode(in: worktree) }
+        }
+        .keyboardShortcut(Shortcuts.showCode)
+        .disabled(!store.commandContext.canShowCode)
+        Button("Go to File…") {
+          if let worktree = store.selectedWorktree { store.codeQuickOpen = store.layout(for: worktree).selectedTab }
+        }
+        .keyboardShortcut(Shortcuts.goToFile)
+        .disabled(!store.commandContext.canGoToFile)
         Divider()
         Group {
           Button("Split Right") { store.performOnFocusedPane(.split(.horizontal, newFirst: false)) }

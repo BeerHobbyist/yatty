@@ -137,6 +137,14 @@ final class AppStore {
     return page
   }
   var diffingWorktree: Worktree?
+  /// Per tab: its code view's page, kept alive like a terminal while the tab exists.
+  @ObservationIgnored var codePages: [String: CodePage] = [:]
+  /// Per worktree: the file that changed there last (the code views follow it).
+  var codeChanges: [String: CodeChangeEvent] = [:]
+  /// Per worktree with a code view shown: what tells it files changed.
+  @ObservationIgnored var codeWatchers: [String: CodeWatcher] = [:]
+  /// The tab whose code view is asking for a file by name (⌘P).
+  var codeQuickOpen: String?
   @ObservationIgnored private let notificationDelegate = NotificationDelegate()
   /// "Track every claude": Yatty's hooks are in Claude's own settings.
   var trackingEveryClaude = ClaudeSettings.isInstalled()
