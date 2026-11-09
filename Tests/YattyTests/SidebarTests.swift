@@ -69,11 +69,18 @@ import Testing
 }
 
 @Test func projectsMoveWithinTheirOwnList() {
-  #expect(AppStore.moved(["/r1", "/r2", "/r3"], "/r3", before: "/r1") == ["/r3", "/r1", "/r2"])
-  #expect(AppStore.moved(["/r1", "/r2", "/r3"], "/r1", before: "/r3") == ["/r2", "/r1", "/r3"])
-  #expect(AppStore.moved(["/r1", "/r2"], "/r1", before: "/r1") == nil)
-  #expect(AppStore.moved(["/r1", "/r2"], "/r1", before: "ssh:h1") == nil)
-  #expect(AppStore.moved(["/r1", "/r2"], "/nope", before: "/r1") == nil)
+  // Dropped onto another, a project takes its place, from either side.
+  #expect(AppStore.moved(["/a", "/b", "/c"], "/c", onto: "/a") == ["/c", "/a", "/b"])
+  #expect(AppStore.moved(["/a", "/b", "/c"], "/a", onto: "/c") == ["/b", "/c", "/a"])
+  #expect(AppStore.moved(["/a", "/b", "/c"], "/a", onto: "/b") == ["/b", "/a", "/c"])
+  #expect(AppStore.moved(["/a", "/b"], "/a", onto: "/a") == nil)
+  #expect(AppStore.moved(["/a", "/b"], "/a", onto: "ssh:h1") == nil)
+  #expect(AppStore.moved(["/a", "/b"], "/nope", onto: "/a") == nil)
+  // One step up or down, not past the ends.
+  #expect(AppStore.shifted(["/a", "/b", "/c"], "/b", by: -1) == ["/b", "/a", "/c"])
+  #expect(AppStore.shifted(["/a", "/b", "/c"], "/b", by: 1) == ["/a", "/c", "/b"])
+  #expect(AppStore.shifted(["/a", "/b"], "/a", by: -1) == nil)
+  #expect(AppStore.shifted(["/a", "/b"], "/b", by: 1) == nil)
 }
 
 @Test func sidebarSelectionMapsNeedsYouRows() {
@@ -86,7 +93,9 @@ import Testing
 }
 
 @Test func renameRules() {
-  #expect(AppStore.cleanLabel("") == nil)
-  #expect(AppStore.cleanLabel("  \n") == nil)
-  #expect(AppStore.cleanLabel("  api ") == "api")
+  #expect(AppStore.cleanLabel("", automatic: "login") == nil)
+  #expect(AppStore.cleanLabel("  \n", automatic: "login") == nil)
+  #expect(AppStore.cleanLabel("  api ", automatic: "login") == "api")
+  // The automatic name typed back (⏎ on an unedited field): still automatic.
+  #expect(AppStore.cleanLabel(" login", automatic: "login") == nil)
 }

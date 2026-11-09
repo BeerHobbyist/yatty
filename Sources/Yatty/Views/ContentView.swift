@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
   @Environment(AppStore.self) private var store
   @Environment(\.openSettings) private var openSettings
+  @State private var columns = NavigationSplitViewVisibility.all
 
   var body: some View {
     @Bindable var store = store
@@ -16,7 +17,7 @@ struct ContentView: View {
           DetailView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       } else {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
           Sidebar()
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 400)
         } detail: {
@@ -29,6 +30,10 @@ struct ContentView: View {
     }
     .sheet(item: $store.addingHost) { request in
       AddHostSheet(request: request)
+    }
+    .onChange(of: store.focusingFilter) { _, focusing in
+      // Filtering needs the sidebar there.
+      if focusing { columns = .all }
     }
     .task(id: store.openingSettings) {
       guard store.openingSettings else { return }

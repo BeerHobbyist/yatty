@@ -143,6 +143,10 @@ extension AppStore {
     add("project.filter", "Filter Worktrees", "Projects", Shortcuts.filterWorktrees) { self.focusingFilter = true }
     add("project.repo", "Add Repository…", "Projects", Shortcuts.addRepository) { self.addingRepository = true }
     add("project.host", "Add SSH Host…", "Projects", Shortcuts.addHost) { self.addingHost = AddHostRequest() }
+    if let selected, let project = projectID(of: selected.id) {
+      add("project.up", "Move Project Up", "Projects") { self.shiftProject(project, by: -1) }
+      add("project.down", "Move Project Down", "Projects") { self.shiftProject(project, by: 1) }
+    }
     if let selected, let repo = repo(of: selected) {
       add("project.removeRepo", "Remove Repository…", "Projects", detail: repo.name) { self.pendingRemoval = repo }
     }

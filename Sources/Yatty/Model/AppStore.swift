@@ -250,11 +250,25 @@ final class AppStore {
     unfoldOnSelect = true
   }
 
-  /// Moves a repository before another, or a host before another host.
-  func moveProject(_ id: String, before target: String) {
-    if let order = Self.moved(repos.map(\.id), id, before: target) {
+  /// Drops a repository onto another, or a host onto another host: it takes
+  /// that one's place.
+  func moveProject(_ id: String, onto target: String) {
+    reorderProjects { Self.moved($0, id, onto: target) }
+  }
+
+  /// One place up (-1) or down (+1) among its kind.
+  func shiftProject(_ id: String, by delta: Int) {
+    reorderProjects { Self.shifted($0, id, by: delta) }
+  }
+
+  func shiftSelectedProject(by delta: Int) {
+    if let id = selection.flatMap(projectID(of:)) { shiftProject(id, by: delta) }
+  }
+
+  private func reorderProjects(_ reorder: ([String]) -> [String]?) {
+    if let order = reorder(repos.map(\.id)) {
       repos = order.compactMap { id in repos.first { $0.id == id } }
-    } else if let order = Self.moved(hosts.map(\.id), id, before: target) {
+    } else if let order = reorder(hosts.map(\.id)) {
       hosts = order.compactMap { id in hosts.first { $0.id == id } }
     } else {
       return
@@ -262,14 +276,19 @@ final class AppStore {
     saveState()
   }
 
-  /// `ids` with `id` moved to just before `target`; nil when either isn't in it.
-  nonisolated static func moved(_ ids: [String], _ id: String, before target: String) -> [String]? {
-    guard id != target, ids.contains(target), let from = ids.firstIndex(of: id) else { return nil }
+  /// `ids` with `id` at `target`'s place; nil when either isn't in it.
+  nonisolated static func moved(_ ids: [String], _ id: String, onto target: String) -> [String]? {
+    guard id != target, let from = ids.firstIndex(of: id), let to = ids.firstIndex(of: target) else { return nil }
     var order = ids
     order.remove(at: from)
-    guard let to = order.firstIndex(of: target) else { return nil }
     order.insert(id, at: to)
     return order
+  }
+
+  /// `ids` with `id` moved `delta` places; nil past either end.
+  nonisolated static func shifted(_ ids: [String], _ id: String, by delta: Int) -> [String]? {
+    guard let from = ids.firstIndex(of: id), ids.indices.contains(from + delta), delta != 0 else { return nil }
+    return moved(ids, id, onto: ids[from + delta])
   }
 
   func toggleFold(_ projectID: String) {
@@ -558,14 +577,15 @@ final class AppStore {
 
   /// Only the sidebar's name changes; an empty name gives back the branch's.
   func renameWorktree(_ worktree: Worktree, to name: String) {
-    labels[worktree.id] = Self.cleanLabel(name)
+    labels[worktree.id] = Self.cleanLabel(name, automatic: worktree.name)
     saveState()
   }
 
-  /// A name as the sidebar keeps it: trimmed, and nil (the branch's) when empty.
-  nonisolated static func cleanLabel(_ name: String) -> String? {
+  /// A name as the sidebar keeps it: trimmed; nil — follow the branch — when
+  /// empty or the branch's own name.
+  nonisolated static func cleanLabel(_ name: String, automatic: String) -> String? {
     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : trimmed
+    return trimmed.isEmpty || trimmed == automatic ? nil : trimmed
   }
 
   /// Deletes the worktree's directory (uncommitted changes too) and ends its

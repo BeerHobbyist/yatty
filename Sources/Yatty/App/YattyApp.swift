@@ -68,6 +68,11 @@ struct YattyApp: App {
         Button("Copy Path") { if let worktree = store.selectedWorktree { store.copyPath(worktree) } }
           .disabled(context.selected == nil)
         Divider()
+        Button("Move Project Up") { store.shiftSelectedProject(by: -1) }
+          .disabled(context.selected == nil)
+        Button("Move Project Down") { store.shiftSelectedProject(by: 1) }
+          .disabled(context.selected == nil)
+        Divider()
         Button(context.selected?.isRemote == true ? "Remove Directory…" : "Close Worktree…") {
           store.requestCloseSelected()
         }

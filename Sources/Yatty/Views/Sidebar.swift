@@ -33,65 +33,72 @@ struct Sidebar: View {
     let filtering = !query.trimmingCharacters(in: .whitespaces).isEmpty
     let needsYou = needsYouWorktrees(query: query)
     let firstProject = store.repos.first?.id ?? store.hosts.first?.id
-    List(selection: selection(needsYou: needsYou)) {
-      if !needsYou.isEmpty {
-        Section {
-          // Their own ids: the same worktree is listed again in its
-          // project, and a List mixes up rows that share one.
-          ForEach(needsYou.map { (tag: SidebarSelection.tag($0.id, inNeedsYou: true), worktree: $0) }, id: \.tag) {
-            WorktreeRow(worktree: $0.worktree, project: projectName(of: $0.worktree)).tag($0.tag)
+    ScrollViewReader { proxy in
+      List(selection: selection(needsYou: needsYou)) {
+        if !needsYou.isEmpty {
+          Section {
+            // Their own ids: the same worktree is listed again in its
+            // project, and a List mixes up rows that share one.
+            ForEach(needsYou.map { (tag: SidebarSelection.tag($0.id, inNeedsYou: true), worktree: $0) }, id: \.tag) {
+              WorktreeRow(worktree: $0.worktree, project: projectName(of: $0.worktree)).tag($0.tag)
+            }
+          } header: {
+            SidebarSectionTitle(title: "Needs you", count: needsYou.count)
           }
-        } header: {
-          SidebarSectionTitle(title: "Needs you", count: needsYou.count)
+        }
+        ForEach(store.repos) { repo in
+          let worktrees = (store.worktrees[repo.id] ?? []).filter { matches($0, query: query, project: repo.name) }
+          if !filtering || !worktrees.isEmpty {
+            ProjectHeader(
+              id: repo.id, name: repo.name, icon: .repo, worktrees: store.worktrees[repo.id] ?? [],
+              isFirst: repo.id == firstProject && needsYou.isEmpty, addHelp: "New worktree in \(repo.name)",
+              add: { store.newWorktreeRepo = repo }
+            ) {
+              Button("New Worktree…") { store.newWorktreeRepo = repo }
+              Button("Remove Repository…", role: .destructive) { store.pendingRemoval = repo }
+            }
+            if filtering || !store.foldedProjects.contains(repo.id) {
+              if let error = store.loadErrors[repo.id], !filtering {
+                Text(error).font(.caption).foregroundStyle(.secondary).selectionDisabled()
+              }
+              ForEach(worktrees) { worktree in
+                WorktreeRow(worktree: worktree).tag(worktree.id)
+              }
+            }
+          }
+        }
+        ForEach(store.hosts) { host in
+          let worktrees = host.worktrees.filter { matches($0, query: query, project: host.host) }
+          if !filtering || !worktrees.isEmpty {
+            ProjectHeader(
+              id: host.id, name: host.host, icon: .server, worktrees: host.worktrees,
+              isFirst: host.id == firstProject && needsYou.isEmpty, addHelp: "Add a directory on \(host.host)",
+              add: { store.addingHost = AddHostRequest(host: host.host) }
+            ) {
+              Button("Add Directory…") { store.addingHost = AddHostRequest(host: host.host) }
+              Button("Remove Host…", role: .destructive) { store.pendingHostRemoval = host }
+            }
+            if filtering || !store.foldedProjects.contains(host.id) {
+              ForEach(worktrees) { worktree in
+                WorktreeRow(worktree: worktree).tag(worktree.id)
+              }
+            }
+          }
         }
       }
-      ForEach(store.repos) { repo in
-        let worktrees = (store.worktrees[repo.id] ?? []).filter { matches($0, query: query, project: repo.name) }
-        if !filtering || !worktrees.isEmpty {
-          ProjectHeader(
-            id: repo.id, name: repo.name, icon: .repo, worktrees: store.worktrees[repo.id] ?? [],
-            isFirst: repo.id == firstProject && needsYou.isEmpty, addHelp: "New worktree in \(repo.name)",
-            add: { store.newWorktreeRepo = repo }
-          ) {
-            Button("New Worktree…") { store.newWorktreeRepo = repo }
-            Button("Remove Repository…", role: .destructive) { store.pendingRemoval = repo }
-          }
-          if filtering || !store.foldedProjects.contains(repo.id) {
-            if let error = store.loadErrors[repo.id], !filtering {
-              Text(error).font(.caption).foregroundStyle(.secondary).selectionDisabled()
-            }
-            ForEach(worktrees) { worktree in
-              WorktreeRow(worktree: worktree).tag(worktree.id)
-            }
-          }
-        }
-      }
-      ForEach(store.hosts) { host in
-        let worktrees = host.worktrees.filter { matches($0, query: query, project: host.host) }
-        if !filtering || !worktrees.isEmpty {
-          ProjectHeader(
-            id: host.id, name: host.host, icon: .server, worktrees: host.worktrees,
-            isFirst: host.id == firstProject && needsYou.isEmpty, addHelp: "Add a directory on \(host.host)",
-            add: { store.addingHost = AddHostRequest(host: host.host) }
-          ) {
-            Button("Add Directory…") { store.addingHost = AddHostRequest(host: host.host) }
-            Button("Remove Host…", role: .destructive) { store.pendingHostRemoval = host }
-          }
-          if filtering || !store.foldedProjects.contains(host.id) {
-            ForEach(worktrees) { worktree in
-              WorktreeRow(worktree: worktree).tag(worktree.id)
-            }
-          }
-        }
+      .animation(.easeOut(duration: 0.2), value: needsYou.map(\.id))
+      .onChange(of: store.renamingWorktree?.id) { _, id in
+        // Lazily built: a row scrolled away has no field to edit until shown.
+        if let id { withAnimation { proxy.scrollTo(id) } }
       }
     }
-    .animation(.easeOut(duration: 0.2), value: needsYou.map(\.id))
     .modifier(SidebarListStyle())
     .modifier(SidebarFilterField(text: $store.sidebarFilter, focused: $filterFocused))
-    .onChange(of: store.focusingFilter) { _, focusing in
+    .onChange(of: store.focusingFilter, initial: true) { _, focusing in
       guard focusing else { return }
       filterFocused = true
-      store.focusingFilter = false
+      // Later: the window shows a hidden sidebar on the same request.
+      DispatchQueue.main.async { store.focusingFilter = false }
     }
     .onChange(of: store.selection) { _, selection in
       // Selected from elsewhere (the palette, ⇧⌘J, a notification): its
@@ -232,11 +239,16 @@ struct ProjectHeader<Actions: View>: View {
       .help(addHelp)
     }
     .padding(.top, isFirst ? 0 : 8)
-    .contextMenu { actions() }
+    .contextMenu {
+      actions()
+      Divider()
+      Button("Move Up") { withAnimation(.easeOut(duration: 0.2)) { store.shiftProject(id, by: -1) } }
+      Button("Move Down") { withAnimation(.easeOut(duration: 0.2)) { store.shiftProject(id, by: 1) } }
+    }
     .draggable(id)
     .dropDestination(for: String.self) { ids, _ in
       guard let moved = ids.first, moved != id else { return false }
-      withAnimation(.easeOut(duration: 0.2)) { store.moveProject(moved, before: id) }
+      withAnimation(.easeOut(duration: 0.2)) { store.moveProject(moved, onto: id) }
       return true
     }
     .selectionDisabled()
@@ -281,8 +293,12 @@ struct WorktreeRow: View {
             .onSubmit {
               store.renameWorktree(worktree, to: draft)
               store.renamingWorktree = nil
+              store.focusSelectedTerminal()
             }
-            .onExitCommand { store.renamingWorktree = nil }
+            .onExitCommand {
+              store.renamingWorktree = nil
+              store.focusSelectedTerminal()
+            }
             .onAppear {
               draft = store.label(for: worktree)
               DispatchQueue.main.async { nameFocused = true }
