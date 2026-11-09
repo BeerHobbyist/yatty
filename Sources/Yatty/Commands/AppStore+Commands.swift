@@ -83,6 +83,10 @@ extension AppStore {
     }
     if let selected {
       add("worktree.rename", "Rename…", "Worktree", detail: name) { self.renamingWorktree = selected }
+      add("worktree.finder", "Open in Finder", "Worktree", detail: name, when: !selected.isRemote) {
+        self.openInFinder(selected)
+      }
+      add("worktree.copyPath", "Copy Path", "Worktree", detail: name) { self.copyPath(selected) }
     }
 
     // Everything acts on what the palette showed: the worktree selected when
@@ -166,6 +170,17 @@ extension AppStore {
     add("app.settings", "Settings…", "App", Shortcuts.settings) { self.openingSettings = true }
     add("app.help", "Keyboard Shortcuts", "App", Shortcuts.help) { self.showingHelp = true }
     return list
+  }
+
+  func openInFinder(_ worktree: Worktree) {
+    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: worktree.path)])
+  }
+
+  /// The path on the clipboard; `host:~/path` for a remote directory.
+  func copyPath(_ worktree: Worktree) {
+    let path = host(of: worktree).map { "\($0.host):" + SSH.displayPath(worktree.path, home: $0.home) } ?? worktree.path
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(path, forType: .string)
   }
 
   /// The palette closed: run what was picked (sheets it opens need it gone

@@ -61,6 +61,13 @@ struct YattyApp: App {
         Divider()
       }
       CommandMenu("Worktree") {
+        Button("Rename…") { store.renamingWorktree = store.selectedWorktree }
+          .disabled(context.selected == nil)
+        Button("Open in Finder") { if let worktree = store.selectedWorktree { store.openInFinder(worktree) } }
+          .disabled(context.selected == nil || context.selected?.isRemote == true)
+        Button("Copy Path") { if let worktree = store.selectedWorktree { store.copyPath(worktree) } }
+          .disabled(context.selected == nil)
+        Divider()
         Button(context.selected?.isRemote == true ? "Remove Directory…" : "Close Worktree…") {
           store.requestCloseSelected()
         }

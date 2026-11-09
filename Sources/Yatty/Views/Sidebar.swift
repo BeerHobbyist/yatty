@@ -372,12 +372,9 @@ struct WorktreeRow: View {
       Button("New Worktree…") { store.newWorktreeRepo = repo }
     }
     if !worktree.isRemote {
-      Button("Open in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: worktree.path)]) }
+      Button("Open in Finder") { store.openInFinder(worktree) }
     }
-    Button("Copy Path") {
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(remotePath ?? worktree.path, forType: .string)
-    }
+    Button("Copy Path") { store.copyPath(worktree) }
     if !worktree.isMain {
       Divider()
       Button(worktree.isRemote ? "Remove Directory…" : "Close Worktree…", role: .destructive) {
