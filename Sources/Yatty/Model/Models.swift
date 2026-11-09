@@ -100,6 +100,8 @@ struct StoredState: Codable {
   var labels: [String: String] = [:]
   /// Pull request inspector sections the user folded.
   var foldedSections: [String] = []
+  /// Sidebar repositories and hosts the user folded, by id.
+  var foldedProjects: [String] = []
   /// The merge method used last, offered first.
   var mergeMethod: MergeMethod?
   /// The diff viewer the user picked.
@@ -109,8 +111,9 @@ struct StoredState: Codable {
 
   init(
     repos: [Repo] = [], selectedWorktree: String? = nil, layouts: [String: WorktreeLayout] = [:],
-    labels: [String: String] = [:], foldedSections: [String] = [], mergeMethod: MergeMethod? = nil,
-    diffViewer: DiffViewer? = nil, hosts: [SSHHost] = [], remoteCleanup: [RemoteCleanup] = []
+    labels: [String: String] = [:], foldedSections: [String] = [], foldedProjects: [String] = [],
+    mergeMethod: MergeMethod? = nil, diffViewer: DiffViewer? = nil, hosts: [SSHHost] = [],
+    remoteCleanup: [RemoteCleanup] = []
   ) {
     self.hosts = hosts
     self.remoteCleanup = remoteCleanup
@@ -120,6 +123,7 @@ struct StoredState: Codable {
     self.layouts = layouts
     self.labels = labels
     self.foldedSections = foldedSections
+    self.foldedProjects = foldedProjects
     self.mergeMethod = mergeMethod
   }
 
@@ -131,6 +135,7 @@ struct StoredState: Codable {
     layouts = try container.decodeIfPresent([String: WorktreeLayout].self, forKey: .layouts) ?? [:]
     labels = try container.decodeIfPresent([String: String].self, forKey: .labels) ?? [:]
     foldedSections = try container.decodeIfPresent([String].self, forKey: .foldedSections) ?? []
+    foldedProjects = (try? container.decodeIfPresent([String].self, forKey: .foldedProjects)) ?? []
     mergeMethod = try? container.decodeIfPresent(MergeMethod.self, forKey: .mergeMethod)
     diffViewer = try? container.decodeIfPresent(DiffViewer.self, forKey: .diffViewer)
     hosts = try container.decodeIfPresent([SSHHost].self, forKey: .hosts) ?? []

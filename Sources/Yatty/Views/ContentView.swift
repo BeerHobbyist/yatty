@@ -145,13 +145,22 @@ struct Sidebar: View {
 
   var body: some View {
     @Bindable var store = store
+    let firstProject = store.repos.first?.id ?? store.hosts.first?.id
     List(selection: $store.selection) {
       ForEach(store.repos) { repo in
-        Section {
+        let worktrees = store.worktrees[repo.id] ?? []
+        ProjectHeader(
+          id: repo.id, name: repo.name, worktrees: worktrees, isFirst: repo.id == firstProject,
+          addHelp: "New worktree in \(repo.name)", add: { store.newWorktreeRepo = repo }
+        ) {
+          Button("New Worktree…") { store.newWorktreeRepo = repo }
+          Button("Remove Repository…", role: .destructive) { store.pendingRemoval = repo }
+        }
+        if !store.foldedProjects.contains(repo.id) {
           if let error = store.loadErrors[repo.id] {
-            Text(error).font(.caption).foregroundStyle(.secondary)
+            Text(error).font(.caption).foregroundStyle(.secondary).selectionDisabled()
           }
-          ForEach(store.worktrees[repo.id] ?? []) { worktree in
+          ForEach(worktrees) { worktree in
             WorktreeRow(worktree: worktree)
               .tag(worktree.id)
               .contextMenu {
@@ -164,26 +173,18 @@ struct Sidebar: View {
                 }
               }
           }
-        } header: {
-          HStack {
-            Text(repo.name)
-            Spacer()
-            Button {
-              store.newWorktreeRepo = repo
-            } label: {
-              Image(systemName: "plus")
-            }
-            .buttonStyle(.borderless)
-            .help("New worktree in \(repo.name)")
-          }
-          .contextMenu {
-            Button("New Worktree…") { store.newWorktreeRepo = repo }
-            Button("Remove Repository…", role: .destructive) { store.pendingRemoval = repo }
-          }
         }
       }
       ForEach(store.hosts) { host in
-        Section {
+        ProjectHeader(
+          id: host.id, name: host.host, systemImage: "server.rack", worktrees: host.worktrees,
+          isFirst: host.id == firstProject, addHelp: "Add a directory on \(host.host)",
+          add: { store.addingHost = AddHostRequest(host: host.host) }
+        ) {
+          Button("Add Directory…") { store.addingHost = AddHostRequest(host: host.host) }
+          Button("Remove Host…", role: .destructive) { store.pendingHostRemoval = host }
+        }
+        if !store.foldedProjects.contains(host.id) {
           ForEach(host.worktrees) { worktree in
             WorktreeRow(worktree: worktree)
               .tag(worktree.id)
@@ -191,23 +192,6 @@ struct Sidebar: View {
                 Button("Rename…") { store.renamingWorktree = worktree }
                 Button("Remove Directory…", role: .destructive) { store.pendingDirectoryRemoval = worktree }
               }
-          }
-        } header: {
-          HStack {
-            Image(systemName: "server.rack")
-            Text(host.host)
-            Spacer()
-            Button {
-              store.addingHost = AddHostRequest(host: host.host)
-            } label: {
-              Image(systemName: "plus")
-            }
-            .buttonStyle(.borderless)
-            .help("Add a directory on \(host.host)")
-          }
-          .contextMenu {
-            Button("Add Directory…") { store.addingHost = AddHostRequest(host: host.host) }
-            Button("Remove Host…", role: .destructive) { store.pendingHostRemoval = host }
           }
         }
       }
@@ -243,6 +227,70 @@ struct Sidebar: View {
         .help("Add a directory on another machine (⌘⇧O)")
       }
     }
+  }
+}
+
+/// A repository's or host's row: a click folds its worktrees away or back,
+/// as in agentree. Folded, it still shows what inside wants you.
+struct ProjectHeader<Actions: View>: View {
+  let id: String
+  let name: String
+  var systemImage: String?
+  let worktrees: [Worktree]
+  let isFirst: Bool
+  let addHelp: String
+  let add: () -> Void
+  @ViewBuilder let actions: () -> Actions
+  @Environment(AppStore.self) private var store
+
+  var body: some View {
+    let folded = store.foldedProjects.contains(id)
+    HStack(spacing: 4) {
+      Button {
+        withAnimation(.easeOut(duration: 0.15)) { store.toggleFold(id) }
+      } label: {
+        HStack(spacing: 5) {
+          Image(systemName: "chevron.right")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.tertiary)
+            .rotationEffect(.degrees(folded ? 0 : 90))
+            .frame(width: 10)
+          if let systemImage {
+            Image(systemName: systemImage).font(.caption).foregroundStyle(.secondary)
+          }
+          Text(name)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+          if folded { summary }
+          Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help(folded ? "Show \(name)" : "Hide \(name)")
+      Button(action: add) {
+        Image(systemName: "plus")
+      }
+      .buttonStyle(.borderless)
+      .help(addHelp)
+    }
+    .padding(.top, isFirst ? 0 : 8)
+    .contextMenu { actions() }
+    .selectionDisabled()
+  }
+
+  /// The most urgent agent inside, whether any worktree has changes, and how many there are.
+  @ViewBuilder private var summary: some View {
+    let urgent = worktrees.compactMap { store.agents.state(of: $0) }.min()
+    let changed = worktrees.filter { (store.gitStatus.status(of: $0)?.changed ?? 0) > 0 }.count
+    AgentGlyph(state: urgent)
+    if changed > 0 {
+      Text("●").font(.caption).foregroundStyle(.orange)
+        .help("\(changed) worktree\(changed == 1 ? " has" : "s have") changes")
+    }
+    Text("\(worktrees.count)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
   }
 }
 

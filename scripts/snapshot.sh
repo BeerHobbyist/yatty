@@ -3,7 +3,7 @@
 # throwaway config and zmx directory that never touch the real ones.
 # Usage: scripts/snapshot.sh <scene>   Scenes: empty, worktrees, tabs-splits, add-repository,
 #   new-worktree-branch, new-worktree-existing, new-worktree-pr, agents, status, pr-panel, merge, diff,
-#   ssh, add-host, disconnected, palette, help, settings
+#   ssh, add-host, disconnected, folded, palette, help, settings
 set -euo pipefail
 
 scene="${1:?usage: snapshot.sh <scene>}"
@@ -156,6 +156,22 @@ EOF
     printf 'Host devbox staging\n  HostName 10.0.0.2\nHost *\n' > "$sandbox/ssh-config"
     export YATTY_SSH_CONFIG="$sandbox/ssh-config"
     [ "$scene" = ssh ] || export YATTY_SNAPSHOT_SHEET="$scene"
+    ;;
+  folded)
+    # sample-app folded away, still saying an agent in it needs you.
+    cat > "$state" <<EOF
+{
+  "repos": [{ "name": "sample-app", "path": "$repo" }],
+  "selectedWorktree": "ssh:devbox:/home/me/src/api",
+  "foldedProjects": ["$repo"],
+  "hosts": [{ "host": "devbox", "home": "/home/me", "zmx": "/usr/local/bin/zmx", "needsPassword": false,
+              "directories": ["/home/me/src/api", "/srv/data pipeline"] }]
+}
+EOF
+    session() { printf 'yatty-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -c1-10)"; }
+    mkdir -p "$sandbox/state/agents"
+    echo "needs-action $(date +%s)" > "$sandbox/state/agents/$(session "$login")"
+    touch "$login/new-file.swift"
     ;;
   *) echo "unknown scene: $scene" >&2; exit 1 ;;
 esac

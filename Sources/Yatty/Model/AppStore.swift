@@ -37,11 +37,16 @@ final class AppStore {
   var loadErrors: [String: String] = [:]
   var selection: String? {
     didSet {
-      guard selection != oldValue else { return }
-      updateVisibility()
+      // Whatever selects a worktree (a jump to an agent, the palette, a new
+      // one) shows its row, so its project unfolds.
+      let unfolded = selection.flatMap(projectID(of:)).map { foldedProjects.remove($0) != nil } ?? false
+      guard selection != oldValue || unfolded else { return }
+      if selection != oldValue { updateVisibility() }
       saveState()
     }
   }
+  /// Sidebar repositories and hosts folded away, by `Repo.id` / `SSHHost.id`.
+  var foldedProjects: Set<String> = []
   /// Per worktree path; see `layout(for:)`.
   var layouts: [String: WorktreeLayout] = [:]
   /// Per worktree path: a name the user gave it; see `label(for:)`.
@@ -116,6 +121,7 @@ final class AppStore {
       layouts = stored.layouts
       labels = stored.labels
       foldedSections = Set(stored.foldedSections)
+      foldedProjects = Set(stored.foldedProjects)
       mergeMethod = stored.mergeMethod
       diffViewer = stored.diffViewer
       hosts = stored.hosts
@@ -194,6 +200,17 @@ final class AppStore {
 
   func repo(of worktree: Worktree) -> Repo? {
     repos.first { worktrees[$0.id]?.contains(worktree) == true }
+  }
+
+  /// The repository or host a worktree is listed under in the sidebar.
+  func projectID(of worktreeID: String) -> String? {
+    guard let worktree = worktree(withID: worktreeID) else { return nil }
+    return repo(of: worktree)?.id ?? host(of: worktree)?.id
+  }
+
+  func toggleFold(_ projectID: String) {
+    if foldedProjects.remove(projectID) == nil { foldedProjects.insert(projectID) }
+    saveState()
   }
 
   // MARK: Loading
@@ -569,7 +586,7 @@ final class AppStore {
     ConfigFiles.saveState(
       StoredState(
         repos: repos, selectedWorktree: selection, layouts: layouts, labels: labels,
-        foldedSections: foldedSections.sorted(), mergeMethod: mergeMethod, diffViewer: diffViewer, hosts: hosts,
-        remoteCleanup: remoteCleanup))
+        foldedSections: foldedSections.sorted(), foldedProjects: foldedProjects.sorted(), mergeMethod: mergeMethod,
+        diffViewer: diffViewer, hosts: hosts, remoteCleanup: remoteCleanup))
   }
 }
