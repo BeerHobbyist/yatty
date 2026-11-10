@@ -145,3 +145,27 @@ import Testing
   #expect(moved.map(\.ids) == [["n"], ["s"]])
   #expect(WorktreeSummary.activeSections([("d", .done, t)], held: nil).map(\.ids) == [["d"]])
 }
+
+@Test func theRowsIconIsItsPullRequestsState() {
+  let pr = BranchPullRequest(number: 42, title: "", url: "", isDraft: false, merged: false, checks: .pass, headOid: "")
+  func icon(main: Bool = false, remote: Bool = false, _ change: ((inout BranchPullRequest) -> Void)? = nil) -> WorktreeIcon {
+    WorktreeIcon.of(isMain: main, isRemote: remote, pullRequest: change.map { change in
+      var p = pr
+      change(&p)
+      return p
+    })
+  }
+  // No pull request: what the worktree is.
+  #expect(icon() == WorktreeIcon(name: .gitBranch, tint: .accent))
+  #expect(icon(main: true) == WorktreeIcon(name: .home, tint: .accent))
+  #expect(icon(remote: true) == WorktreeIcon(name: .fileDirectory, tint: .accent))
+  // One: GitHub's icon for it, coloured by its checks.
+  #expect(icon { _ in } == WorktreeIcon(name: .gitPullRequest, tint: .green))
+  #expect(icon { $0.checks = .fail } == WorktreeIcon(name: .gitPullRequest, tint: .red))
+  #expect(icon { $0.checks = .pending } == WorktreeIcon(name: .gitPullRequest, tint: .orange))
+  #expect(icon { $0.checks = .skipped } == WorktreeIcon(name: .gitPullRequest, tint: .secondary))
+  #expect(icon { $0.checks = nil } == WorktreeIcon(name: .gitPullRequest, tint: .secondary))
+  #expect(icon { $0.isDraft = true; $0.checks = .fail } == WorktreeIcon(name: .gitPullRequestDraft, tint: .red))
+  #expect(icon { $0.merged = true; $0.checks = .fail } == WorktreeIcon(name: .gitMerge, tint: .purple))
+  #expect(icon(main: true) { $0.merged = true } == WorktreeIcon(name: .gitMerge, tint: .purple))
+}

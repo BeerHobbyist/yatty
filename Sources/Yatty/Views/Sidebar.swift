@@ -261,8 +261,10 @@ struct WorktreeRow: View {
     // Each worktree has one row, floated or not: that's where it's renamed.
     let renaming = store.renamingWorktree?.id == worktree.id
     HStack(spacing: 8) {
-      Octicon(worktree.isRemote ? .fileDirectory : worktree.isMain ? .home : .gitBranch, size: 14)
-        .foregroundStyle(Color.accentColor)
+      let icon = WorktreeIcon.of(
+        isMain: worktree.isMain, isRemote: worktree.isRemote, pullRequest: store.pullRequests.badge(for: worktree))
+      Octicon(icon.name, size: 14)
+        .foregroundStyle(icon.tint.color)
       VStack(alignment: .leading, spacing: 1) {
         if renaming {
           TextField("Name", text: $draft, prompt: Text(worktree.name))
