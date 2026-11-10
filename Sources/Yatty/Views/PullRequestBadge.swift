@@ -1,21 +1,15 @@
 import SwiftUI
 
-/// A worktree's pull request: GitHub's icon for its state and `#N`, tinted
-/// by its checks, purple once merged. A click shows it in the inspector.
+/// The pull request's number on the right of its row; the row's icon shows
+/// its state. A click opens the pull request panel.
 struct PullRequestBadge: View {
   let pullRequest: BranchPullRequest
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 2) {
-        Octicon(icon, size: 10)
-        Text("#\(pullRequest.number)").font(.caption.weight(.medium).monospacedDigit())
-      }
-      .foregroundStyle(tint)
-      .padding(.horizontal, 5)
-      .padding(.vertical, 1)
-      .background(Capsule().fill(tint.opacity(0.16)))
+      Text("#\(pullRequest.number)").font(.caption.weight(.medium).monospacedDigit())
+        .foregroundStyle(.secondary)
     }
     .buttonStyle(.borderless)
     .fixedSize()
@@ -23,19 +17,5 @@ struct PullRequestBadge: View {
     .help(
       (pullRequest.merged ? "Merged: " : pullRequest.isDraft ? "Draft: " : "")
         + (pullRequest.title.isEmpty ? "Pull request #\(pullRequest.number)" : pullRequest.title))
-  }
-
-  private var icon: Octicon.Name {
-    pullRequest.merged ? .gitMerge : pullRequest.isDraft ? .gitPullRequestDraft : .gitPullRequest
-  }
-
-  private var tint: Color {
-    if pullRequest.merged { return .purple }
-    switch pullRequest.checks {
-    case .pass: return .green
-    case .fail: return .red
-    case .pending: return .orange
-    case .skipped, nil: return .secondary
-    }
   }
 }

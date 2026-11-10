@@ -36,9 +36,12 @@ Repositories come first, then SSH hosts. Under each, its worktrees.
   5. Changes and sync: `13 changes · ↑2`, `↑2 ahead`, `↓18 behind`.
   6. The branch, when the name shown isn't the branch's.
   7. Otherwise `up to date` (`missing` when the directory is gone).
-- **On the right**, the pull request's pill (GitHub's icon for open, draft or
-  merged, and `#N`, coloured by its checks; purple once merged; a click opens
-  the PR panel) and the agent's mark.
+- **The icon** is the pull request's state when the branch has one: GitHub's
+  icon for open, draft or merged, coloured by its checks (green, red, orange
+  while they run, grey with none); purple once merged. Without one it says what
+  the row is: a branch, a house for the main working copy, a folder on a host.
+- **On the right**, the pull request's `#N` (a click opens the PR panel) and
+  the agent's mark.
 - **Hover** swaps those for ⋯ (Rename, New Worktree, Open in Finder, Copy Path,
   Close) and ✕ (Close Worktree…, or Remove Directory… on a host); neither
   closes the repository's main working copy. The same actions are in the row's
