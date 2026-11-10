@@ -342,12 +342,15 @@ struct WorktreeRow: View {
 
   private var actions: some View {
     HStack(spacing: 2) {
+      // Drawn by SwiftUI, as the close button is: a borderless-button menu
+      // is AppKit's, which ignores the colour (black on the dark sidebar).
       Menu {
         menu
       } label: {
-        Image(systemName: "ellipsis")
+        actionIcon("ellipsis")
       }
-      .menuStyle(.borderlessButton)
+      .menuStyle(.button)
+      .buttonStyle(.plain)
       .menuIndicator(.hidden)
       .fixedSize()
       .help("More")
@@ -355,13 +358,19 @@ struct WorktreeRow: View {
         Button {
           store.requestClose(worktree)
         } label: {
-          Image(systemName: "xmark")
+          actionIcon("xmark")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
         .help(worktree.isRemote ? "Remove Directory…" : "Close Worktree…")
       }
     }
     .foregroundStyle(.secondary)
+  }
+
+  private func actionIcon(_ symbol: String) -> some View {
+    Image(systemName: symbol)
+      .frame(width: 18, height: 18)
+      .contentShape(Rectangle())
   }
 
   @ViewBuilder private var menu: some View {
