@@ -30,6 +30,14 @@ install -m 755 "$bindir/yatty-cli" "$app/Contents/Resources/bin/yatty"
 cp -R "$root/skills/yatty" "$app/Contents/Resources/skills/yatty"
 # The diff window's page and its renderer (diff2html; see THIRD-PARTY.md).
 cp -R "$root/Resources/diff" "$app/Contents/Resources/diff"
+# The icon, from Resources/AppIcon.icon (open it in Icon Composer to edit):
+# Assets.car for macOS 26's Liquid Glass, AppIcon.icns for the rest. Paths
+# are absolute, as actool's helper runs elsewhere; it reports on stdout.
+scratch="$(mktemp -d)"
+log="$(xcrun actool "$root/Resources/AppIcon.icon" --compile "$(cd "$app/Contents/Resources" && pwd)" \
+  --app-icon AppIcon --platform macosx --target-device mac --minimum-deployment-target 26.0 \
+  --output-partial-info-plist "$scratch/icon.plist")" || { echo "$log" >&2; exit 1; }
+rm -rf "$scratch"
 
 codesign --force --sign - "$app/Contents/MacOS/zmx"
 codesign --force --sign - "$app/Contents/Resources/bin/yatty"

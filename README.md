@@ -351,8 +351,9 @@ make run    # build it and open it
 
 `make deps` does nothing when `Vendor/` is up to date; `FORCE=1
 scripts/build-ghostty.sh` rebuilds GhosttyKit anyway. The bundle carries zmx,
-the `yatty` CLI and its skill, Ghostty's resources and the diff tab's page,
-and is signed ad hoc.
+the `yatty` CLI and its skill, Ghostty's resources, the diff tab's page and
+the app icon, and is signed ad hoc. The icon is `Resources/AppIcon.icon`:
+Xcode's `actool` compiles it, and Icon Composer opens it to edit.
 
 ### Rebuilding while Yatty is open
 
