@@ -241,6 +241,8 @@ never the agent beside it.
 - **Finding your way.** ⌘-click a name to go to where it's declared (a list when
   there are several); ⌘P opens a file by a few letters of its name, changed
   files first; the path bar lists the changed files, then every file.
+  **‹ ›** beside the file's name (⌥⌘] and ⌥⌘[) step through the changed files,
+  each opened at its first change, as in Cursor's review.
 - **Comments for the agent.** Click a line number to comment, as in the diff tab.
   A comment follows its line's text as the file changes, or is listed as
   outdated. **Send to Agent** pastes the comments not sent yet into the agent's
@@ -416,6 +418,7 @@ and the new Yatty attaches to them as it opens.
 | ⌥⌘D | Open a diff |
 | ⌘E | Show or hide the code beside the terminals |
 | ⌘P | Go to a file (with the code shown) |
+| ⌥⌘] / ⌥⌘[ | Next / previous changed file (with the code shown) |
 | ⌘D / ⇧⌘D | Split right / down |
 | ⌃⌘= | Equalize splits |
 | ⌘] / ⌘[ | Next / previous pane |

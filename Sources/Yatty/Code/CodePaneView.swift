@@ -49,6 +49,10 @@ struct CodePaneView: View {
       }
     }
     .onAppear { store.watchCode(in: worktree) }
+    .onChange(of: store.codeStep) { _, request in
+      guard let request, request.tab == tab.id else { return }
+      step(forward: request.forward)
+    }
     .task(id: LoadKey(file: code.file, base: code.base, loads: loads)) { await load() }
     .task(id: code.base) { await readChanges() }
     // Initial too: a view shown again catches up on what changed meanwhile.
@@ -93,6 +97,27 @@ struct CodePaneView: View {
         CodeFilesPopover(worktree: worktree, changes: changes, current: code.file) { file in
           showingFiles = false
           open(file, line: nil)
+        }
+      }
+      let files = CodeChanges.steppable(changes)
+      if !files.isEmpty {
+        HStack(spacing: 2) {
+          Button {
+            step(forward: false)
+          } label: {
+            Image(systemName: "chevron.left")
+          }
+          .help("Previous changed file (⌥⌘[)")
+          Text(CodeChanges.position(of: code.file, in: changes).map { "\($0)/\(files.count)" } ?? "\(files.count) changed")
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .fixedSize()
+          Button {
+            step(forward: true)
+          } label: {
+            Image(systemName: "chevron.right")
+          }
+          .help("Next changed file (⌥⌘])")
         }
       }
       Spacer(minLength: 8)
@@ -264,6 +289,16 @@ struct CodePaneView: View {
     } else {
       store.openCode(file, tab: tab.id, in: worktree)
     }
+  }
+
+  /// Opens the next (or previous) changed file at its first change; a beep
+  /// when there's no other.
+  private func step(forward: Bool) {
+    guard let next = CodeChanges.neighbor(of: code.file, in: changes, forward: forward) else {
+      NSSound.beep()
+      return
+    }
+    open(next, line: nil)
   }
 
   private func follow() {

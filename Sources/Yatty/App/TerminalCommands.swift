@@ -33,6 +33,16 @@ struct TerminalCommands: Commands {
         }
         .keyboardShortcut(Shortcuts.goToFile)
         .disabled(!store.commandContext.canGoToFile)
+        Button("Next Changed File") {
+          if let worktree = store.selectedWorktree { store.stepCodeFile(forward: true, in: worktree) }
+        }
+        .keyboardShortcut(Shortcuts.nextChangedFile)
+        .disabled(!store.commandContext.canGoToFile)
+        Button("Previous Changed File") {
+          if let worktree = store.selectedWorktree { store.stepCodeFile(forward: false, in: worktree) }
+        }
+        .keyboardShortcut(Shortcuts.previousChangedFile)
+        .disabled(!store.commandContext.canGoToFile)
         Divider()
         Group {
           Button("Split Right") { store.performOnFocusedPane(.split(.horizontal, newFirst: false)) }

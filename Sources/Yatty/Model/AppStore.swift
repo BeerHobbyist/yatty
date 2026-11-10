@@ -145,6 +145,8 @@ final class AppStore {
   @ObservationIgnored var codeWatchers: [String: CodeWatcher] = [:]
   /// The tab whose code view is asking for a file by name (⌘P).
   var codeQuickOpen: String?
+  /// The last ask for a code view to open the next or previous changed file.
+  var codeStep: CodeStep?
   /// Per tab: the last change its code view took in (`CodeChangeEvent.serial`),
   /// so one shown again catches up on what changed while it wasn't.
   @ObservationIgnored var codeSeen: [String: Int] = [:]

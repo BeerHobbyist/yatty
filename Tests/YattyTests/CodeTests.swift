@@ -175,3 +175,25 @@ import Testing
   #expect(CloseTarget.of(codeShown: true, repeated: true) == .nothing)
   #expect(CloseTarget.of(codeShown: false, repeated: true) == .nothing)
 }
+
+/// Next and previous file step through the changed files, as listed, round
+/// the ends; a deleted file has nothing to show and is passed over.
+@Test func nextFileStepsThroughTheChangedOnes() {
+  let changes = [
+    CodeChange(path: "a.swift", status: "M"), CodeChange(path: "gone.swift", status: "D"),
+    CodeChange(path: "b.swift", status: "A"), CodeChange(path: "c.swift", status: "M"),
+  ]
+  #expect(CodeChanges.neighbor(of: "a.swift", in: changes, forward: true) == "b.swift")
+  #expect(CodeChanges.neighbor(of: "c.swift", in: changes, forward: true) == "a.swift")
+  #expect(CodeChanges.neighbor(of: "a.swift", in: changes, forward: false) == "c.swift")
+  // A file that isn't changed, or none: from the start, or the end.
+  #expect(CodeChanges.neighbor(of: "README.md", in: changes, forward: true) == "a.swift")
+  #expect(CodeChanges.neighbor(of: nil, in: changes, forward: false) == "c.swift")
+  // The only changed file, already shown: nowhere to go.
+  #expect(CodeChanges.neighbor(of: "a.swift", in: [changes[0]], forward: true) == nil)
+  #expect(CodeChanges.neighbor(of: "x", in: [changes[1]], forward: true) == nil)
+  // Where the shown file is among them, for "2/3".
+  #expect(CodeChanges.position(of: "b.swift", in: changes) == 2)
+  #expect(CodeChanges.position(of: "gone.swift", in: changes) == nil)
+  #expect(CodeChanges.steppable(changes) == ["a.swift", "b.swift", "c.swift"])
+}

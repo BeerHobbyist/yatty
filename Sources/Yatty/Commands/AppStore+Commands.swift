@@ -18,6 +18,8 @@ enum Shortcuts {
   static let openDiff = KeyboardShortcut("d", modifiers: [.command, .option])
   static let showCode = KeyboardShortcut("e")
   static let goToFile = KeyboardShortcut("p")
+  static let nextChangedFile = KeyboardShortcut("]", modifiers: [.command, .option])
+  static let previousChangedFile = KeyboardShortcut("[", modifiers: [.command, .option])
   static let splitRight = KeyboardShortcut("d")
   static let splitDown = KeyboardShortcut("d", modifiers: [.command, .shift])
   static let equalize = KeyboardShortcut("=", modifiers: [.command, .control])
@@ -131,6 +133,13 @@ extension AppStore {
       }
       add("code.goto", "Go to File…", "Terminal", Shortcuts.goToFile, when: context.canGoToFile) {
         self.codeQuickOpen = self.layout(for: selected).selectedTab
+      }
+      add("code.next", "Next Changed File", "Terminal", Shortcuts.nextChangedFile, when: context.canGoToFile) {
+        self.stepCodeFile(forward: true, in: selected)
+      }
+      add("code.previous", "Previous Changed File", "Terminal", Shortcuts.previousChangedFile,
+        when: context.canGoToFile) {
+        self.stepCodeFile(forward: false, in: selected)
       }
       add("split.right", "Split Right", "Terminal", Shortcuts.splitRight, when: context.canSplit,
         onPane(.split(.horizontal, newFirst: false)))

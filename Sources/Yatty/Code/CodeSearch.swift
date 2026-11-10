@@ -145,6 +145,31 @@ enum CodeChanges {
     }
     return changes
   }
+
+  /// The changed files next and previous file step through, as listed: a
+  /// deleted one has nothing to show.
+  static func steppable(_ changes: [CodeChange]) -> [String] {
+    changes.filter { $0.status != "D" }.map(\.path)
+  }
+
+  /// The changed file after (or before) `current`, round the ends; the first
+  /// (or last) when `current` isn't one. Nil when that's `current` itself.
+  static func neighbor(of current: String?, in changes: [CodeChange], forward: Bool) -> String? {
+    let files = steppable(changes)
+    guard !files.isEmpty else { return nil }
+    let next: String
+    if let index = current.flatMap(files.firstIndex) {
+      next = files[(index + (forward ? 1 : files.count - 1)) % files.count]
+    } else {
+      next = forward ? files[0] : files[files.count - 1]
+    }
+    return next == current ? nil : next
+  }
+
+  /// `file`'s place among the steppable files, from 1.
+  static func position(of file: String?, in changes: [CodeChange]) -> Int? {
+    file.flatMap(steppable(changes).firstIndex).map { $0 + 1 }
+  }
 }
 
 /// What the agent's terminal is sent: the comments as one paste, then Enter.
