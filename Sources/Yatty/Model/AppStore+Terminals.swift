@@ -237,6 +237,18 @@ extension AppStore {
       if case .newTab = command { newTab(in: worktree, agent: false) }
       return
     }
+    if case .close = command {
+      // isARepeat raises for anything but a key event (a menu click).
+      let event = NSApp.currentEvent
+      let repeated = event?.type == .keyDown && event?.isARepeat == true
+      switch CloseTarget.of(codeShown: tab.code?.shown == true && !worktree.isRemote, repeated: repeated) {
+      case .nothing: return
+      case .code:
+        toggleCode(in: worktree)
+        return
+      case .pane: break
+      }
+    }
     handle(command, from: PaneKey(worktree: worktree.id, pane: tab.focusedPane))
   }
 
@@ -324,8 +336,14 @@ extension AppStore {
       let worktree = worktree(withID: key.worktree)
     else { return }
     let hadKeyboard = terminals[key].map { $0.window?.firstResponder === $0 } ?? false
+    let tab = layouts[key.worktree]?.tab(containing: key.pane)
     dropTerminal(key)
     updateLayout(key.worktree) { $0.close(key.pane) }
+    // Its last pane: the tab went, and its code page with it.
+    if let tab, !layout(for: worktree).tabs.contains(where: { $0.id == tab.id }) {
+      forgetCode(tab.id)
+      stopWatchingCodeIfUnused(in: worktree)
+    }
     Task { await endSessions([key.pane], of: worktree) }
     if hadKeyboard { focusSelectedTerminal() }
   }
@@ -337,6 +355,8 @@ extension AppStore {
       updateLayout(worktree.id) { $0.close(pane) }
     }
     if tab.diff == nil {
+      forgetCode(tab.id)
+      stopWatchingCodeIfUnused(in: worktree)
       Task { await endSessions(tab.root.panes, of: worktree) }
     } else {
       forgetDiff(tab.id)
@@ -392,7 +412,11 @@ extension AppStore {
     defer { retiring.remove(worktree.id) }
     let panes = Set(layout(for: worktree).allPanes).union(["0"])
     for pane in panes { dropTerminal(PaneKey(worktree: worktree.id, pane: pane)) }
-    for tab in layout(for: worktree).tabs where tab.diff != nil { forgetDiff(tab.id) }
+    for tab in layout(for: worktree).tabs {
+      if tab.diff != nil { forgetDiff(tab.id) } else { forgetCode(tab.id) }
+    }
+    codeWatchers.removeValue(forKey: worktree.id)?.stop()
+    codeChanges[worktree.id] = nil
     layouts[worktree.id] = nil
     labels[worktree.id] = nil
     saveState()

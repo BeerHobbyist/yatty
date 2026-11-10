@@ -15,19 +15,20 @@ enum Run {
 
   static func run(
     _ executable: String, _ args: [String], cwd: String? = nil, env: [String: String] = [:],
-    timeout: TimeInterval? = nil
+    timeout: TimeInterval? = nil, input: Data? = nil
   ) async -> ProcessResult {
     await withCheckedContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
-        continuation.resume(returning: runSync(executable, args, cwd: cwd, env: env, timeout: timeout))
+        continuation.resume(returning: runSync(executable, args, cwd: cwd, env: env, timeout: timeout, input: input))
       }
     }
   }
 
   /// Past `timeout` the program is terminated (its result then fails).
+  /// `input` is its standard input; without it, nothing.
   static func runSync(
     _ executable: String, _ args: [String], cwd: String? = nil, env: [String: String] = [:],
-    timeout: TimeInterval? = nil
+    timeout: TimeInterval? = nil, input: Data? = nil
   ) -> ProcessResult {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
@@ -42,12 +43,20 @@ enum Run {
     let err = Pipe()
     process.standardOutput = out
     process.standardError = err
-    process.standardInput = FileHandle.nullDevice
+    let stdin = input.map { _ in Pipe() }
+    process.standardInput = stdin ?? FileHandle.nullDevice
 
     do {
       try process.run()
     } catch {
       return ProcessResult(status: -1, stdout: "", stderr: error.localizedDescription)
+    }
+    if let stdin, let input {
+      // Written alongside the reading below, so a full pipe can't stall either side.
+      DispatchQueue.global().async {
+        try? stdin.fileHandleForWriting.write(contentsOf: input)
+        try? stdin.fileHandleForWriting.close()
+      }
     }
     if let timeout {
       DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [process] in

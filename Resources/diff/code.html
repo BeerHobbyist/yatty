@@ -1,0 +1,492 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  /* The code beside a tab's agent: one file, its changes marked in place. */
+  :root { color-scheme: light dark; --add: rgba(46, 160, 67, 0.16); --add-edge: #2ea043; --del: rgba(248, 81, 73, 0.12); --del-edge: #f85149; }
+  body { margin: 0; background: Canvas; color: CanvasText; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; }
+  body.meta .t { cursor: pointer; }
+  .hljs { background: transparent !important; }
+  #code { font: 12px/1.6 ui-monospace, "SF Mono", Menlo, monospace; padding: 4px 0 40px; min-width: max-content; }
+  .ln { display: flex; white-space: pre; }
+  .ln .n { position: sticky; left: 0; width: 52px; flex: none; box-sizing: border-box; text-align: right; padding-right: 12px;
+    color: GrayText; cursor: pointer; user-select: none; background: Canvas; }
+  .ln .n:hover { color: #0a84ff; box-shadow: inset 3px 0 0 #0a84ff; }
+  .ln .t { padding-right: 24px; }
+  .ln.add { background: var(--add); }
+  .ln.add .n { background: color-mix(in srgb, Canvas 84%, #2ea043); box-shadow: inset 3px 0 0 var(--add-edge); }
+  .ln.del { background: var(--del); color: color-mix(in srgb, CanvasText 60%, #f85149); }
+  .ln.del .n { background: color-mix(in srgb, Canvas 88%, #f85149); box-shadow: inset 3px 0 0 var(--del-edge); }
+  .flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { from { background: rgba(10, 132, 255, 0.4); } }
+  .target { background: rgba(10, 132, 255, 0.2) !important; }
+
+  /* Comments, as in the diff tab. */
+  .yatty-row { padding: 4px 16px 8px 52px; white-space: normal; position: sticky; left: 0; max-width: 760px; }
+  .yatty-box {
+    font: 13px -apple-system, BlinkMacSystemFont, sans-serif; border: 1px solid rgba(128, 128, 128, 0.35);
+    border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, Canvas 92%, #0a84ff);
+  }
+  .yatty-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .yatty-box textarea {
+    display: block; box-sizing: border-box; width: 100%; min-height: 64px; resize: vertical;
+    font: 13px -apple-system, BlinkMacSystemFont, sans-serif; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid rgba(128, 128, 128, 0.45); background: Field; color: FieldText;
+  }
+  .yatty-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; }
+  .yatty-actions .hint { margin-right: auto; color: GrayText; font-size: 11px; }
+  .yatty-sent { margin-right: auto; color: #2ea043; font-size: 11px; }
+  .yatty-box button {
+    font: 12px -apple-system, BlinkMacSystemFont, sans-serif; padding: 2px 10px; border-radius: 6px;
+    border: 1px solid rgba(128, 128, 128, 0.45); background: ButtonFace; color: ButtonText; cursor: pointer;
+  }
+  .yatty-box button.primary { background: #0a84ff; border-color: #0a84ff; color: white; }
+  .yatty-box button.link { border: none; background: none; color: #0a84ff; padding: 2px 4px; }
+  #outdated { padding: 10px 14px 0; display: grid; gap: 8px; max-width: 760px; }
+  #outdated:empty { display: none; }
+  .yatty-outdated-title { color: GrayText; font-size: 12px; }
+  .yatty-where { font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: GrayText; margin-bottom: 4px; }
+  .yatty-code {
+    font: 12px ui-monospace, "SF Mono", Menlo, monospace; margin: 0 0 6px; padding: 4px 6px; border-radius: 4px;
+    white-space: pre-wrap; overflow-wrap: anywhere; background: rgba(128, 128, 128, 0.12);
+  }
+
+  /* Go to definition. */
+  #picker { position: fixed; z-index: 5; min-width: 320px; max-width: 560px; max-height: 50vh; overflow: auto;
+    background: Canvas; border: 1px solid rgba(128, 128, 128, 0.45); border-radius: 8px; padding: 4px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+  #picker[hidden] { display: none; }
+  #picker .title { color: GrayText; font-size: 11px; padding: 3px 8px 5px; }
+  #picker .item { padding: 4px 8px; border-radius: 5px; cursor: pointer; }
+  #picker .item:hover { background: #0a84ff; color: white; }
+  #picker .where { font: 12px ui-monospace, "SF Mono", Menlo, monospace; }
+  #picker .what { font: 11px ui-monospace, "SF Mono", Menlo, monospace; opacity: 0.7; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  #toast { position: fixed; top: 10px; right: 14px; z-index: 6; padding: 6px 10px; border-radius: 7px; font-size: 12px;
+    background: color-mix(in srgb, Canvas 80%, CanvasText); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+<script src="highlight.min.js"></script>
+<script src="dart.min.js"></script>
+<script src="diff2html.min.js"></script>
+</head>
+<body>
+<div id="outdated"></div>
+<div id="code" class="hljs"></div>
+<div id="picker" hidden></div>
+<div id="toast"></div>
+<script>
+  const post = (message) => {
+    try { window.webkit.messageHandlers.yatty.postMessage(message); } catch (error) {}
+  };
+
+  let shown = null;      // {path, lines: [text], ghosts: Map(before -> [{old, text}])}
+  let comments = [];     // [{id, path, line, side, code, text, outdated, sent}]
+  let rows = [];         // rows[line - 1]: the line's row
+  let oldRows = new Map(); // a removed line's old number -> its row
+  let editor = null;     // the open comment box's row, if any
+  let hidden = null;     // the comment row hidden while its box is open
+  let lastClick = { x: 40, y: 40 };
+
+  // Called by the app with {path, text, diff, untracked, language, comments,
+  // scroll}: scroll is null (stay where you are), "change" (bring what just
+  // changed into view, or a new file's first change) or {line}.
+  window.yattyShow = function (file) {
+    const previous = shown && shown.path === file.path ? shown.lines : null;
+    const y = window.scrollY;
+    // A comment being written stays, under its line wherever that went.
+    const draft = editor && previous ? {
+      side: editor.yattyWhere.side, line: editor.yattyWhere.line, code: codeAt(editor.yattyWhere.side, editor.yattyWhere.line),
+      id: editor.yattyEditing, text: editor.querySelector("textarea").value,
+      focused: document.activeElement === editor.querySelector("textarea"),
+    } : null;
+    editor = null;
+    hidden = null;
+    hidePicker();
+    let lines = file.text.replace(/\r\n/g, "\n").split("\n");
+    if (lines.length && lines[lines.length - 1] === "") lines.pop();
+    const marks = changes(file);
+    shown = { path: file.path, lines, ghosts: marks.ghosts };
+    const html = highlighted(file.text.replace(/\r\n/g, "\n"), file.language, lines);
+    const out = [];
+    const ghostRows = (before) => {
+      for (const ghost of marks.ghosts.get(before) || []) {
+        out.push(`<div class="ln del" data-old="${ghost.old}"><span class="n"></span><span class="t">${escape(ghost.text) || " "}</span></div>`);
+      }
+    };
+    for (let i = 0; i < lines.length; i++) {
+      ghostRows(i + 1);
+      const added = file.untracked || marks.added.has(i + 1);
+      out.push(`<div class="ln${added ? " add" : ""}" data-line="${i + 1}"><span class="n">${i + 1}</span><span class="t">${html[i] || " "}</span></div>`);
+    }
+    for (const [before] of marks.ghosts) if (before > lines.length) ghostRows(before);
+    const code = document.getElementById("code");
+    code.innerHTML = out.join("");
+    rows = [...code.querySelectorAll(".ln[data-line]")];
+    oldRows = new Map([...code.querySelectorAll(".ln.del")].map((row) => [Number(row.dataset.old), row]));
+    window.yattySetComments(file.comments || []);
+    reveal(file.scroll, previous, marks, y);
+    if (draft) restore(draft);
+    return lines.length;
+  };
+
+  function restore(draft) {
+    // By its line's text, else its number, else the nearest line there is.
+    const row = find(draft)?.row || rowAt(draft.side, draft.line) || rows[Math.min(Math.max(draft.line, 1), rows.length) - 1];
+    if (!row) return;
+    const existing = draft.id ? comments.find((comment) => comment.id === draft.id) || null : null;
+    // Focused again where it is, without undoing the scroll the reload asked for.
+    openEditor(row, existing, draft.focused ? "quietly" : false);
+    editor.querySelector("textarea").value = draft.text;
+  }
+
+  // Brings the right line into view.
+  function reveal(scroll, previous, marks, y) {
+    const flash = (row) => { row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash"); };
+    if (scroll && typeof scroll === "object") {
+      const row = rows[scroll.line - 1];
+      if (row) {
+        row.scrollIntoView({ block: "center" });
+        row.classList.add("target");
+        setTimeout(() => row.classList.remove("target"), 1500);
+      }
+    } else if (scroll === "change" && previous) {
+      // The first line that differs from what was shown.
+      const lines = shown.lines;
+      let i = 0;
+      while (i < lines.length && i < previous.length && lines[i] === previous[i]) i++;
+      if (i === lines.length && i === previous.length) return window.scrollTo(0, y);
+      const row = rows[Math.min(i, rows.length - 1)];
+      if (row) { row.scrollIntoView({ block: "center" }); flash(row); }
+    } else if (scroll === "change") {
+      const first = document.querySelector("#code .ln.add, #code .ln.del");
+      if (first) first.scrollIntoView({ block: "center" });
+      else window.scrollTo(0, 0);
+    } else {
+      window.scrollTo(0, y);
+    }
+  }
+
+  // What the diff (git diff -U0 for one file) says: added lines' numbers, and
+  // removed lines, by the line they stood before.
+  function changes(file) {
+    const added = new Set();
+    const ghosts = new Map();
+    if (!file.diff) return { added, ghosts };
+    const attach = (before, list) => {
+      if (!list.length) return;
+      ghosts.set(before, (ghosts.get(before) || []).concat(list));
+    };
+    for (const parsed of Diff2Html.parse(file.diff, {})) {
+      for (const block of parsed.blocks) {
+        let pending = [];
+        for (const line of block.lines) {
+          if (line.type === "delete") {
+            pending.push({ old: line.oldNumber, text: line.content.slice(1) });
+          } else if (line.type === "insert") {
+            attach(line.newNumber, pending);
+            pending = [];
+            added.add(line.newNumber);
+          }
+        }
+        // Removed with nothing in their place: after the hunk's start line.
+        attach(block.newStartLine + 1, pending);
+      }
+    }
+    return { added, ghosts };
+  }
+
+  // Each line's highlighted HTML: the whole file at once, so a comment or a
+  // string over several lines stays one, then cut at each line with its
+  // open spans closed and opened again.
+  function highlighted(text, language, lines) {
+    if (!language || !hljs.getLanguage(language) || text.length > 1000000) return lines.map(escape);
+    let html;
+    try { html = hljs.highlight(text, { language, ignoreIllegals: true }).value; } catch (error) { return lines.map(escape); }
+    const out = [];
+    const open = [];
+    let current = "";
+    const tag = /<span[^>]*>|<\/span>|\n/g;
+    let at = 0;
+    let match;
+    while ((match = tag.exec(html))) {
+      current += html.slice(at, match.index);
+      at = tag.lastIndex;
+      if (match[0] === "\n") {
+        out.push(current + "</span>".repeat(open.length));
+        current = open.join("");
+      } else if (match[0] === "</span>") {
+        open.pop();
+        current += match[0];
+      } else {
+        open.push(match[0]);
+        current += match[0];
+      }
+    }
+    current += html.slice(at);
+    out.push(current + "</span>".repeat(open.length));
+    return out;
+  }
+
+  function escape(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // The comments on this file as the app keeps them: under their lines,
+  // found again by their text if the file moved them; the rest outdated.
+  window.yattySetComments = function (list) {
+    comments = (list || []).filter((comment) => shown && comment.path === shown.path);
+    for (const row of [...document.querySelectorAll(".yatty-comment")]) row.remove();
+    hidden = null;
+    const anchors = [];
+    const outdated = [];
+    for (const comment of comments) {
+      const found = find(comment);
+      const line = found ? found.line : comment.line;
+      if (line !== comment.line || !found !== !!comment.outdated) anchors.push({ id: comment.id, line, outdated: !found });
+      if (!found) { outdated.push(comment); continue; }
+      const row = insertAfter(found.row, commentBox(comment, found.row));
+      row.classList.add("yatty-comment");
+      row.yattyComment = comment.id;
+      if (editor && editor.yattyEditing === comment.id) { row.style.display = "none"; hidden = row; }
+    }
+    showOutdated(outdated);
+    if (anchors.length) post({ type: "place", anchors });
+  };
+
+  function codeAt(side, line) {
+    if (side === "new") return line >= 1 && line <= shown.lines.length ? shown.lines[line - 1].trim() : null;
+    const row = oldRows.get(line);
+    return row ? row.querySelector(".t").textContent.trim() : null;
+  }
+
+  function rowAt(side, line) { return side === "new" ? rows[line - 1] : oldRows.get(line); }
+
+  // Where a comment's line is now: where it was if its text is still there,
+  // else the nearest line on its side with that text; null if none has.
+  function find(comment) {
+    if (codeAt(comment.side, comment.line) === comment.code && rowAt(comment.side, comment.line)) {
+      return { line: comment.line, row: rowAt(comment.side, comment.line) };
+    }
+    if (!comment.code) return null;
+    let best = null;
+    const numbers = comment.side === "new" ? shown.lines.map((_, i) => i + 1) : [...oldRows.keys()];
+    for (const line of numbers) {
+      if (codeAt(comment.side, line) !== comment.code) continue;
+      if (best === null || Math.abs(line - comment.line) < Math.abs(best - comment.line)) best = line;
+    }
+    return best === null ? null : { line: best, row: rowAt(comment.side, best) };
+  }
+
+  // A line row's side and number.
+  function lineOf(row) {
+    if (row.dataset.line) return { side: "new", line: Number(row.dataset.line) };
+    return { side: "old", line: Number(row.dataset.old) };
+  }
+
+  function showOutdated(list) {
+    const container = document.getElementById("outdated");
+    container.replaceChildren();
+    if (!list.length) return;
+    const title = element("div", "yatty-outdated-title");
+    title.textContent = list.length === 1
+      ? "1 comment whose line is no longer in this file"
+      : list.length + " comments whose lines are no longer in this file";
+    container.append(title);
+    for (const comment of list) {
+      const box = element("div", "yatty-box");
+      const where = element("div", "yatty-where");
+      where.textContent = comment.path + ":" + comment.line + (comment.side === "old" ? " (removed)" : "");
+      box.append(where);
+      if (comment.code) {
+        const code = element("pre", "yatty-code");
+        code.textContent = comment.code;
+        box.append(code);
+      }
+      const text = element("div", "yatty-text");
+      text.textContent = comment.text;
+      const actions = element("div", "yatty-actions");
+      actions.append(button("Delete", "link", () => post({ type: "delete", id: comment.id })));
+      box.append(text, actions);
+      container.append(box);
+    }
+  }
+
+  function openEditor(row, existing, focus = true) {
+    closeEditor();
+    const where = lineOf(row);
+    const shownRow = existing ? [...document.querySelectorAll(".yatty-comment")].find((r) => r.yattyComment === existing.id) : null;
+    const box = element("div", "yatty-box");
+    const area = element("textarea");
+    area.placeholder = "A comment for your agent";
+    area.value = existing ? existing.text : "";
+    const actions = element("div", "yatty-actions");
+    const hint = element("span", "hint");
+    hint.textContent = "⌘↩ to save, esc to cancel";
+    const cancel = button("Cancel", "", closeEditor);
+    const save = button(existing ? "Save" : "Comment", "primary", () => {
+      const text = area.value.trim();
+      if (text) {
+        post({
+          type: "save", id: existing ? existing.id : "", path: shown.path, line: where.line, side: where.side,
+          code: existing ? existing.code : (codeAt(where.side, where.line) ?? ""), text,
+        });
+      }
+      closeEditor();
+    });
+    area.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); save.click(); }
+      if (event.key === "Escape") { event.preventDefault(); cancel.click(); }
+    });
+    actions.append(hint, cancel, save);
+    box.append(area, actions);
+    editor = insertAfter(row, box);
+    editor.yattyEditing = existing ? existing.id : null;
+    editor.yattyWhere = where;
+    if (shownRow) { shownRow.style.display = "none"; hidden = shownRow; }
+    if (focus === "quietly") area.focus({ preventScroll: true });
+    else if (focus) area.focus();
+  }
+
+  function closeEditor() {
+    if (editor) editor.remove();
+    editor = null;
+    if (hidden) hidden.style.display = "";
+    hidden = null;
+  }
+
+  function commentBox(comment, row) {
+    const box = element("div", "yatty-box");
+    const text = element("div", "yatty-text");
+    text.textContent = comment.text;
+    const actions = element("div", "yatty-actions");
+    if (comment.sent) {
+      const sent = element("span", "yatty-sent");
+      sent.textContent = "✓ sent to the agent";
+      actions.append(sent);
+    }
+    actions.append(
+      button("Edit", "link", () => openEditor(row, comment)),
+      button("Delete", "link", () => post({ type: "delete", id: comment.id })),
+    );
+    box.append(text, actions);
+    return box;
+  }
+
+  // A row under `row`, after the comments already there.
+  function insertAfter(row, content) {
+    let anchor = row;
+    while (anchor.nextElementSibling && anchor.nextElementSibling.classList.contains("yatty-row")) {
+      anchor = anchor.nextElementSibling;
+    }
+    const added = element("div", "yatty-row");
+    added.append(content);
+    anchor.after(added);
+    return added;
+  }
+
+  // Clicks: a line number comments; ⌘-click on a name finds its declaration.
+  document.getElementById("code").addEventListener("click", (event) => {
+    lastClick = { x: event.clientX, y: event.clientY };
+    const number = event.target.closest(".n");
+    const row = event.target.closest(".ln");
+    if (number && row) {
+      event.stopPropagation();
+      openEditor(row, null);
+      return;
+    }
+    if (event.metaKey && event.target.closest(".t")) {
+      const name = wordAt(event.clientX, event.clientY);
+      if (name) post({ type: "definition", name });
+    }
+  });
+
+  // The identifier under the pointer.
+  function wordAt(x, y) {
+    const range = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
+    if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) return null;
+    const text = range.startContainer.textContent;
+    let start = range.startOffset, end = range.startOffset;
+    const word = /[A-Za-z0-9_$]/;
+    while (start > 0 && word.test(text[start - 1])) start--;
+    while (end < text.length && word.test(text[end])) end++;
+    const name = text.slice(start, end);
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : null;
+  }
+
+  // Declarations the app found: several to pick from, or none.
+  window.yattyDefinitions = function (name, hits) {
+    hidePicker();
+    if (!hits.length) {
+      const toast = document.getElementById("toast");
+      toast.textContent = "No declaration of " + name + " found";
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 1800);
+      return;
+    }
+    const picker = document.getElementById("picker");
+    const title = element("div", "title");
+    title.textContent = name + ": " + hits.length + " declarations";
+    picker.append(title);
+    for (const hit of hits) {
+      const item = element("div", "item");
+      const where = element("div", "where");
+      where.textContent = hit.path + ":" + hit.line;
+      const what = element("div", "what");
+      what.textContent = hit.text.trim();
+      item.append(where, what);
+      item.addEventListener("click", (event) => {
+        event.stopPropagation();
+        hidePicker();
+        post({ type: "open", path: hit.path, line: hit.line });
+      });
+      picker.append(item);
+    }
+    picker.style.left = Math.min(lastClick.x, Math.max(0, window.innerWidth - 340)) + "px";
+    picker.style.top = Math.min(lastClick.y + 14, Math.max(0, window.innerHeight - 200)) + "px";
+    picker.hidden = false;
+  };
+
+  function hidePicker() {
+    const picker = document.getElementById("picker");
+    picker.hidden = true;
+    picker.replaceChildren();
+  }
+
+  document.addEventListener("click", (event) => { if (!event.target.closest("#picker")) hidePicker(); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hidePicker();
+    if (event.key === "Meta") document.body.classList.add("meta");
+  });
+  document.addEventListener("keyup", (event) => { if (event.key === "Meta") document.body.classList.remove("meta"); });
+  window.addEventListener("blur", () => document.body.classList.remove("meta"));
+
+  // Looking around by hand stops the view following the agent.
+  let told = 0;
+  const interact = () => {
+    if (Date.now() - told < 500) return;
+    told = Date.now();
+    post({ type: "interact" });
+  };
+  document.addEventListener("wheel", interact, { passive: true });
+  document.addEventListener("mousedown", interact);
+
+  function element(tag, className) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    return node;
+  }
+
+  function button(title, className, action) {
+    const node = element("button", className);
+    node.type = "button";
+    node.textContent = title;
+    node.addEventListener("click", (event) => { event.stopPropagation(); action(); });
+    return node;
+  }
+</script>
+</body>
+</html>

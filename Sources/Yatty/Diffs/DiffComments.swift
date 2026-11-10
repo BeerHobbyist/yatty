@@ -3,7 +3,7 @@ import Foundation
 /// The prompt that hands the user's own diff comments to their agent. It
 /// says whose they are — the user's review in Yatty, not GitHub's.
 enum LocalReviewPrompt {
-  static func make(target: DiffTarget, branch: String?, comments: [DiffComment]) -> String {
+  static func make(target: DiffTarget, branch: String?, comments: [DiffComment], view: String = "diff view") -> String {
     let what: String =
       switch target {
       case .working: "the working changes"
@@ -15,7 +15,7 @@ enum LocalReviewPrompt {
     var out =
       "Below are comments from my own review of \(what) in this worktree"
       + (branch.map { " (\($0))" } ?? "")
-      + ", made in Yatty's diff view. They're mine, not comments from GitHub."
+      + ", made in Yatty's \(view). They're mine, not comments from GitHub."
       + "\n\nWork through them: make the change each one asks for, or tell me why it shouldn't be made."
     let sorted = comments.sorted { ($0.path, $0.line, $0.side.rawValue) < ($1.path, $1.line, $1.side.rawValue) }
     for (index, comment) in sorted.enumerated() {
