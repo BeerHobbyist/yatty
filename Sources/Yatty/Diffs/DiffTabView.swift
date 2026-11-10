@@ -282,7 +282,6 @@ struct DiffWebView: NSViewRepresentable {
           case .success(let files): Snapshot.note("diff drawn: \(files) file(s)")
           case .failure(let error): Snapshot.note("diff not drawn: \(error)")
           }
-          if Snapshot.isActive { Snapshot.saveWebView(view) }
         }
       }
     }

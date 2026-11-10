@@ -594,7 +594,8 @@ scripts/snapshot.sh SCENE # build/snapshots/SCENE.png from sample data
   - the real sidebar list style, split view and inspector: the window is laid
     out as a plain row instead, and Settings as a plain form;
   - sheets in place: they're stacked below the window in the image;
-  - the diff tab's page, which is saved beside it as `SCENE-web.png`;
+  - web pages (the diff tab, the code) under a sandbox that stops WebKit's
+    page process: run it from a normal terminal to see them;
   - animations and avatars: symbols stand still, and people show as initials.
 
   It needs the window server; under a sandbox that blocks it, it finds no
