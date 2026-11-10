@@ -1,5 +1,13 @@
 import Foundation
 
+/// An ask for a tab's code view to open the next or previous changed file.
+struct CodeStep: Equatable {
+  var tab: String
+  var forward: Bool
+  /// New for each ask, so the same one twice still counts.
+  var serial: Int
+}
+
 /// The code beside a tab's terminals: showing it, what it follows, and the
 /// comments it hands to the agent.
 extension AppStore {
@@ -34,6 +42,13 @@ extension AppStore {
         $0.following = following
       }
     }
+  }
+
+  /// Asks the selected tab's code view, which holds the changed files, to
+  /// open the next (or previous) one.
+  func stepCodeFile(forward: Bool, in worktree: Worktree) {
+    guard !worktree.isRemote, let tab = layout(for: worktree).selected, tab.code?.shown == true else { return }
+    codeStep = CodeStep(tab: tab.id, forward: forward, serial: (codeStep?.serial ?? 0) + 1)
   }
 
   func setCodeFollowing(_ following: Bool, tab tabID: String, in worktree: Worktree) {
