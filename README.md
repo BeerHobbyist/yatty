@@ -201,6 +201,8 @@ Open Diff… (⌥⌘D, or New Diff… in the tab bar's **+** menu) shows:
 - commits picked from the branch's list: pick one to diff from it to HEAD, or
   mark a second for the range between them.
 
+![Yatty's diff tab, side by side, over working changes](docs/images/diff-tab.png)
+
 Its Viewer menu picks where, and remembers it:
 
 - **Yatty** (the default): a diff tab of Yatty's own, beside the terminals. Unified or side by side
@@ -226,6 +228,8 @@ Show Code (⌘E, or the **</>** button in the tab bar) puts the code on the left
 of a tab and its terminals on the right, as in Cursor: for reading what your
 agent writes, not for typing. With the code shown, ⌘W closes the code first,
 never the agent beside it.
+
+![The code beside a terminal: a changed line under its old text, and a comment on it](docs/images/code-view.png)
 
 - **It follows the agent.** Each file that changes in the worktree opens as it
   changes, scrolled to the change. Scroll or click to look around yourself and
