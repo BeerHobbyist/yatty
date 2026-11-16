@@ -102,6 +102,9 @@ final class AppStore {
   var sidebarFilter = Snapshot.filter ?? ""
   /// Asks the sidebar to put the keyboard in its filter (only a view can).
   var focusingFilter = false
+  /// Asks the sidebar to put the keyboard in its list, or, when it has it
+  /// already, to give it back to the terminal.
+  var focusingWorktrees = false
 
   /// `config.json`, as the Settings window last changed it.
   private(set) var config = ConfigFiles.loadConfig()
