@@ -7,6 +7,7 @@ import SwiftUI
 struct Sidebar: View {
   @Environment(AppStore.self) private var store
   @FocusState private var filterFocused: Bool
+  @FocusState private var listFocused: Bool
 
   var body: some View {
     @Bindable var store = store
@@ -84,6 +85,7 @@ struct Sidebar: View {
         if let id { withAnimation { proxy.scrollTo(id) } }
       }
     }
+    .focused($listFocused)
     .modifier(SidebarListStyle())
     .modifier(SidebarFilterField(text: $store.sidebarFilter, focused: $filterFocused))
     .onChange(of: store.focusingFilter, initial: true) { _, focusing in
@@ -91,6 +93,12 @@ struct Sidebar: View {
       filterFocused = true
       // Later: the window shows a hidden sidebar on the same request.
       DispatchQueue.main.async { store.focusingFilter = false }
+    }
+    .onChange(of: store.focusingWorktrees) { _, focusing in
+      guard focusing else { return }
+      if listFocused { store.focusSelectedTerminal() } else { listFocused = true }
+      // Later: the window shows a hidden sidebar on the same request.
+      DispatchQueue.main.async { store.focusingWorktrees = false }
     }
     .onKeyPress(.return) {
       guard store.renamingWorktree == nil else { return .ignored }

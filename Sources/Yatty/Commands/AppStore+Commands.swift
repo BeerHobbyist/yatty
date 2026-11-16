@@ -31,6 +31,8 @@ enum Shortcuts {
   static let closeTab = KeyboardShortcut("w", modifiers: [.command, .option])
   /// Not ⌘F: Ghostty searches the terminal with it.
   static let filterWorktrees = KeyboardShortcut("f", modifiers: [.command, .option])
+  /// Free in Ghostty too; like a browser's ⌘L, it jumps to where you go next.
+  static let focusWorktrees = KeyboardShortcut("l")
 }
 
 /// When a command applies. The menus and the palette ask the same rules, so
@@ -192,6 +194,7 @@ extension AppStore {
       if self.trackingEveryClaude { self.setTracking(false) } else { self.confirmingTracking = true }
     }
 
+    add("project.focus", "Focus Worktrees", "Projects", Shortcuts.focusWorktrees) { self.focusingWorktrees = true }
     add("project.filter", "Filter Worktrees", "Projects", Shortcuts.filterWorktrees) { self.focusingFilter = true }
     add("project.repo", "Add Repository…", "Projects", Shortcuts.addRepository) { self.addingRepository = true }
     add("project.host", "Add SSH Host…", "Projects", Shortcuts.addHost) { self.addingHost = AddHostRequest() }

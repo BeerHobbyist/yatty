@@ -35,6 +35,9 @@ struct ContentView: View {
       // Filtering needs the sidebar there.
       if focusing { columns = .all }
     }
+    .onChange(of: store.focusingWorktrees) { _, focusing in
+      if focusing { columns = .all }
+    }
     .focusedSceneValue(\.isMainWindow, true)
     .task(id: store.openingSettings) {
       guard store.openingSettings else { return }
