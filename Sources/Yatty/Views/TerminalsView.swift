@@ -199,7 +199,7 @@ private struct CodeBeside: View {
             .frame(width: max(0, total * code.ratio))
           divider(total)
         }
-        SplitNodeView(node: tab.root, path: [], tab: tab, worktree: worktree)
+        SplitNodeView(node: tab.root, tab: tab, worktree: worktree)
       }
       .coordinateSpace(.named("code-beside"))
     }
@@ -228,66 +228,55 @@ private struct CodeBeside: View {
   }
 }
 
-/// A split: its two children with a draggable divider; or one pane.
+/// A tab's panes, each placed where its split puts it, with a draggable
+/// divider per split. The panes are one flat list keyed by pane, never
+/// nested by split: splitting or closing a pane leaves every other terminal
+/// in the view that hosts it. Moving a terminal to a new host left it black
+/// (an agent's pane, when the split beside it closed).
 struct SplitNodeView: View {
   let node: SplitNode
-  /// Which split this is within its tab: false = first child, true = second.
-  let path: [Bool]
   let tab: TerminalTab
   let worktree: Worktree
 
   var body: some View {
-    switch node {
-    case .pane(let pane):
-      PaneView(
-        key: PaneKey(worktree: worktree.id, pane: pane), worktree: worktree,
-        dimmed: tab.root.panes.count > 1 && tab.focusedPane != pane)
-    case .split(let axis, let ratio, let first, let second):
-      GeometryReader { geometry in
-        let total = axis == .horizontal ? geometry.size.width : geometry.size.height
-        let firstLength = max(0, total * ratio - Divider.thickness / 2)
-        let secondLength = max(0, total - firstLength - Divider.thickness)
-        let layout = axis == .horizontal
-          ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
-        layout {
-          SplitNodeView(node: first, path: path + [false], tab: tab, worktree: worktree)
-            .frame(
-              width: axis == .horizontal ? firstLength : nil,
-              height: axis == .vertical ? firstLength : nil)
-          SplitDivider(axis: axis, total: total, space: space, path: path, tab: tab, worktree: worktree)
-          SplitNodeView(node: second, path: path + [true], tab: tab, worktree: worktree)
-            .frame(
-              width: axis == .horizontal ? secondLength : nil,
-              height: axis == .vertical ? secondLength : nil)
+    GeometryReader { geometry in
+      let layout = node.layout(in: CGRect(origin: .zero, size: geometry.size), divider: Self.dividerThickness)
+      ZStack(alignment: .topLeading) {
+        ForEach(node.panes, id: \.self) { pane in
+          let frame = layout.panes[pane] ?? .zero
+          PaneView(
+            key: PaneKey(worktree: worktree.id, pane: pane), worktree: worktree,
+            dimmed: node.panes.count > 1 && tab.focusedPane != pane)
+            .frame(width: frame.width, height: frame.height)
+            .position(x: frame.midX, y: frame.midY)
         }
-        .coordinateSpace(.named(space))
+        ForEach(layout.dividers, id: \.path) { divider in
+          SplitDivider(divider: divider, tab: tab, worktree: worktree)
+            .frame(width: divider.line.width, height: divider.line.height)
+            .position(x: divider.line.midX, y: divider.line.midY)
+        }
       }
+      .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+      .coordinateSpace(.named(Self.space))
     }
   }
 
-  /// The split's own coordinate space, which its divider is dragged in.
-  private var space: String { "split-" + path.map { $0 ? "1" : "0" }.joined() }
-
-  enum Divider {
-    static let thickness: CGFloat = 1
-  }
+  /// The tab's coordinate space, which every divider is dragged in.
+  static let space = "panes"
+  static let dividerThickness: CGFloat = 1
 }
 
 private struct SplitDivider: View {
-  let axis: SplitAxis
-  let total: CGFloat
-  let space: String
-  let path: [Bool]
+  let divider: SplitLayout.Divider
   let tab: TerminalTab
   let worktree: Worktree
   @Environment(AppStore.self) private var store
 
+  private var axis: SplitAxis { divider.axis }
+
   var body: some View {
     Rectangle()
       .fill(Color(nsColor: .separatorColor))
-      .frame(
-        width: axis == .horizontal ? SplitNodeView.Divider.thickness : nil,
-        height: axis == .vertical ? SplitNodeView.Divider.thickness : nil)
       .overlay {
         // A wider grab area than the line itself.
         Color.clear
@@ -301,11 +290,13 @@ private struct SplitDivider: View {
             }
           }
           .gesture(
-            DragGesture(minimumDistance: 1, coordinateSpace: .named(space))
+            DragGesture(minimumDistance: 1, coordinateSpace: .named(SplitNodeView.space))
               .onChanged { value in
+                let split = divider.split
+                let total = axis == .horizontal ? split.width : split.height
                 guard total > 0 else { return }
-                let position = axis == .horizontal ? value.location.x : value.location.y
-                store.setRatio(position / total, at: path, tab: tab.id, in: worktree, save: false)
+                let position = axis == .horizontal ? value.location.x - split.minX : value.location.y - split.minY
+                store.setRatio(position / total, at: divider.path, tab: tab.id, in: worktree, save: false)
               }
               .onEnded { _ in store.saveState() })
           .onTapGesture(count: 2) { store.equalize(tab.id, in: worktree) }

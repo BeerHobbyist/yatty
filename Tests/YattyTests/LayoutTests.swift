@@ -29,6 +29,21 @@ import Testing
   #expect(resized.equalized() == tree)
 }
 
+@Test func layoutPlacesPanesAndDividers() {
+  let tree = SplitNode.split(
+    .horizontal, ratio: 0.5, first: .pane("a"),
+    second: .split(.vertical, ratio: 0.25, first: .pane("b"), second: .pane("c")))
+  let layout = tree.layout(in: CGRect(x: 0, y: 0, width: 201, height: 101), divider: 1)
+  #expect(layout.panes["a"] == CGRect(x: 0, y: 0, width: 100, height: 101))
+  #expect(layout.panes["b"] == CGRect(x: 101, y: 0, width: 100, height: 24.75))
+  #expect(layout.panes["c"] == CGRect(x: 101, y: 25.75, width: 100, height: 75.25))
+  #expect(layout.dividers.map(\.path) == [[], [true]])
+  #expect(layout.dividers[0].line == CGRect(x: 100, y: 0, width: 1, height: 101))
+  #expect(layout.dividers[1].split == CGRect(x: 101, y: 0, width: 100, height: 101))
+  // A closed split's pane keeps its key; only its frame changes.
+  #expect(tree.removing("a")!.layout(in: CGRect(x: 0, y: 0, width: 201, height: 101), divider: 1).panes.keys.sorted() == ["b", "c"])
+}
+
 @Test func neighborInUnevenSplit() {
   let tree = SplitNode.split(
     .horizontal, ratio: 0.3, first: .pane("a"),
