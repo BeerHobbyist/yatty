@@ -8,6 +8,9 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 src="$root/ThirdParty/ghostty"
 out="$root/Vendor"
+# A clone made without --recurse-submodules leaves the submodule empty, and
+# git in an empty directory answers for this repository instead.
+[ -f "$src/build.zig" ] || git -C "$root" submodule update --init ThirdParty/ghostty
 rev="$(git -C "$src" rev-parse HEAD)"
 
 if [ "${FORCE:-}" != "1" ] && [ -d "$out/GhosttyKit.xcframework" ] &&
