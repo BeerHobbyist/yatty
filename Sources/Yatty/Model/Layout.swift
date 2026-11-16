@@ -108,6 +108,35 @@ indirect enum SplitNode: Codable, Equatable, Sendable {
     }
   }
 
+  /// The tree laid out in `rect` (points, origin top left), with a divider
+  /// `thickness` thick between the two sides of every split.
+  func layout(in rect: CGRect, divider thickness: CGFloat, path: [Bool] = []) -> SplitLayout {
+    switch self {
+    case .pane(let id):
+      return SplitLayout(panes: [id: rect], dividers: [])
+    case .split(let axis, let ratio, let first, let second):
+      let total = axis == .horizontal ? rect.width : rect.height
+      let firstLength = max(0, total * ratio - thickness / 2)
+      let secondLength = max(0, total - firstLength - thickness)
+      let (a, line, b): (CGRect, CGRect, CGRect)
+      switch axis {
+      case .horizontal:
+        a = CGRect(x: rect.minX, y: rect.minY, width: firstLength, height: rect.height)
+        line = CGRect(x: a.maxX, y: rect.minY, width: thickness, height: rect.height)
+        b = CGRect(x: line.maxX, y: rect.minY, width: secondLength, height: rect.height)
+      case .vertical:
+        a = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: firstLength)
+        line = CGRect(x: rect.minX, y: a.maxY, width: rect.width, height: thickness)
+        b = CGRect(x: rect.minX, y: line.maxY, width: rect.width, height: secondLength)
+      }
+      let one = first.layout(in: a, divider: thickness, path: path + [false])
+      let two = second.layout(in: b, divider: thickness, path: path + [true])
+      return SplitLayout(
+        panes: one.panes.merging(two.panes) { old, _ in old },
+        dividers: [SplitLayout.Divider(path: path, axis: axis, line: line, split: rect)] + one.dividers + two.dividers)
+    }
+  }
+
   /// The pane beyond `pane`'s edge in `direction` that overlaps it: the
   /// closest, then the top- or left-most.
   func neighbor(of pane: String, toward direction: FocusDirection) -> String? {
@@ -133,6 +162,22 @@ indirect enum SplitNode: Codable, Equatable, Sendable {
     }
     return candidates.min { ($0.distance, $0.start) < ($1.distance, $1.start) }?.id
   }
+}
+
+/// Where a tab's panes and dividers go, as `SplitNode.layout` works it out.
+struct SplitLayout: Equatable {
+  struct Divider: Equatable {
+    /// Which split: false = first child, true = second.
+    let path: [Bool]
+    let axis: SplitAxis
+    /// The line itself.
+    let line: CGRect
+    /// The whole split it divides, which a drag's ratio is measured in.
+    let split: CGRect
+  }
+
+  let panes: [String: CGRect]
+  let dividers: [Divider]
 }
 
 struct TerminalTab: Codable, Identifiable, Equatable, Sendable {
